@@ -7,7 +7,7 @@ tego pliku, commit `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 - **Ostatnio:** P0 — repozytorium, build, Lua 5.4.8 bootuje (test dymny z benchmarkiem).
 - **Następny krok:** P1 — jądro (pętla `update`/`draw` w C, alokator Lua z licznikiem, ekran
   błędu, wejście).
-- **Otwarte sprawy:** brak.
+- **Otwarte sprawy:** brak. (D10: grafika tylko PNG — dodane po P0.)
 
 ## Punkty
 
@@ -24,8 +24,10 @@ tego pliku, commit `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
   SD + NitroFS; manifest `cart.lua`; stała struktura katalogów (D6); czytnik `.lcart` (ZIP);
   piaskownica `io`/`os`; `require` z kolejnością z D6; katalog zapisów.
 - [ ] **P4 — Grafika**
-  Tekstury z PNG (dekoder permisywny); sprite'y: obrót, skala, odbicia, kolorowanie 4 rogów;
-  prymitywy; kamera; przycinanie; cache bindowania; wbudowany font 6×8 z polskimi znakami.
+  Dekompresja deflate (wspólna z P3) + własny dekoder PNG → tekstury 4/8/16 bpp wg D10
+  (dopełnianie do potęgi dwójki, przezroczystość, licznik VRAM); sprite'y: obrót, skala,
+  odbicia, kolorowanie 4 rogów; prymitywy; kamera; przycinanie; cache bindowania;
+  wbudowany font 6×8 z polskimi znakami.
 - [ ] **P5 — Statystyki**
   Nakładka (kombinacja przycisków) + `sys.stats()`: pamięć Lua, sterta C (`mallinfo`), VRAM
   (liczona przy uploadzie), wielokąty/wierzchołki (`glGetInt`), czas `update`/`draw`.

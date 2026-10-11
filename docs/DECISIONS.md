@@ -59,3 +59,19 @@ pisane w Lua na tym samym API co gry. Jeden wbudowany font 6×8 (ASCII + polskie
 ## D9 (2026-10-11) — Nazwa: LiteLua
 Na GitHubie są 3 małe, niezwiązane projekty o tej nazwie (żaden dla DS). Przed publicznym
 wydaniem sprawdzić EUIPO/USPTO. Unikać „DS”/„Nintendo”/„Pico” w nazwie.
+
+## D10 (2026-10-11) — Grafika: wyłącznie PNG
+Jeden format w kartridżach i w edytorze na DS (zapis PNG z paletą 16 kolorów domyślnie).
+Bez GIF/JPG/BMP. Dekompresja deflate współdzielona z czytnikiem `.lcart` (np. `tinfl` z miniz,
+MIT); dekoder PNG piszemy sami.
+
+Mapowanie na tekstury DS (wybór automatyczny):
+- PNG z paletą ≤16 kolorów → tekstura 16-kolorowa (4 bpp)
+- PNG z paletą ≤256 kolorów → tekstura 256-kolorowa (8 bpp)
+- RGB/RGBA → 15 bitów + 1 bit przezroczystości (16 bpp)
+
+Zasady: przezroczystość = indeks 0 palety albo alfa 0 (alfa 1–254 zaokrąglana, półprzezroczystość
+sprite'a przez API); kolory zaokrąglane do 15 bitów; boki tekstur dopełniane do potęgi dwójki
+(8–1024 px), zalecane arkusze 64/128/256 px; fonty = PNG z siatką znaków w `font/` + opcjonalny
+`.lua` z szerokościami. Opcjonalnie później: cache przekonwertowanych tekstur w `saves/`
+(poza specyfikacją kartridża).
