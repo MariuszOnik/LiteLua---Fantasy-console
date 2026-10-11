@@ -186,10 +186,21 @@ static bool load_main(lua_State *L, const LLCart *cart)
     return !stop_requested();
 }
 
+// Waits until the VBlank counter reaches 'target' (no wait if it is past)
+static void wait_vblank(unsigned long target)
+{
+    while ((long)(ll_vblanks() - target) < 0)
+        swiWaitForVBlank();
+}
+
+// A game frame is two VBlanks. Waiting for VBlank numbers (instead of "the
+// next VBlank") lets _update + _draw(TOP) take longer than one VBlank as
+// long as the whole frame fits in two; a slower frame just takes three.
 static void frame_loop(lua_State *L)
 {
     while (1)
     {
+        unsigned long start = ll_vblanks();
         ll_input_update();
         if ((keysHeld() & KEYS_LEAVE) == KEYS_LEAVE)
         {
@@ -207,7 +218,7 @@ static void frame_loop(lua_State *L)
         ll_gfx_end();
         if (!ok)
             return;
-        swiWaitForVBlank();
+        wait_vblank(start + 1);
 
         ll_gfx_begin(SCREEN_BOTTOM);
         ok = call_hook(L, "_draw", SCREEN_BOTTOM);
@@ -215,7 +226,7 @@ static void frame_loop(lua_State *L)
         if (!ok)
             return;
         ll_log_flush();
-        swiWaitForVBlank();
+        wait_vblank(start + 2);
     }
 }
 

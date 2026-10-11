@@ -10,6 +10,10 @@
 
 #include "lua.h"
 
+// Number of VBlanks since boot (the log timestamps and the frame pacing use
+// it). Counting starts in ll_log_init.
+unsigned long ll_vblanks(void);
+
 // Opens the log file; the previous one is kept as log.old.txt. Does nothing
 // (and all other functions are no-ops) when there is no FAT drive.
 void ll_log_init(bool fat_ok);

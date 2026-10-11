@@ -281,6 +281,12 @@ Ustalone z użytkownikiem przed P4:
   `_draw(BOTTOM)` są ignorowane z jednym wpisem w logu.
 - Klatka: `_draw(TOP)` między `ll_gfx_begin/end` — `end` zawsze (też po błędzie), potem
   `glFlush`; obraz widać od następnego VBlanka i zostaje na obie połówki klatki 30 FPS.
-- Pomiar (melonDS, tryb DS): 500 × `rectfill` z pętlą Lua = 13 ms, 2000 = 53 ms (~26 µs na
-  wywołanie). Pomiar na konsoli i ewentualna optymalizacja (pomijanie powtórzonych
-  `glPolyFmt`/`glColor`) — przy P5.
+- Pomiar `rectfill` z pętlą Lua — melonDS (tryb DS): ~26 µs na wywołanie (500 = 13 ms);
+  **konsola DSi: ~11,8 µs** (scena testowa 4,8 ms, 500 = 5,9 ms, 900 = 10,6 ms, 1500 =
+  17,8 ms). Ewentualna optymalizacja (pomijanie powtórzonych `glPolyFmt`/`glColor`) — przy P5.
+- **Tempo klatki (poprawka po pomiarze na konsoli):** pętla czekała na „następny VBlank” po
+  `_draw(TOP)`, więc gdy `_update` + `_draw(TOP)` trwało ponad 16,7 ms, klatka zajmowała
+  3 VBlanki (20 FPS) mimo zapasu. Teraz czeka do numerów VBlanka: start klatki + 1 (przed
+  `_draw(BOTTOM)`), start + 2 (koniec). Cała klatka może trwać do ~33 ms; dłuższa zajmuje
+  3 VBlanki. Licznik VBlanków: `ll_vblanks()` (`ll_log.c`). W trybie dual30 (P6) każdy
+  ekran ma osobny VBlank — wtedy do przemyślenia na nowo.

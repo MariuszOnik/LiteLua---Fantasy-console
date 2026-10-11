@@ -31,6 +31,11 @@ static void vblank_handler(void)
     vblank_count++;
 }
 
+unsigned long ll_vblanks(void)
+{
+    return vblank_count;
+}
+
 static void log_raw(const char *s, size_t len)
 {
     if (log_file == NULL)
