@@ -29,6 +29,88 @@ To leave a running game and go back to the list, hold **L+R+B** together.
 A cartridge is either a folder or a single `.lcart` file (see below); both show up in the
 list.
 
+## Making a game on a PC, step by step
+
+Until the editors on the DS are ready, games are written on a PC in any text editor
+(VS Code, Notepad++, even Notepad) and tested in the melonDS emulator or on a DS.
+
+**1. Make the cartridge folder.** A game is a folder with two files to start with:
+
+```
+mygame/
+  cart.lua
+  main.lua
+```
+
+`cart.lua` — the manifest:
+
+```lua
+return {
+  id = "mygame",        -- lowercase letters, digits, _ - . (names the save folder)
+  title = "My Game",
+  author = "me",
+  version = "1.0",
+  api = 1,
+}
+```
+
+`main.lua` — the game. A complete one that moves a ball with the buttons:
+
+```lua
+local x, y = 128, 96
+
+function _update()
+  if btn("left")  then x = x - 2 end
+  if btn("right") then x = x + 2 end
+  if btn("up")    then y = y - 2 end
+  if btn("down")  then y = y + 2 end
+end
+
+function _draw(screen)
+  if screen == TOP then
+    cls(1)
+    circfill(x, y, 8, 10)
+  else
+    cls(0)
+    text("Move the ball with the D-pad", 4, 4, 12)
+  end
+end
+```
+
+Save the files as UTF-8 (Polish letters work in strings).
+
+**2. Add more when you need it** (all optional): `src/` for more Lua files loaded with
+`require`, `gfx/` for PNG images, `data/` for your own data files. See
+[Writing a game](#writing-a-game) below for the API, and [docs/API.md](docs/API.md) for
+every function.
+
+**3. Test it in melonDS.** Set up melonDS once as described in
+[Testing in melonDS](#testing-in-melonds) (DLDI with "Sync SD to folder"), then:
+
+1. copy the `mygame` folder to `litelua/carts/` in that SD folder,
+2. start (or reset) `litelua.nds` in melonDS — melonDS reads the folder only when the ROM
+   starts, so **reset after every change**,
+3. choose `mygame` in the list.
+
+When something goes wrong, the error screen shows the file and line. Hold **L+R** and
+press **X** to see your `print` output, **L+R+Y** for the speed and memory numbers, and
+**L+R+B** to go back to the list. Everything is also written to `litelua/log.txt` — in
+melonDS it appears in the SD folder after you stop the emulation.
+
+**4. Play it on the DS.** Copy the folder to `litelua/carts/` on the SD card of the DS. Or
+pack it into one file first:
+
+```
+python tools/litelua.py pack mygame        # -> mygame.lcart
+```
+
+and copy `mygame.lcart` to `litelua/carts/` — easier to share.
+
+**Example game.** [examples/carts/starcatch](examples/carts/starcatch) is a small complete
+game: catch falling stars on the top screen, score and touch control on the bottom
+screen, a module in `src/`, particles that make no garbage, a saved high score. Copy it to
+`litelua/carts/` to play it, or use it as a starting point.
+
 ## Writing a game
 
 A game is a cartridge: a folder in `litelua/carts/` with at least two files:

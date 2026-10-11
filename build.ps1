@@ -75,15 +75,16 @@ try {
         }
         Copy-Item litelua.nds (Join-Path $sdcard 'litelua.nds') -Force
         Write-Host "  DEPLOY  $sdcard\litelua.nds"
-        # Test carts from tests\carts replace their copies on the SD card
-        foreach ($cart in Get-ChildItem tests\carts -Directory) {
+        # Test carts (tests\carts) and example games (examples\carts) replace
+        # their copies on the SD card
+        foreach ($cart in @(Get-ChildItem tests\carts, examples\carts -Directory)) {
             $dest = Join-Path $sdcard "litelua\carts\$($cart.Name)"
             if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
             Copy-Item $cart.FullName $dest -Recurse
         }
         # The same files test packed as .lcart (ZIP) checks reading from archives
         python tools\litelua.py pack tests\carts\files (Join-Path $sdcard 'litelua\carts\files-zip.lcart') | Out-Null
-        Write-Host "  DEPLOY  test carts -> litelua\carts (+ files-zip.lcart)"
+        Write-Host "  DEPLOY  test and example carts -> litelua\carts (+ files-zip.lcart)"
     } else {
         Write-Host "  (no emulator SD card at $sdcard, skipping deploy)"
     }

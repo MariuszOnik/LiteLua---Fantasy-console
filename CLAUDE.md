@@ -12,7 +12,8 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 ## Zasady pracy
 - Praca idzie punktami z `docs/PLAN.md` (P0, P1, …). Po ukończeniu punktu:
   zbuduj, zaktualizuj `docs/PLAN.md` (status + „Gdzie skończyliśmy”), zrób lokalny commit
-  `P<n>: <opis>`. Bez push — repo jest lokalne.
+  `P<n>: <opis>`. Push na GitHub (`origin` =
+  https://github.com/MariuszOnik/LiteLua---Fantasy-console) tylko na prośbę użytkownika.
 - Licencja projektu: zlib. **Nie kopiuj kodu z µLibrary** (licencja copyleft + zakaz użytku
   komercyjnego) ani z MicroLua (GPLv3). `ref/` zawiera je tylko do wglądu i jest poza repo.
 - Zależności tylko na licencjach permisywnych (zlib/MIT/BSD/public domain).
@@ -39,6 +40,7 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - `docs/api/*.lua` — dokumentacja API Lua (źródło dla edytora na DS i `docs/API.md`, D12);
   aktualizuj w każdym punkcie zmieniającym API, potem `python tools/apidoc.py`
 - `assets/` — zasoby generowane do podglądu/edycji (np. `font6x8.png` z `tools/make_font.py`)
+- `examples/carts/` — przykładowe gry (np. `starcatch`); `build.ps1` kopiuje je na kartę emulatora
 - `tools/` — skrypty PC (Python): `litelua.py` (`pack` → `.lcart`, reszta w P9), `apidoc.py`, `make_font.py` (font 6×8)
 - `tests/carts/` — kartridże testowe (`bench` — benchmark VM, D19; `files` — piaskownica, D20); `build.ps1` kopiuje je na kartę emulatora
 - `README.md` — manual użytkownika (po angielsku, D15); aktualizuj w każdym punkcie, który
