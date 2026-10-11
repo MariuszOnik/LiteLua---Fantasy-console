@@ -167,5 +167,5 @@ int `%` 922 → 779, float `*` 981 → 886, int `//` 935 → 784, wywołanie fun
 pole tabeli 1227 → 1057…1107, tablica 917 → 773, konkatenacja 1475 → 1456, `sqrt` 297 → 286;
 razem 8401 → 7479…7530 (−10…11%). melonDS nie liczy cykli dokładnie (brak modelu cache,
 tryb ARM vs Thumb), więc ostateczny pomiar na konsoli (D17) — do zrobienia.
-Baseline z D3 (457 ms) mierzony był prawdopodobnie w innych warunkach (tryb DSi/133 MHz);
-porównujemy tylko pomiary z tej samej konfiguracji.
+Baseline z D3 (457 ms) był mierzony w trybie DSi (ARM9 133 MHz zamiast 67 MHz) — melonDS był
+wtedy ustawiony na DSi. Porównujemy tylko pomiary z tego samego trybu (linia `console:` w logu).
