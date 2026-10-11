@@ -9,6 +9,7 @@
 
 #include <setjmp.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <nds.h>
@@ -17,11 +18,14 @@
 #include "lua.h"
 #include "lualib.h"
 
+#include "ll_cart.h"
 #include "ll_error.h"
 #include "ll_input.h"
 #include "ll_log.h"
 #include "ll_mem.h"
 #include "ll_runtime.h"
+#include "ll_sandbox.h"
+#include "ll_sys.h"
 
 #define SCREEN_TOP 0
 #define SCREEN_BOTTOM 1
@@ -30,8 +34,12 @@
 
 extern const char ll_demo_lua[];
 
+// Hold all of these to leave the cart (until the pause menu of P10)
+#define KEYS_LEAVE (KEY_L | KEY_R | KEY_START | KEY_SELECT)
+
 static LLMem lua_mem;
 static jmp_buf panic_jmp;
+static LLRunResult result;
 
 // Elapsed microseconds since boot (wraps after ~128 s)
 static int l_micros(lua_State *L)
@@ -64,7 +72,7 @@ static int panic_handler(lua_State *L)
         msg = "unprotected error";
     ll_log("PANIC: %s", msg);
     ll_log_flush();
-    ll_error_show(msg, &lua_mem);
+    result = ll_error_show(msg, &lua_mem) ? LL_RUN_RESTART : LL_RUN_MENU;
     longjmp(panic_jmp, 1);
     return 0;
 }
@@ -81,7 +89,23 @@ static void show_error(lua_State *L)
     ll_log_text(msg, strlen(msg));
     ll_log_flush();
 
-    ll_error_show(msg, &lua_mem);
+    result = ll_error_show(msg, &lua_mem) ? LL_RUN_RESTART : LL_RUN_MENU;
+}
+
+// True if the cart asked to stop (sys.run, sys.exit); sets 'result'.
+static bool stop_requested(void)
+{
+    switch (ll_sys_request())
+    {
+        case LL_SYS_RUN:
+            result = LL_RUN_NEXT;
+            return true;
+        case LL_SYS_EXIT:
+            result = LL_RUN_MENU;
+            return true;
+        default:
+            return false;
+    }
 }
 
 // Calls global function 'name' if it exists. 'screen' < 0 means no argument.
@@ -105,7 +129,7 @@ static bool call_hook(lua_State *L, const char *name, int screen)
         show_error(L);
         return false;
     }
-    return true;
+    return !stop_requested();
 }
 
 static void register_api(lua_State *L)
@@ -119,15 +143,35 @@ static void register_api(lua_State *L)
 
     ll_input_register(L);
     ll_log_register(L);
+    ll_sys_register(L);
 }
 
-static bool load_main(lua_State *L, const char *path)
+// Loads and runs the entry file; the chunk is named after its path in the
+// cart ("@main.lua"), so errors show "main.lua:12:" (D13).
+static bool load_main(lua_State *L, const LLCart *cart)
 {
     int status;
-    if (path)
-        status = luaL_loadfile(L, path);
+    if (cart)
+    {
+        size_t len;
+        char *src = ll_cart_read(cart, cart->entry, &len);
+        if (src == NULL)
+        {
+            lua_pushfstring(L, "cannot read %s", cart->entry);
+            status = LUA_ERRFILE;
+        }
+        else
+        {
+            char chunkname[LL_NAME_MAX + 1];
+            snprintf(chunkname, sizeof(chunkname), "@%s", cart->entry);
+            status = luaL_loadbufferx(L, src, len, chunkname, "t");
+            free(src);
+        }
+    }
     else
+    {
         status = luaL_loadbuffer(L, ll_demo_lua, strlen(ll_demo_lua), "=demo");
+    }
 
     if (status == LUA_OK)
         status = lua_pcall(L, 0, 0, MSGH_INDEX);
@@ -137,7 +181,7 @@ static bool load_main(lua_State *L, const char *path)
         show_error(L);
         return false;
     }
-    return true;
+    return !stop_requested();
 }
 
 static void frame_loop(lua_State *L)
@@ -145,6 +189,12 @@ static void frame_loop(lua_State *L)
     while (1)
     {
         ll_input_update();
+        if ((keysHeld() & KEYS_LEAVE) == KEYS_LEAVE)
+        {
+            ll_log("L+R+START+SELECT: back to the cart list");
+            result = LL_RUN_MENU;
+            return;
+        }
         if (!call_hook(L, "_update", -1))
             return;
         if (!call_hook(L, "_draw", SCREEN_TOP))
@@ -158,18 +208,24 @@ static void frame_loop(lua_State *L)
     }
 }
 
-void ll_run(const char *path)
+LLRunResult ll_run(const LLCart *cart)
 {
-    ll_mem_init(&lua_mem, LL_MEM_DEFAULT_LIMIT);
-    ll_log("run: %s (Lua mem limit %u KB)", path ? path : "built-in demo",
-           (unsigned)(lua_mem.limit / 1024));
+    ll_mem_init(&lua_mem, cart ? cart->mem_limit : LL_MEM_DEFAULT_LIMIT);
+    if (cart)
+        ll_log("run: %s (carts/%s/%s, id %s, Lua mem limit %u KB)", cart->title,
+               cart->name, cart->entry, cart->id,
+               (unsigned)(lua_mem.limit / 1024));
+    else
+        ll_log("run: built-in demo (Lua mem limit %u KB)",
+               (unsigned)(lua_mem.limit / 1024));
 
+    result = LL_RUN_RESTART;
     lua_State *L = lua_newstate(ll_mem_alloc, &lua_mem);
     if (L == NULL)
     {
         ll_log("cannot create Lua state");
-        ll_error_show("cannot create Lua state", &lua_mem);
-        return;
+        return ll_error_show("cannot create Lua state", &lua_mem)
+            ? LL_RUN_RESTART : LL_RUN_MENU;
     }
 
     if (setjmp(panic_jmp) != 0)
@@ -177,15 +233,16 @@ void ll_run(const char *path)
         ll_log("Lua state abandoned after panic (%u KB leaked)",
                (unsigned)(lua_mem.used / 1024));
         ll_log_flush();
-        return;
+        return result;
     }
     lua_atpanic(L, panic_handler);
 
     lua_pushcfunction(L, msg_handler); // MSGH_INDEX
     luaL_openlibs(L);
+    ll_sandbox_install(L, cart);
     register_api(L);
 
-    if (load_main(L, path) && call_hook(L, "_init", -1))
+    if (load_main(L, cart) && call_hook(L, "_init", -1))
         frame_loop(L);
 
     lua_close(L);
@@ -194,4 +251,5 @@ void ll_run(const char *path)
     ll_log("closed, peak Lua mem %u KB, left after close: %u bytes",
            (unsigned)(lua_mem.peak / 1024), (unsigned)lua_mem.used);
     ll_log_flush();
+    return result;
 }

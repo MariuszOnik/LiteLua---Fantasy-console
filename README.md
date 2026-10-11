@@ -9,18 +9,55 @@ manual and describes what works **now**; the full API reference is in
 
 ## Running
 
-Copy `litelua.nds` to your flashcard or DSi SD card (or open it in melonDS).
+Copy `litelua.nds` to your flashcard or DSi SD card (or open it in melonDS). On the first
+start LiteLua creates the folder `litelua/` on the card:
 
-- If there is a `main.lua` in the current directory of the SD card (usually the root), it is
-  run.
-- Otherwise a built-in demo starts. It shows the frame rate, input and memory use, and lets
-  you test the error screen (SELECT, Y) and the memory limit (L+R).
+```
+litelua/carts/        your cartridges, one folder each
+litelua/lib/          Lua libraries shared by all cartridges
+litelua/saves/<id>/   save files, one folder per cartridge
+litelua/log.txt       the log (see below)
+```
 
-Cartridges (`.lcart` and folders under `sd:/litelua/carts/`) are coming in a later version.
+LiteLua starts with a list of the cartridges in `litelua/carts` (Up/Down, **A** to run).
+The first entry is a built-in demo that shows the frame rate, input and memory use and lets
+you test the error screen (SELECT, Y) and the memory limit (L+R). Without an SD card the
+demo starts directly. (This simple list will be replaced by a proper cartridge browser.)
+
+To leave a running game and go back to the list, hold **L+R+START+SELECT**.
+
+Packed cartridges (`.lcart` files) are coming in a later version; for now a cartridge is a
+folder.
 
 ## Writing a game
 
-A game is Lua 5.4 code that defines up to three callbacks. All of them are optional.
+A game is a cartridge: a folder in `litelua/carts/` with at least two files:
+
+```
+litelua/carts/mygame/
+  cart.lua      the manifest (required)
+  main.lua      the code that starts the game (required)
+  src/          more of your code, loaded with require
+  lib/          libraries used by the game
+  gfx/ font/ map/ sfx/ music/ data/   assets (graphics and sound come later)
+```
+
+The folder names are fixed, so every cartridge looks the same. The manifest `cart.lua`
+returns a table:
+
+```lua
+return {
+  id = "mygame",          -- a-z 0-9 _ - . ; names the save folder (default: folder name)
+  title = "My Game",      -- shown in lists (default: id)
+  author = "me",
+  version = "1.0",
+  api = 1,                -- LiteLua API version the game was written for
+  memory = 2048,          -- Lua memory limit in KB (optional, default 2048)
+}
+```
+
+The manifest may only contain data (no function calls). `main.lua` is Lua 5.4 code that
+defines up to three callbacks. All of them are optional.
 
 ```lua
 local x, y
@@ -53,6 +90,58 @@ The game runs at **30 frames per second**. Every frame:
 
 `TOP` is `0` and `BOTTOM` is `1`. Keep game logic in `_update` and only drawing in `_draw`.
 
+### More files: require and data
+
+Split bigger games into modules in `src/`. `require("enemy")` loads `src/enemy.lua`,
+`require("ai.path")` loads `src/ai/path.lua`. If it is not there, LiteLua looks in the
+cartridge's `lib/` and then in the shared `litelua/lib/` on the card.
+
+```lua
+-- src/enemy.lua
+local M = {}
+function M.new(x, y) return { x = x, y = y } end
+return M
+
+-- main.lua
+local enemy = require("enemy")
+```
+
+Files are always given relative to the cartridge folder, with `/`: `"data/level1.txt"`.
+Absolute paths, drive names and `..` are not allowed — a game only sees its own files.
+The cartridge's files are **read only**: `io.open`, `io.lines`, `loadfile` and `dofile`
+read them.
+
+```lua
+for line in io.lines("data/level1.txt") do
+  print(line)
+end
+```
+
+### Saving
+
+Paths starting with `save/` go to the game's own save folder `litelua/saves/<id>/` (the
+`id` from the manifest). This is the only place a game can write to; the folder is created
+when needed. `os.remove` and `os.rename` work only there.
+
+```lua
+local f = io.open("save/score.txt", "w")
+f:write(best_score)
+f:close()
+
+local f = io.open("save/score.txt")   -- nil if there is no save yet
+if f then best_score = tonumber(f:read("a")) f:close() end
+```
+
+Not available to games: `os.execute`, `os.exit`, `os.getenv`, `os.tmpname`, `io.popen`,
+`io.tmpfile`, loading C libraries and precompiled (binary) Lua chunks. The time functions
+`os.time`, `os.clock`, `os.date` and `os.difftime` work.
+
+### Switching cartridges
+
+`sys.run("othergame")` starts the cartridge `litelua/carts/othergame` and `sys.exit()` goes
+back to the cartridge list. Both take effect when the current callback returns: the game is
+closed and all its memory is freed, then the next one starts fresh.
+
 ### Numbers
 
 LiteLua uses 32-bit integers and 32-bit floats (the DS has no floating point unit).
@@ -83,7 +172,8 @@ end
 When your code fails — a syntax error or an error while running — the game stops and the
 error screen shows the message with the file and line (`main.lua:12: ...`), the stack
 traceback (which functions were called) and the memory use. Press **START** to restart the
-game from the beginning (with fresh memory).
+game from the beginning (with fresh memory) or **SELECT** to go back to the cartridge list.
+File names are relative to the cartridge (`src/enemy.lua:7: ...`).
 
 You can raise your own errors with `error("message")`.
 
@@ -91,8 +181,9 @@ You can raise your own errors with `error("message")`.
 
 Each game has its own Lua memory with a limit of **2 MB** (the same on DS and DSi, so games
 run on both). When the limit is reached, the game stops with `not enough memory`.
-`collectgarbage("count")` returns the memory in use in KB. Cartridges will be able to ask
-for a bigger limit in their manifest.
+`collectgarbage("count")` returns the memory in use in KB. A cartridge can ask for a
+different limit with `memory` (in KB) in `cart.lua`. A DS has only 4 MB of RAM in total,
+so limits much above the default only help on a DSi (16 MB).
 
 ### Debugging and the log file
 
@@ -133,8 +224,8 @@ about 5 µs. At 30 FPS a frame has about 33 ms for `_update` and `_draw`, so pla
 thousand Lua operations per frame, not hundreds of thousands. Integer `//` and `%` use the
 DS hardware divider and are cheap. Keep hot values in `local` variables.
 
-`tests/bench.lua` in the repository is the VM benchmark: copy it to the SD card as
-`main.lua` to run it.
+The repository has a VM benchmark cartridge in `tests/carts/bench`: copy the folder to
+`litelua/carts/` to run it.
 
 ## Building from source
 
@@ -153,7 +244,9 @@ builds stay available for comparison.
 In melonDS, enable DLDI and "Sync SD to folder" (Emu settings → DLDI) and point it to a
 folder, by default `D:\Programowanie\sdcard` (override with the `LITELUA_SDCARD` environment
 variable). After each build `build.ps1` copies the ROM there as `litelua.nds` and creates
-the `litelua\carts`, `litelua\lib` and `litelua\saves` folders.
+the `litelua\carts`, `litelua\lib` and `litelua\saves` folders. The test cartridges from
+`tests\carts` (VM benchmark, files and sandbox test) are copied to `litelua\carts`,
+replacing older copies.
 
 ```powershell
 .\build.ps1 run      # build, copy to the SD folder and start melonDS

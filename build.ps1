@@ -1,6 +1,7 @@
 # Builds LiteLua with the Wonderful toolchain + BlocksDS installed in C:\msys64.
 # Usage:
-#   .\build.ps1          build, archive to builds\, copy to the emulator SD card
+#   .\build.ps1          build, archive to builds\, copy the ROM and the test carts
+#                        (tests\carts) to the emulator SD card
 #   .\build.ps1 run      the same, then start melonDS with the ROM
 #   .\build.ps1 clean    any other arguments are passed to make (no archive/copy)
 # Git Bash cannot run this toolchain (missing libstdc++ DLL / mixed msys runtimes),
@@ -61,6 +62,13 @@ try {
         }
         Copy-Item litelua.nds (Join-Path $sdcard 'litelua.nds') -Force
         Write-Host "  DEPLOY  $sdcard\litelua.nds"
+        # Test carts from tests\carts replace their copies on the SD card
+        foreach ($cart in Get-ChildItem tests\carts -Directory) {
+            $dest = Join-Path $sdcard "litelua\carts\$($cart.Name)"
+            if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
+            Copy-Item $cart.FullName $dest -Recurse
+        }
+        Write-Host "  DEPLOY  test carts -> litelua\carts"
     } else {
         Write-Host "  (no emulator SD card at $sdcard, skipping deploy)"
     }

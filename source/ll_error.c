@@ -50,7 +50,7 @@ static int print_wrapped(const char *s, size_t len, int row, int last_row)
     return row + 1;
 }
 
-void ll_error_show(const char *err, const LLMem *mem)
+bool ll_error_show(const char *err, const LLMem *mem)
 {
     static const char trace_tag[] = "\nstack traceback:";
 
@@ -76,15 +76,16 @@ void ll_error_show(const char *err, const LLMem *mem)
                (unsigned)(mem->used / 1024), (unsigned)(mem->limit / 1024),
                (unsigned)(mem->peak / 1024));
     }
-    printf("\x1b[23;0HSTART: restart");
+    printf("\x1b[23;0HSTART: restart  SELECT: cart list");
 
-    while (1)
+    u32 keys;
+    do
     {
         swiWaitForVBlank();
         scanKeys();
-        if (keysDown() & KEY_START)
-            break;
-    }
+        keys = keysDown();
+    } while (!(keys & (KEY_START | KEY_SELECT)));
 
     consoleClear();
+    return (keys & KEY_START) != 0;
 }

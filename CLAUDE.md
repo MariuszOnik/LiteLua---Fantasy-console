@@ -36,7 +36,7 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - `docs/api/*.lua` — dokumentacja API Lua (źródło dla edytora na DS i `docs/API.md`, D12);
   aktualizuj w każdym punkcie zmieniającym API, potem `python tools/apidoc.py`
 - `tools/` — skrypty PC (Python)
-- `tests/` — skrypty testowe Lua (np. `bench.lua` — benchmark VM, D19; na SD jako `main.lua`)
+- `tests/carts/` — kartridże testowe (`bench` — benchmark VM, D19; `files` — piaskownica, D20); `build.ps1` kopiuje je na kartę emulatora
 - `README.md` — manual użytkownika (po angielsku, D15); aktualizuj w każdym punkcie, który
   zmienia coś widocznego dla twórców gier
 - `.claude/commands/punkt.md` — komenda `/punkt`: cykl jednego punktu planu

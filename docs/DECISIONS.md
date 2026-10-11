@@ -160,7 +160,7 @@ zsynchronizowanego folderu po zatrzymaniu emulacji.
   (`source/ll_hwdiv.h`, jedno dzielenie daje iloraz i resztę), za `LITELUA_HWDIV`.
   Dzielnik nie jest zapisywany przez przerwania — kod w IRQ nie może go używać.
   Semantyka (zaokrąglenie w dół, `n//0` błąd, `mininteger//-1`) sprawdzana w `tests/bench.lua`.
-- Benchmark: `tests/bench.lua` (skopiować na SD jako `main.lua`), wyniki na ekranie i w logu.
+- Benchmark: `tests/bench.lua` (od P3: kartridż `tests/carts/bench`), wyniki na ekranie i w logu.
 
 Pomiar w melonDS 1.1 (tryb DS, bez JIT), N = 200 000, ms — przed (P1) → po (P2):
 int `%` 922 → 779, float `*` 981 → 886, int `//` 935 → 784, wywołanie funkcji 1648 → 1460,
@@ -169,3 +169,36 @@ razem 8401 → 7479…7530 (−10…11%). melonDS nie liczy cykli dokładnie (br
 tryb ARM vs Thumb), więc ostateczny pomiar na konsoli (D17) — do zrobienia.
 Baseline z D3 (457 ms) był mierzony w trybie DSi (ARM9 133 MHz zamiast 67 MHz) — melonDS był
 wtedy ustawiony na DSi. Porównujemy tylko pomiary z tego samego trybu (linia `console:` w logu).
+
+## D20 (2026-10-11) — Kartridże z folderów: start, manifest, piaskownica, sys
+- **Start (do P10):** tymczasowa lista w C (`source/ll_menu.c`) — foldery z `litelua/carts`
+  posortowane + „(built-in demo)” na początku; góra/dół, A. Kursor zapamiętany między
+  wywołaniami. Bez karty SD od razu demo. `main.lua` w katalogu głównym karty już nie jest
+  uruchamiany. Wyjście z gry: przytrzymanie L+R+START+SELECT (do menu pauzy w P10).
+  Ekran błędu: START — restart, SELECT — lista.
+- **Manifest `cart.lua`:** liczony w osobnym małym stanie Lua (limit 64 KB, puste `_ENV`,
+  tylko tekst), więc może zawierać tylko dane. Pola z D6 plus `memory` (KB, 64…65536,
+  domyślnie 2048) = limit pamięci Lua. Domyślne: `id` = nazwa folderu (małe litery, znaki
+  spoza `a-z 0-9 _ - .` → `_`), `title` = id, `entry` = `main.lua`. `api` > 1 i `display`
+  inny niż `dual30` → błąd przy otwarciu.
+- **Ścieżki:** zawsze względne do kartridża, `/`; odrzucane: `/` na początku, `:`, `\`, `..`
+  (`.` i podwójne `/` są usuwane). `save/...` → `litelua/saves/<id>/...` (folder tworzony
+  przy pierwszym zapisie) — jedyne miejsce do zapisu. Pliki kartridża tylko do odczytu.
+- **Zapisy:** tylko przez `io` w `save/` (bez osobnego API; wygodne funkcje mogą dojść jako
+  biblioteka Lua).
+- **io/os:** `io.open` (własna implementacja na `luaL_Stream`), `io.lines/input/output`
+  z nazwą pliku przez nią; bez `io.popen/tmpfile`. `os`: `time/clock/date/difftime`;
+  `remove/rename` tylko w `save/`; bez `execute/exit/getenv/tmpname/setlocale`.
+- **Kod:** `load` wymusza tryb `"t"` (binarne chunki mogą wywrócić VM), `loadfile`/`dofile`
+  czytają z kartridża. `require`: `package.preload` → `src/` → `lib/` kartridża →
+  `litelua/lib/` (D6); `a.b` → `a/b.lua`; bez bibliotek C (`loadlib`, `cpath`).
+- **Nazwy chunków (D13):** `@main.lua`, `@src/game/util.lua`; wspólne biblioteki
+  `@litelua/lib/x.lua` (struktura kartridża nie ma folderu `litelua/`, więc bez kolizji).
+- **sys:** `sys.run(name)` (folder w `litelua/carts`; manifest sprawdzany od razu — błąd w
+  grze, jeśli zły) i `sys.exit()` (lista). Działają po powrocie z bieżącego callbacku
+  (też z głównego chunku i `_init`), zgodnie z D14.
+- **Testy:** kartridże testowe w `tests/carts/` (`bench`, `files`); `build.ps1` kopiuje je
+  do `litelua/carts` na karcie emulatora (zastępując stare kopie). Testy w melonDS można
+  prowadzić automatycznie: uruchomienie z ROM-em, klawisze przez `keybd_event` (domyślne
+  mapowanie melonDS: A=`A`, B=`B`, X=`X`, START=Enter, SELECT=spacja, strzałki), zamknięcie
+  okna i odczyt logu.

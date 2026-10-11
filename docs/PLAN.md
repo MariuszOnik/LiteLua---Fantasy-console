@@ -6,17 +6,23 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
-- **Ostatnio:** P2 — wydajność Lua (D19): `lvm.c` + `ltable.c` jako ARM w ITCM (24,3/32 KB),
-  sprzętowy dzielnik dla całkowitych `//` i `%`, benchmark `tests/bench.lua`. melonDS: −10…11%
-  łącznie (np. `int %` 922 → 779 ms / 200k). Pomiar da się zrobić automatycznie: skopiować
-  bench jako `sdcard\main.lua`, uruchomić melonDS z ROM-em, po ~20 s zamknąć okno
-  (`CloseMainWindow`) i przeczytać `sdcard\litelua\log.txt`.
-- **Następny krok:** P3 — pliki i kartridże.
-- **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`.
-- **Manual:** `README.md` (D15) — opisuje stan po P2.
-- **Otwarte sprawy:** pomiar P2 na prawdziwej konsoli (ROM-y `builds/litelua-P2-base.nds`
-  i `builds/litelua-P2.nds` + `tests/bench.lua`), wynik dopisać do D19; błąd jako struktura plik/linia (D13) — przy P3 lub P11; limit pamięci z manifestu (`cart.lua`) — do zrobienia w P3
-  (`ll_mem_init` przyjmuje limit). Konsola tekstowa jest na dolnym ekranie tylko do P4.
+- **Ostatnio:** P3 (część) — kartridże z folderów (D20): tymczasowa lista w C, manifest
+  `cart.lua` (limit pamięci `memory`), piaskownica `io`/`os`/`load`, `require` (src → lib →
+  litelua/lib), katalog zapisów `save/`, `sys.run`/`sys.exit`, nazwy chunków względne (D13).
+  Kartridże testowe `tests/carts/bench`, `tests/carts/files` (wszystkie testy ok w melonDS,
+  0 B po `lua_close`). P2 (D19): pomiar na konsoli nadal otwarty.
+- **Następny krok:** dokończyć P3 — czytnik `.lcart` (ZIP store/deflate, `tinfl` z miniz,
+  MIT, D10) za tym samym interfejsem co foldery (`ll_cart_read`, `ll_cart_fopen` — dla ZIP
+  np. `fmemopen` na rozpakowanym buforze; sprawdzić, czy newlib w BlocksDS go ma), `.lcart`
+  na liście i w `sys.run`, NitroFS (inicjalizacja; kartridże systemowe później).
+- **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
+  `files.lua`, `sys.lua`.
+- **Manual:** `README.md` (D15) — opisuje stan po P3 (część: kartridże z folderów).
+- **Otwarte sprawy:** pomiar P2 na prawdziwej konsoli (ROM-y `builds/litelua-P2-base.nds` i
+  `builds/litelua-P2.nds` + kartridż `tests/carts/bench`; uwaga: te dwa ROM-y uruchamiają
+  `main.lua` z katalogu głównego karty, więc tam trzeba skopiować `tests/carts/bench/main.lua`),
+  wynik dopisać do D19; błąd jako struktura plik/linia (D13) — przy P11. Konsola tekstowa
+  jest na dolnym ekranie tylko do P4.
 
 ## Punkty
 
@@ -32,11 +38,13 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   `lvm.c` (i ewentualnie `ltable.c`/`lgc.c`) w trybie ARM + ITCM; sprzętowy dzielnik DS dla
   `%` i `//`; pomiar względem baseline z D3. Zrobione wg D19 (`lvm` + `ltable` w ITCM,
   `tests/bench.lua`); pomiar na konsoli jeszcze otwarty.
-- [ ] **P3 — Pliki i kartridże**
+- [~] **P3 — Pliki i kartridże**
   Nazwy chunków względne do kartridża (`src/player.lua`, D13); limit pamięci z `cart.lua`;
   `sys.run(path)` + przełączanie stanów po powrocie z callbacku (D14).
   SD + NitroFS; manifest `cart.lua`; stała struktura katalogów (D6); czytnik `.lcart` (ZIP);
   piaskownica `io`/`os`; `require` z kolejnością z D6; katalog zapisów.
+  Zrobione (D20): foldery, manifest, piaskownica, `require`, zapisy, `sys.run`/`sys.exit`,
+  lista tymczasowa. Zostało: `.lcart` (ZIP), NitroFS.
 - [ ] **P4 — Grafika**
   Tekstury należą do stanu Lua kartridża i są zwalniane przy jego zamknięciu (D14).
   Dekompresja deflate (wspólna z P3) + własny dekoder PNG → tekstury 4/8/16 bpp wg D10

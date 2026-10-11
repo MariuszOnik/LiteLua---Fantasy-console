@@ -1,4 +1,4 @@
--- LiteLua VM benchmark (P2). Copy to the SD card as main.lua.
+-- LiteLua VM benchmark (P2, D19). Runs as the cart "bench".
 -- Results go to the bottom screen and to litelua/log.txt.
 -- The first two tests are the P0 baseline from D3 (200k iterations).
 
