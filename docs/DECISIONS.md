@@ -351,4 +351,5 @@ Ustalone z użytkownikiem przed P4:
 - Fonty z `font/` kartridża (też o zmiennej szerokości) — później (D10 przewiduje PNG z
   siatką + szerokości).
 - Pomiar melonDS (tryb DS): 1560 znaków (40 × 39) = 7,4 ms (~4,7 µs/znak); scena testowa
-  z wieloma wywołaniami 4 ms. Konsola — do zmierzenia.
+  z wieloma wywołaniami 4 ms. **Konsola DSi:** ~2,7 µs/znak — pełny ekran 24 × 39 = 936
+  znaków w 2,5 ms; scena testowa (dużo krótkich wywołań) 3,3 ms.

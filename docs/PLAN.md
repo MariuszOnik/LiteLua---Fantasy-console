@@ -13,7 +13,7 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 - **Następny krok:** P5 — statystyki: nakładka + `sys.stats()` (pamięć Lua, sterta C,
   VRAM — licznik już jest w `ll_image_vram_used()`, wielokąty/wierzchołki, czas
   `update`/`draw`). Do rozważenia przy okazji: `ll_gfx.c` w ITCM (zostało ~7,7 KB, D19).
-  Do sprawdzenia na konsoli: kartridż `text`.
+  P4c na DSi: pełny ekran tekstu 2,5 ms (D25).
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
   `gfx.lua`, `files.lua`, `sys.lua`.
 - **Manual:** `README.md` (D15) — opisuje stan po P4.
