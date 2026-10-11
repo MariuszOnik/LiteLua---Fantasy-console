@@ -14,9 +14,9 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   folderami potwierdzona na konsoli DSi. P2 zmierzone na konsoli (D19): −14%.
   ROM ma w banerze punkt i czas buildu (D16). Konsola ma serwer FTP (`192.168.1.86:5000`),
   przez który można wgrywać buildy i czytać logi (za zgodą użytkownika).
-- **Następny krok:** P4 — grafika. Najpierw ustalić z użytkownikiem otwarte szczegóły API
-  (nazwy funkcji rysujących, kolory, kamera) — D4 (krótkie nazwy), D10 (PNG), D5 (dual30
-  dopiero w P6: w P4 rysujemy 3D na górnym ekranie, dolny zostaje konsolą tekstową?).
+- **Następny krok:** P4a — rysowanie podstawowe (plan w punkcie P4, decyzje API w D22).
+  Do ustalenia na starcie P4a: paleta 16 kolorów, sygnatury `rect` (x, y, w, h — propozycja)
+  i sposób podawania obrotu/skali w `spr` (dodatkowe argumenty czy osobna funkcja).
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
   `files.lua`, `sys.lua`.
 - **Manual:** `README.md` (D15) — opisuje stan po P3.
@@ -44,12 +44,30 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   piaskownica `io`/`os`; `require` z kolejnością z D6; katalog zapisów.
   Zrobione: D20 (foldery, manifest, piaskownica, `require`, zapisy, `sys`, lista), D21
   (`.lcart` przez miniz, NitroFS, `tools/litelua.py pack`).
-- [ ] **P4 — Grafika**
-  Tekstury należą do stanu Lua kartridża i są zwalniane przy jego zamknięciu (D14).
-  Dekompresja deflate (wspólna z P3) + własny dekoder PNG → tekstury 4/8/16 bpp wg D10
-  (dopełnianie do potęgi dwójki, przezroczystość, licznik VRAM); sprite'y: obrót, skala,
-  odbicia, kolorowanie 4 rogów; prymitywy; kamera; przycinanie; cache bindowania;
-  wbudowany font 6×8 z polskimi znakami.
+- [ ] **P4 — Grafika** (D1, D5, D10, D22) — trzy części, każda z commitem `P4 (część)`.
+  Do P6 (dual30) 3D rysuje tylko **górny ekran**; dolny zostaje konsolą tekstową, a
+  rysowanie w `_draw(BOTTOM)` jest ignorowane (jedno ostrzeżenie w logu). Tekstury i inne
+  zasoby graficzne należą do stanu Lua kartridża i są zwalniane przy jego zamknięciu (D14).
+  - **P4a — rysowanie podstawowe:** inicjalizacja 3D (gl2d, D1) na górnym ekranie, klatka:
+    `_draw(TOP)` między `glBegin2D` a `glFlush`. API (szkic, nazwy do potwierdzenia przy
+    implementacji): `cls([col])`, `pset(x, y, col)`, `line(x1, y1, x2, y2, col)`,
+    `rect(x, y, w, h, col)` / `rectfill`, `circ(x, y, r, col)` / `circfill`,
+    `tri(x1, y1, x2, y2, x3, y3, col)` / `trifill`, `camera([x, y])`, `clip([x, y, w, h])`,
+    półprzezroczystość (`alpha(a)` dla kolejnych rysunków — DS: 32 poziomy). Kolory i
+    paleta 16 wg D22. Kolejność rysowania = kolejność wywołań (głębokość rośnie sama).
+    Limity sprzętu: 2048 czworokątów / 6144 wierzchołków na klatkę — liczone dla P5.
+  - **P4b — obrazy i sprite'y:** własny dekoder PNG (inflate z miniz, D21) → tekstury
+    4/8/16 bpp wg D10 (paleta ≤16 / ≤256 / RGB(A)), przezroczystość (indeks 0 / alfa 0),
+    dopełnianie boków do potęgi dwójki, licznik VRAM (A+B = 256 KB tekstur, palety w E),
+    błąd Lua przy braku miejsca. `img = image("hero")` ładuje `gfx/hero.png` (loader dopisuje
+    katalog i rozszerzenie, D4); arkusze z klatkami (`image("chars", 16, 16)`).
+    `spr(img, x, y, [frame])` + wariant z obrotem (stopnie), skalą, odbiciem i kolorem
+    4 rogów (własny kod quadów, gl2d tego nie ma). Cache bindowania tekstur.
+  - **P4c — tekst:** własny font 6×8 (D22) w ROM (NitroFS), `text(s, x, y, [col])`,
+    szerokość tekstu (`textw`), UTF-8 z polskimi znakami. Fonty z `font/` kartridża —
+    później (P12 albo osobny punkt).
+  Test: kartridż `tests/carts/gfx` pokazujący wszystkie funkcje + pomiar (ile sprite'ów w
+  klatce przy 30 FPS) na konsoli.
 - [ ] **P5 — Statystyki**
   Nakładka (kombinacja przycisków) + `sys.stats()`: pamięć Lua, sterta C (`mallinfo`), VRAM
   (liczona przy uploadzie), wielokąty/wierzchołki (`glGetInt`), czas `update`/`draw`.

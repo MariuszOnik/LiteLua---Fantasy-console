@@ -242,3 +242,16 @@ wtedy ustawiony na DSi. Porównujemy tylko pomiary z tego samego trybu (linia `c
   (ścieżki z `/`; PowerShell 5.1 `Compress-Archive` zapisuje `\`, co psuje ZIP). Deflate
   poziom 9, PNG i inne skompresowane formaty jako store, pomija pliki ukryte. `build.ps1`
   pakuje test `files` jako `files-zip.lcart` na karcie emulatora.
+
+## D22 (2026-10-11) — API grafiki: globalne funkcje, kolory, stopnie, własny font
+Ustalone z użytkownikiem przed P4:
+- **Funkcje rysujące są globalne**, jak w PICO-8 (`cls`, `rect`, `spr`, `text`…) — najkrócej
+  do pisania rysikiem na DS (D4). `print` zostaje konsolą/logiem (D18); tekst na ekranie
+  rysuje `text`.
+- **Kolory:** liczba `0xRRGGBB` (zaokrąglana do 15 bitów DS) **albo** numer `0`–`15` z
+  wbudowanej palety 16 kolorów. Wartości 0–15 to zawsze numery palety (prawdziwe kolory
+  `0x000000`–`0x00000F` są i tak praktycznie czarne). Paletę wybieramy w P4 (własna albo
+  wolna od praw, np. CC0); zmiana palety przez grę — do ustalenia w P4.
+- **Kąty obrotu w stopniach** (0–360, zgodnie z ruchem wskazówek zegara na ekranie).
+- **Wbudowany font 6×8 rysujemy sami** (ASCII + ąćęłńóśźż ĄĆĘŁŃÓŚŹŻ), w repo jako PNG,
+  licencja zlib (D8). Teksty w UTF-8.
