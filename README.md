@@ -178,9 +178,25 @@ padded to a power of two (a 40×24 image takes as much as 64×32). Images can be
 1024×1024; interlaced PNGs are not supported. When video memory is full, `image` fails with
 an "out of video memory" error. All images are freed when the game ends.
 
+### Text
+
+`text(s, x, y, [col])` draws text with the built-in font. Every character is 6×8 pixels,
+so a screen holds 42 columns × 24 rows. `\n` starts a new line, `\t` goes to the next
+multiple of 4 columns. Polish letters work (strings are UTF-8); other characters show as a
+box. `textw(s)` returns the width and height of a text in pixels.
+
+```lua
+text("Score: " .. score, 2, 2, 12)
+local w = textw("GAME OVER")
+text("GAME OVER", (256 - w) // 2, 92, 2)   -- centered
+```
+
+`print` still writes to the console on the bottom screen and to the log; `text` draws on
+the game screen.
+
 ### Speed
 
-The DS draws at most about 2000 shapes or sprites per frame. Every call costs time in Lua
+The DS draws at most about 2000 shapes, sprites or characters per frame. Every call costs time in Lua
 too: on a DSi about 12 µs per `rectfill` and a bit more per `spr`, so a 30 FPS frame has
 room for roughly 1500–2000 of them, less if the game logic is heavy.
 

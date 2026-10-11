@@ -246,6 +246,7 @@ LLRunResult ll_run(const LLCart *cart)
     result = LL_RUN_RESTART;
     ll_gfx_reset();
     ll_image_reset(cart);
+    ll_gfx_font_reset();
     lua_State *L = lua_newstate(ll_mem_alloc, &lua_mem);
     if (L == NULL)
     {

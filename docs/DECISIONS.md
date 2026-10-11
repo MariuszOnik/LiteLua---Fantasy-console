@@ -332,3 +332,23 @@ Ustalone z użytkownikiem przed P4:
   13,8 ms. **Konsola DSi:** `spr` ~17,8 µs (300 = 5,4 ms, 900 = 16,0 ms, równe 30 FPS),
   scena testowa 1,45 ms, start kartridża z testem braku VRAM 0,85 s. Kandydat do
   optymalizacji w P5: `ll_gfx.c` w ITCM.
+
+## D25 (2026-10-11) — Tekst (P4c): wbudowany font 6×8
+- **Font własny, stałej szerokości:** każdy znak to pole 6×8 (glif 5 px + odstęp), 42×24
+  znaki na ekran — także pod edytor kodu (P11). Wielkie litery i cyfry: wiersze 1–6 (wiersz
+  0 na akcenty Ć Ń Ó Ś Ź Ż), małe litery: 2–6, laseczki i ogonki: wiersz 7. Zestaw: ASCII
+  32–126, `ąćęłńóśźżĄĆĘŁŃÓŚŹŻ`, prostokąt dla nieznanych znaków (114 glifów).
+- **Źródło:** wzory liter w `tools/make_font.py` (licencja zlib); skrypt generuje
+  `assets/font6x8.png` (arkusz 16×8 pól, paleta 2 kolory) i `source/ll_font6x8.inc` (ten sam
+  PNG jako tablica C). Font jest w kodzie programu, nie w NitroFS — działa nawet, gdy NitroFS
+  nie wstanie. PNG dekodowany raz (`ll_png`) i wysyłany do VRAM przy starcie każdego
+  kartridża (po `glResetTextures`), 4 KB.
+- **API:** `text(s, x, y, [col])` — UTF-8, `\n` nowa linia, `\t` do wielokrotności 4
+  kolumn; kolor przez kolor wierzchołków (biały glif × kolor), działa z kamerą/zoomem,
+  `clip`, `alpha`; `tint` nie dotyczy tekstu. `textw(s)` → szerokość najdłuższej linii i
+  wysokość w pikselach. Cały napis to jedna lista quadów (jedno `glBegin`, ta sama
+  głębokość). `print` zostaje konsolą/logiem.
+- Fonty z `font/` kartridża (też o zmiennej szerokości) — później (D10 przewiduje PNG z
+  siatką + szerokości).
+- Pomiar melonDS (tryb DS): 1560 znaków (40 × 39) = 7,4 ms (~4,7 µs/znak); scena testowa
+  z wieloma wywołaniami 4 ms. Konsola — do zmierzenia.

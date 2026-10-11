@@ -37,6 +37,16 @@
 
 #define DEFAULT_COLOR 12 // Palette entry used when no color is given
 
+// Built-in 6x8 font (tools/make_font.py): sheet of 16 x 8 cells
+#include "ll_font6x8.inc"
+#define FONT_W 6
+#define FONT_H 8
+#define FONT_COLS 16
+#define FONT_UNKNOWN 113 // Glyph index of the box for unknown characters
+#define TAB_COLS 4
+
+static LLImage font;
+
 // Sweetie 16 palette by GrafxKid (D22)
 static const u32 palette_rgb[16] = {
     0x1a1c2c, 0x5d275d, 0xb13e53, 0xef7d57, 0xffcd75, 0xa7f070, 0x38b764, 0x257179,
@@ -687,6 +697,170 @@ static int l_sspr(lua_State *L)
     return 0;
 }
 
+// --- Text -------------------------------------------------------------------
+
+void ll_gfx_font_reset(void)
+{
+    static LLPng png;
+    static bool decoded;
+    char err[96];
+
+    if (!decoded)
+    {
+        decoded = ll_png_decode(font6x8_png, sizeof(font6x8_png), &png, err,
+                                sizeof(err));
+        if (!decoded)
+            ll_log("font: %s", err);
+    }
+
+    memset(&font, 0, sizeof(font));
+    if (decoded)
+    {
+        font.tex = ll_image_upload(&png, &font.vram, err, sizeof(err));
+        if (font.tex == 0)
+            ll_log("font: %s", err);
+        font.w = png.w;
+        font.h = png.h;
+    }
+}
+
+// Decodes one UTF-8 character; invalid bytes give 0xFFFD
+static unsigned utf8_next(const unsigned char **p, const unsigned char *end)
+{
+    const unsigned char *s = *p;
+    unsigned c = *s++;
+    int extra = c >= 0xf0 ? 3 : c >= 0xe0 ? 2 : c >= 0xc0 ? 1 : 0;
+    if (c >= 0x80 && extra == 0)
+    {
+        *p = s;
+        return 0xfffd;
+    }
+    if (extra)
+        c &= 0x3f >> extra;
+    for (int i = 0; i < extra; i++)
+    {
+        if (s >= end || (*s & 0xc0) != 0x80)
+        {
+            *p = s;
+            return 0xfffd;
+        }
+        c = (c << 6) | (*s++ & 0x3f);
+    }
+    *p = s;
+    return c;
+}
+
+// Glyph index in the font sheet (order of tools/make_font.py)
+static int glyph_index(unsigned c)
+{
+    // ąćęłńóśźż ĄĆĘŁŃÓŚŹŻ follow ASCII 32-126 (95 glyphs)
+    static const unsigned short polish[18] = {
+        0x105, 0x107, 0x119, 0x142, 0x144, 0xf3, 0x15b, 0x17a, 0x17c,
+        0x104, 0x106, 0x118, 0x141, 0x143, 0xd3, 0x15a, 0x179, 0x17b,
+    };
+    if (c >= 32 && c < 127)
+        return (int)c - 32;
+    for (int i = 0; i < 18; i++)
+    {
+        if (polish[i] == c)
+            return 95 + i;
+    }
+    return FONT_UNKNOWN;
+}
+
+// text(s, x, y, [col]): draws text with the built-in 6x8 font. '\n' starts a
+// new line, tabs go to the next multiple of 4 columns.
+static int l_text(lua_State *L)
+{
+    size_t len;
+    const unsigned char *s = (const unsigned char *)luaL_checklstring(L, 1, &len);
+    const unsigned char *end = s + len;
+    int x0 = arg_int(L, 2), y = arg_int(L, 3);
+    u16 color = arg_color(L, 4);
+
+    if (font.tex == 0 || len == 0 || !poly_begin(true))
+        return 0;
+    if (gs.bound != font.tex)
+    {
+        glBindTexture(0, font.tex);
+        gs.bound = font.tex;
+    }
+
+    // All glyphs are quads of one polygon list at the same depth
+    glColor(color);
+    glBegin(GL_QUADS);
+    bool first = true;
+    int col = 0;
+    while (s < end)
+    {
+        unsigned c = utf8_next(&s, end);
+        if (c == '\n')
+        {
+            y += FONT_H;
+            col = 0;
+            continue;
+        }
+        if (c == '\t')
+        {
+            col = (col / TAB_COLS + 1) * TAB_COLS;
+            continue;
+        }
+        if (c == ' ')
+        {
+            col++;
+            continue;
+        }
+
+        int g = glyph_index(c);
+        int u = (g % FONT_COLS) * FONT_W * 16, v = (g / FONT_COLS) * FONT_H * 16;
+        int x = x0 + col * FONT_W;
+        int32_t qx1 = x * 4, qy1 = y * 4;
+        int32_t qx2 = (x + FONT_W) * 4, qy2 = (y + FONT_H) * 4;
+
+        glTexCoord2t16(u, v);
+        if (first)
+            glVertex3v16(VXQ(qx1), VYQ(qy1), gs.depth);
+        else
+            glVertex2v16(VXQ(qx1), VYQ(qy1));
+        first = false;
+        glTexCoord2t16(u, v + FONT_H * 16);
+        glVertex2v16(VXQ(qx1), VYQ(qy2));
+        glTexCoord2t16(u + FONT_W * 16, v + FONT_H * 16);
+        glVertex2v16(VXQ(qx2), VYQ(qy2));
+        glTexCoord2t16(u + FONT_W * 16, v);
+        glVertex2v16(VXQ(qx2), VYQ(qy1));
+        col++;
+    }
+    glEnd();
+    prim_end();
+    return 0;
+}
+
+// textw(s) -> w, h: size of the text in pixels (widest line, all lines)
+static int l_textw(lua_State *L)
+{
+    size_t len;
+    const unsigned char *s = (const unsigned char *)luaL_checklstring(L, 1, &len);
+    const unsigned char *end = s + len;
+    int col = 0, max_col = 0, lines = len > 0 ? 1 : 0;
+    while (s < end)
+    {
+        unsigned c = utf8_next(&s, end);
+        if (c == '\n')
+        {
+            lines++;
+            col = 0;
+            continue;
+        }
+        col = c == '\t' ? (col / TAB_COLS + 1) * TAB_COLS : col + 1;
+        if (col > max_col)
+            max_col = col;
+    }
+    lua_pushinteger(L, max_col * FONT_W);
+    lua_pushinteger(L, lines * FONT_H);
+    return 2;
+}
+
 // tint([col]) or tint(c1, c2, c3, c4): colors multiplied with the sprites
 // drawn next; four colors are the corners top left, top right, bottom right,
 // bottom left. tint() removes the tint.
@@ -734,6 +908,8 @@ void ll_gfx_register(lua_State *L)
         { "sprx", l_sprx },
         { "sspr", l_sspr },
         { "tint", l_tint },
+        { "text", l_text },
+        { "textw", l_textw },
         { NULL, NULL },
     };
 

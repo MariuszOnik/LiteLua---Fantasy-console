@@ -658,6 +658,49 @@ spr(hero, x, y)
 tint()
 ```
 
+### `text`
+
+```lua
+text(s, x, y, [col])
+```
+
+Draws text with the built-in font: every character is 6x8 pixels (42 columns x 24 rows fit on a screen). ASCII and the Polish letters are included; other characters show as a box. Works with camera (also zoom), clip and alpha.
+
+| Argument | Type | Description |
+|---|---|---|
+| `s` | string | text; \n starts a new line, \t goes to the next multiple of 4 columns |
+| `x` | number | left |
+| `y` | number | top |
+| `col` | color | color, default: color() |
+
+Example:
+
+```lua
+text("Score: " .. score, 2, 2, 12)
+text("Zażółć gęślą jaźń", 2, 12, 4)
+```
+
+### `textw`
+
+```lua
+textw(s) -> w, h
+```
+
+Measures text, e.g. to center it or draw a box behind it.
+
+| Argument | Type | Description |
+|---|---|---|
+| `s` | string | text |
+
+Returns: integer — width in pixels of the longest line; integer — height in pixels of all lines
+
+Example:
+
+```lua
+local w = textw(msg)
+text(msg, (256 - w) // 2, 90)
+```
+
 ## Files
 
 Reading cartridge files, saving data and loading modules. Paths are relative to the cartridge, "save/..." is the save folder.

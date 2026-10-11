@@ -70,9 +70,7 @@ static u16 rgb15(uint32_t c)
     return RGB15((r * 31 + 127) / 255, (g * 31 + 127) / 255, (b * 31 + 127) / 255);
 }
 
-// Builds the texture data of a decoded PNG and uploads it. Returns the GL
-// texture name, or 0 with a message in 'err'.
-static int upload(const LLPng *png, unsigned *vram, char *err, size_t err_size)
+int ll_image_upload(const LLPng *png, unsigned *vram, char *err, size_t err_size)
 {
     int tw = pow2_side(png->w), th = pow2_side(png->h);
     GL_TEXTURE_TYPE_ENUM type;
@@ -287,12 +285,12 @@ static int load_image(lua_State *L, const char *name)
         luaL_error(L, "%s: %s", rel, err);
 
     unsigned vram;
-    int tex = upload(&png, &vram, err, sizeof(err));
+    int tex = ll_image_upload(&png, &vram, err, sizeof(err));
     if (tex == 0)
     {
         // Unused images may still hold textures: collect them and retry
         lua_gc(L, LUA_GCCOLLECT);
-        tex = upload(&png, &vram, err, sizeof(err));
+        tex = ll_image_upload(&png, &vram, err, sizeof(err));
     }
     int w = png.w, h = png.h;
     ll_png_free(&png);

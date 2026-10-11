@@ -37,7 +37,8 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - `docs/` — plan, decyzje, `newCzatWorkflow.md` (jak zaczynać nowy czat)
 - `docs/api/*.lua` — dokumentacja API Lua (źródło dla edytora na DS i `docs/API.md`, D12);
   aktualizuj w każdym punkcie zmieniającym API, potem `python tools/apidoc.py`
-- `tools/` — skrypty PC (Python): `litelua.py` (`pack` → `.lcart`, reszta w P9), `apidoc.py`
+- `assets/` — zasoby generowane do podglądu/edycji (np. `font6x8.png` z `tools/make_font.py`)
+- `tools/` — skrypty PC (Python): `litelua.py` (`pack` → `.lcart`, reszta w P9), `apidoc.py`, `make_font.py` (font 6×8)
 - `tests/carts/` — kartridże testowe (`bench` — benchmark VM, D19; `files` — piaskownica, D20); `build.ps1` kopiuje je na kartę emulatora
 - `README.md` — manual użytkownika (po angielsku, D15); aktualizuj w każdym punkcie, który
   zmienia coś widocznego dla twórców gier

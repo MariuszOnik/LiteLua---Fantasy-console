@@ -24,6 +24,9 @@ void ll_gfx_begin(int screen);
 // image is shown from the next VBlank.
 void ll_gfx_end(void);
 
+// Uploads the built-in font. Call after the textures were reset (each cart).
+void ll_gfx_font_reset(void);
+
 // Must be called after any glBindTexture outside ll_gfx.c (texture uploads).
 void ll_gfx_texture_changed(void);
 

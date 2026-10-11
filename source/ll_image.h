@@ -10,6 +10,7 @@
 #include "lua.h"
 
 #include "ll_cart.h"
+#include "ll_png.h"
 
 typedef struct {
     int tex;          // GL texture name, shared by views; 0 when freed
@@ -37,6 +38,10 @@ LLImage *ll_image_check(lua_State *L, int idx);
 // frame does not exist.
 void ll_image_frame(lua_State *L, const LLImage *img, int frame,
                     int *x, int *y, int *w, int *h);
+
+// Builds the texture of a decoded PNG (D10 formats) and uploads it. Returns
+// the GL texture name, or 0 with a message in 'err'.
+int ll_image_upload(const LLPng *png, unsigned *vram, char *err, size_t err_size);
 
 // Texture and palette memory in use, in bytes.
 unsigned ll_image_vram_used(void);
