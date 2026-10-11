@@ -23,8 +23,11 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - Buduj przez PowerShell: `.\build.ps1` (albo `.\build.ps1 clean`). Wynik: `litelua.nds`
   + kopia `builds/litelua-P<n>.nds` dla bieżącego punktu planu (D16, stare buildy zostają).
 - Make z Git Basha NIE działa (gcc kończy się kodem 127 — brak `libstdc++-6.dll`, konflikt runtime'ów msys).
-- Test: melonDS w `D:\Programowanie\melonDS-1.1-windows-x86_64`. Timing melonDS nie jest
-  cykliczny — ostateczne pomiary wydajności na konsoli.
+- Test (D17): melonDS w `D:\Programowanie\melonDS-1.1-windows-x86_64`, karta SD emulatora =
+  folder `D:\Programowanie\sdcard` (DLDI „Sync SD to folder”). `.\build.ps1` sam kopiuje tam
+  ROM i tworzy `litelua\carts|lib|saves`; `.\build.ps1 run` uruchamia też melonDS.
+  Na konsoli testujemy, gdy trzeba sprawdzić sprzęt — timing melonDS nie jest cykliczny,
+  ostateczne pomiary wydajności tylko na konsoli.
 
 ## Struktura repo
 - `source/` — kod silnika (C)

@@ -127,3 +127,14 @@ aktualizuje README w tym samym commicie.
 a jeśli go nie ma — pierwszy `[ ]` w `docs/PLAN.md`. Buildy wcześniejszych punktów zostają;
 kolejne buildy w obrębie punktu nadpisują jego plik. Build kończący punkt robimy przed
 oznaczeniem go `[x]` (kolejność z `/punkt`). `builds/` jest poza gitem.
+
+## D17 (2026-10-11) — Testowanie: melonDS na PC, konsola do pomiarów sprzętu
+Na co dzień testujemy w melonDS (`D:\Programowanie\melonDS-1.1-windows-x86_64`). melonDS ma
+włączone DLDI z opcją „Sync SD to folder” = `D:\Programowanie\sdcard` — ten folder jest kartą
+SD konsoli w emulatorze. Na prawdziwej konsoli testujemy, gdy trzeba sprawdzić sprzęt:
+wydajność (timing melonDS nie jest cykliczny), zachowanie kart SD/DLDI, dźwięk, dotyk.
+`build.ps1` po udanym buildzie kopiuje ROM do `sdcard\litelua.nds` i tworzy strukturę z D6
+(`litelua\carts`, `lib`, `saves`); `.\build.ps1 run` dodatkowo uruchamia melonDS z tym ROM-em
+(jeśli melonDS już działa — trzeba zresetować ROM). melonDS synchronizuje folder z obrazem
+przy starcie ROM-u, więc po nowym buildzie zawsze restart/reset. Ścieżki można nadpisać
+zmiennymi `LITELUA_SDCARD` i `LITELUA_MELONDS`.

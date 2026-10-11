@@ -116,6 +116,20 @@ Requires the Wonderful toolchain with BlocksDS installed in `C:\msys64\opt\wonde
 Every build is also copied to `builds/` named after the plan point in progress, so older
 builds stay available for comparison.
 
+### Testing in melonDS
+
+In melonDS, enable DLDI and "Sync SD to folder" (Emu settings → DLDI) and point it to a
+folder, by default `D:\Programowanie\sdcard` (override with the `LITELUA_SDCARD` environment
+variable). After each build `build.ps1` copies the ROM there as `litelua.nds` and creates
+the `litelua\carts`, `litelua\lib` and `litelua\saves` folders.
+
+```powershell
+.\build.ps1 run      # build, copy to the SD folder and start melonDS
+```
+
+melonDS reads the folder when the ROM starts, so reset the ROM after every build. Final
+performance measurements need real hardware — melonDS timing is not cycle accurate.
+
 The API reference is generated from `docs/api/*.lua`:
 
 ```powershell
