@@ -32,18 +32,20 @@ SDIMAGE		:= image.bin
 # Source code paths
 # -----------------
 
-SOURCEDIRS	:= source vendor/lua
-INCLUDEDIRS	:= source vendor/lua
+SOURCEDIRS	:= source vendor/lua vendor/miniz
+INCLUDEDIRS	:= source vendor/lua vendor/miniz
 GFXDIRS		:=
 BINDIRS		:=
 AUDIODIRS	:=
 # List of folders to combine into the root of NitroFS:
-NITROFSDIR	:=
+NITROFSDIR	:= nitrofs
 
 # Defines passed to all files
 # ---------------------------
 
-DEFINES		:=
+# LiteLua: miniz (vendor/miniz) is used for .lcart (ZIP) reading only
+DEFINES		:= -DMINIZ_NO_STDIO -DMINIZ_NO_TIME -DMINIZ_NO_ZLIB_COMPATIBLE_NAMES \
+		   -DMINIZ_NO_ARCHIVE_WRITING_APIS
 
 # Libraries
 # ---------

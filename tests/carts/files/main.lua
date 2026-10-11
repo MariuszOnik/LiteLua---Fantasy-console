@@ -19,7 +19,8 @@ local util = require("game.util")
 check("require src/", util.source() == "@src/game/util.lua", util.source())
 check("require lib/", require("helper").name == "cart lib helper")
 local ok, err = pcall(require, "nothing.here")
-check("require missing", not ok and err:find("src/nothing/here.lua", 1, true))
+check("require missing", not ok and err:find("src/nothing/here.lua", 1, true)
+  and err:find("rom/lib/nothing/here.lua", 1, true))
 local _, e2 = pcall(util.fail)
 check("error has file:line", e2:find("src/game/util.lua:9:", 1, true), e2)
 
@@ -31,6 +32,9 @@ local n = 0
 for _ in io.lines("data/hello.txt") do n = n + 1 end
 check("io.lines", n == 2)
 check("./ path", io.open("./data//hello.txt") ~= nil)
+local s = io.open("data/hello.txt")
+check("seek", s and s:seek("end") > 0 and s:seek("set") == 0 and s:read("l") == "first line")
+if s then s:close() end
 
 -- Writing is only allowed in save/
 check("write cart file", errors(io.open, "data/hello.txt", "w"))
@@ -56,6 +60,7 @@ check("no binary chunks", load(string.dump(function() end)) == nil)
 check("load text", load("return 1 + 1")() == 2)
 check("dofile", errors(dofile, "data/none.lua"))
 check("os.time", type(os.time()) == "number")
+check("sys.run missing", errors(sys.run, "no-such-cart"))
 
 print(fails == 0 and "ALL OK" or (fails .. " FAILED"))
 print("A: sys.run('bench')  B: sys.exit()")

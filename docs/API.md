@@ -277,7 +277,7 @@ end
 require(name) -> module
 ```
 
-Loads a module once: src/<name>.lua, then lib/<name>.lua of the cartridge, then litelua/lib/<name>.lua shared on the SD card. "ai.path" means ai/path.lua.
+Loads a module once: src/<name>.lua, then lib/<name>.lua of the cartridge, then litelua/lib/<name>.lua shared on the SD card, then the libraries built into LiteLua. "ai.path" means ai/path.lua.
 
 | Argument | Type | Description |
 |---|---|---|
@@ -363,11 +363,11 @@ Starting another cartridge and leaving the current one.
 sys.run(name)
 ```
 
-Starts another cartridge when the current callback returns. The current game is closed and all its memory is freed first. An error if the cartridge does not exist or its cart.lua is wrong.
+Starts another cartridge when the current callback returns. "game" finds the folder game or the file game.lcart. The current game is closed and all its memory is freed first. An error if the cartridge does not exist or its cart.lua is wrong.
 
 | Argument | Type | Description |
 |---|---|---|
-| `name` | string | folder name in litelua/carts |
+| `name` | string | folder or .lcart in litelua/carts |
 
 Example:
 

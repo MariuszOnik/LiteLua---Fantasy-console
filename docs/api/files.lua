@@ -43,8 +43,8 @@ end]],
       args = { { "name", "string", "module name, dots become folders" } },
       ret = { { "any", "the value returned by the module file" } },
       desc = "Loads a module once: src/<name>.lua, then lib/<name>.lua of the "
-          .. "cartridge, then litelua/lib/<name>.lua shared on the SD card. "
-          .. "\"ai.path\" means ai/path.lua.",
+          .. "cartridge, then litelua/lib/<name>.lua shared on the SD card, then "
+          .. "the libraries built into LiteLua. \"ai.path\" means ai/path.lua.",
       example = [[
 local enemy = require("enemy")
 local e = enemy.new(10, 20)]],

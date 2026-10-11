@@ -81,7 +81,9 @@ try {
             if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
             Copy-Item $cart.FullName $dest -Recurse
         }
-        Write-Host "  DEPLOY  test carts -> litelua\carts"
+        # The same files test packed as .lcart (ZIP) checks reading from archives
+        python tools\litelua.py pack tests\carts\files (Join-Path $sdcard 'litelua\carts\files-zip.lcart') | Out-Null
+        Write-Host "  DEPLOY  test carts -> litelua\carts (+ files-zip.lcart)"
     } else {
         Write-Host "  (no emulator SD card at $sdcard, skipping deploy)"
     }

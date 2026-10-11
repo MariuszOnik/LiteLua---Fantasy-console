@@ -10,7 +10,7 @@
 typedef enum {
     LL_RUN_RESTART, // Run the same cart again (START on the error screen)
     LL_RUN_MENU,    // Back to the cart list
-    LL_RUN_NEXT,    // Run ll_sys_next_cart() (sys.run)
+    LL_RUN_NEXT,    // Run ll_sys_take_next_cart() (sys.run)
 } LLRunResult;
 
 // Runs one session of 'cart' (the built-in demo when NULL) in a new Lua

@@ -215,3 +215,30 @@ wtedy ustawiony na DSi. Porównujemy tylko pomiary z tego samego trybu (linia `c
   prowadzić automatycznie: uruchomienie z ROM-em, klawisze przez `keybd_event` (domyślne
   mapowanie melonDS: A=`A`, B=`B`, X=`X`, START=Enter, SELECT=spacja, strzałki), zamknięcie
   okna i odczyt logu.
+
+## D21 (2026-10-11) — `.lcart`: czytnik ZIP z miniz, NitroFS, narzędzie `pack`
+- **miniz 3.0.2 (MIT)** w `vendor/miniz` bez zmian, zamiast samego `tinfl` z D10: daje też
+  czytnik ZIP (katalog centralny, store/deflate), więc nie piszemy własnego. Konfiguracja w
+  `Makefile`: `MINIZ_NO_STDIO` (odczyt przez własny callback na `FILE*` — bez ścieżki stdio
+  miniz i jej ostrzeżeń), `MINIZ_NO_TIME`, `MINIZ_NO_ZLIB_COMPATIBLE_NAMES`,
+  `MINIZ_NO_ARCHIVE_WRITING_APIS`. Kompresja deflate (`tdefl`) zostaje dostępna — przyda się
+  do zapisu PNG w edytorze grafiki; inflate dla dekodera PNG (P4) też z miniz.
+- **Kartridż `.lcart`:** archiwum otwarte przez cały czas działania kartridża (`FILE*` +
+  katalog centralny w RAM C, nie liczony do limitu Lua). Pliki rozpakowywane w całości do
+  pamięci przy odczycie (`ll_cart_read`); `io.open` na pliku kartridża dostaje `FILE*` z
+  `fopencookie` nad tym buforem (zwalnianym przy `fclose`) — działa `read`, `lines`, `seek`.
+  Duże pliki (muzyka) będą w P7 strumieniowane inaczej.
+- Nazwy w ZIP porównywane bez rozróżniania wielkości liter (jak FAT dla folderów). Jeśli
+  `cart.lua` nie leży na górze, a w jednym folderze (spakowany cały folder) — ten folder jest
+  prefiksem. `sys.run("x")` i lista: folder `x` albo plik `x.lcart` (folder ma pierwszeństwo).
+  Domyślne `id` z nazwy bez `.lcart`.
+- **Własność otwartego kartridża:** `ll_cart_open`/`ll_cart_close`; `sys.run` otwiera
+  następny kartridż od razu (błąd widoczny w grze), `main` przejmuje go
+  (`ll_sys_take_next_cart`); niewykorzystany (błąd po `sys.run`, L+R+B) jest zamykany.
+- **NitroFS:** `nitroFSInit(NULL)` przy starcie (wynik w logu), zawartość z `nitrofs/` w
+  repo. `require` szuka na końcu w `nitro:/lib/` (nazwa chunku `@rom/lib/x.lua`). Na razie
+  pusto; tu trafią wbudowane biblioteki, font i kartridże systemowe.
+- **`tools/litelua.py pack`** (początek narzędzia z P9): folder → `.lcart` przez `zipfile`
+  (ścieżki z `/`; PowerShell 5.1 `Compress-Archive` zapisuje `\`, co psuje ZIP). Deflate
+  poziom 9, PNG i inne skompresowane formaty jako store, pomija pliki ukryte. `build.ps1`
+  pakuje test `files` jako `files-zip.lcart` na karcie emulatora.

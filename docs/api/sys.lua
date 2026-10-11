@@ -9,8 +9,9 @@ return {
     {
       name = "sys.run", kind = "function",
       sig = "sys.run(name)",
-      args = { { "name", "string", "folder name in litelua/carts" } },
+      args = { { "name", "string", "folder or .lcart in litelua/carts" } },
       desc = "Starts another cartridge when the current callback returns. "
+          .. "\"game\" finds the folder game or the file game.lcart. "
           .. "The current game is closed and all its memory is freed first. "
           .. "An error if the cartridge does not exist or its cart.lua is wrong.",
       example = [[

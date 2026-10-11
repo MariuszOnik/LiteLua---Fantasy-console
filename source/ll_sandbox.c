@@ -4,8 +4,8 @@
 //
 // Carts see their own files through relative paths ("data/level1.txt") and
 // may only read them. Paths starting with "save/" go to litelua/saves/<id>,
-// which is also writable. require looks in src/, lib/ of the cart and then
-// in the shared litelua/lib. Code is only loaded from source text: binary
+// which is also writable. require looks in src/, lib/ of the cart, then in
+// the shared litelua/lib on the SD card and last in nitro:/lib (built in). Code is only loaded from source text: binary
 // chunks are rejected because a broken one can crash the VM.
 
 #include <errno.h>
@@ -73,7 +73,7 @@ static int l_io_open(lua_State *L)
     {
         if (writing)
             ll_cart_make_save_dir(cart);
-        p->f = ll_cart_file(cart, rel, abs, sizeof(abs)) ? fopen(abs, mode) : NULL;
+        p->f = ll_cart_save_path(cart, rel, abs, sizeof(abs)) ? fopen(abs, mode) : NULL;
     }
     else
     {
@@ -94,7 +94,7 @@ static void check_save_path(lua_State *L, int arg, char *abs, size_t size)
     check_path(L, arg, rel, sizeof(rel));
     if (!ll_path_is_save(rel))
         luaL_error(L, "only files in \"save/...\" can be changed");
-    if (!ll_cart_file(cart, rel, abs, size))
+    if (!ll_cart_save_path(cart, rel, abs, size))
         luaL_error(L, "path too long");
 }
 
@@ -117,17 +117,13 @@ static int l_os_rename(lua_State *L)
 
 // --- loading code -----------------------------------------------------------
 
-// Loads a chunk from an absolute path, naming it 'chunkname' (with '@').
-// Returns a Lua status; on error the message is on the stack.
-static int load_file(lua_State *L, const char *abs, const char *chunkname)
+// Compiles source text read by ll_cart_read/ll_file_read (and frees it),
+// naming the chunk '@' + 'name'. Returns a Lua status; on error the message
+// is on the stack.
+static int load_source(lua_State *L, char *src, size_t len, const char *name)
 {
-    size_t len;
-    char *src = ll_file_read(abs, &len);
-    if (src == NULL)
-    {
-        lua_pushfstring(L, "cannot read %s", chunkname + 1);
-        return LUA_ERRFILE;
-    }
+    char chunkname[LL_PATH_MAX + 1];
+    snprintf(chunkname, sizeof(chunkname), "@%s", name);
     int status = luaL_loadbufferx(L, src, len, chunkname, "t");
     free(src);
     return status;
@@ -137,14 +133,14 @@ static int load_file(lua_State *L, const char *abs, const char *chunkname)
 // the path ("@src/player.lua", D13).
 static int load_cart_file(lua_State *L, const char *rel)
 {
-    char abs[LL_PATH_MAX], chunkname[LL_PATH_MAX + 1];
-    if (!ll_cart_file(cart, rel, abs, sizeof(abs)))
+    size_t len;
+    char *src = ll_cart_read(cart, rel, &len);
+    if (src == NULL)
     {
-        lua_pushfstring(L, "path too long: %s", rel);
+        lua_pushfstring(L, "cannot read %s", rel);
         return LUA_ERRFILE;
     }
-    snprintf(chunkname, sizeof(chunkname), "@%s", rel);
-    return load_file(L, abs, chunkname);
+    return load_source(L, src, len, rel);
 }
 
 // loadfile(path [, mode [, env]]); mode is ignored, only text is accepted
@@ -195,7 +191,8 @@ static int l_load(lua_State *L)
 }
 
 // package.searchers entry: "a.b" -> src/a/b.lua, lib/a/b.lua (cart), then
-// litelua/lib/a/b.lua (shared, chunk named "@litelua/lib/a/b.lua").
+// litelua/lib/a/b.lua (shared, chunk named "@litelua/lib/a/b.lua") and
+// nitro:/lib/a/b.lua (built in, chunk named "@rom/lib/a/b.lua").
 static int l_searcher(lua_State *L)
 {
     const char *name = luaL_checkstring(L, 1);
@@ -218,36 +215,38 @@ static int l_searcher(lua_State *L)
     luaL_Buffer tried;
     luaL_buffinit(L, &tried);
 
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < 4; i++)
     {
         char path[LL_PATH_MAX], abs[LL_PATH_MAX];
-        int status;
+        char *src;
+        size_t len;
 
         if (i < 2)
         {
             snprintf(path, sizeof(path), "%s/%s.lua", dirs[i], rel);
-            if (!ll_cart_file(cart, path, abs, sizeof(abs)))
-                continue;
+            src = ll_cart_read(cart, path, &len);
         }
-        else
+        else if (i == 2)
         {
             snprintf(path, sizeof(path), "litelua/lib/%s.lua", rel);
             snprintf(abs, sizeof(abs), "%s/lib/%s.lua", ll_base, rel);
+            src = ll_file_read(abs, &len);
+        }
+        else
+        {
+            snprintf(path, sizeof(path), "rom/lib/%s.lua", rel);
+            snprintf(abs, sizeof(abs), "nitro:/lib/%s.lua", rel);
+            src = ll_file_read(abs, &len);
         }
 
-        FILE *f = fopen(abs, "rb");
-        if (f == NULL)
+        if (src == NULL)
         {
             lua_pushfstring(L, "\n\tno file '%s'", path);
             luaL_addvalue(&tried);
             continue;
         }
-        fclose(f);
 
-        char chunkname[LL_PATH_MAX + 1];
-        snprintf(chunkname, sizeof(chunkname), "@%s", path);
-        status = load_file(L, abs, chunkname);
-        if (status != LUA_OK)
+        if (load_source(L, src, len, path) != LUA_OK)
             return luaL_error(L, "error loading module '%s':\n\t%s", name,
                               lua_tostring(L, -1));
         lua_pushstring(L, path); // Second argument of the loader

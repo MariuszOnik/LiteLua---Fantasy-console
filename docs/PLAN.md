@@ -6,21 +6,20 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
-- **Ostatnio:** P3 (część) — kartridże z folderów (D20): tymczasowa lista w C, manifest
-  `cart.lua` (limit pamięci `memory`), piaskownica `io`/`os`/`load`, `require` (src → lib →
-  litelua/lib), katalog zapisów `save/`, `sys.run`/`sys.exit`, nazwy chunków względne (D13).
-  Kartridże testowe `tests/carts/bench`, `tests/carts/files` (wszystkie testy ok w melonDS,
-  0 B po `lua_close`; potwierdzone też na konsoli DSi). P2 zmierzone na konsoli (D19):
-  −14% łącznie; sprzętowy dzielnik okazał się wolniejszy i został usunięty. ROM ma w banerze
-  punkt i czas buildu (D16); konsola ma serwer FTP (`192.168.1.86:5000`), przez który można
-  wgrywać buildy i czytać logi (za zgodą użytkownika).
-- **Następny krok:** dokończyć P3 — czytnik `.lcart` (ZIP store/deflate, `tinfl` z miniz,
-  MIT, D10) za tym samym interfejsem co foldery (`ll_cart_read`, `ll_cart_fopen` — dla ZIP
-  np. `fmemopen` na rozpakowanym buforze; sprawdzić, czy newlib w BlocksDS go ma), `.lcart`
-  na liście i w `sys.run`, NitroFS (inicjalizacja; kartridże systemowe później).
+- **Ostatnio:** P3 — pliki i kartridże: foldery i `.lcart` (ZIP przez miniz, D21),
+  manifest `cart.lua` z limitem pamięci, piaskownica `io`/`os`/`load`, `require` (src → lib →
+  litelua/lib → nitro:/lib), zapisy w `save/`, `sys.run`/`sys.exit`, tymczasowa lista w C,
+  nazwy chunków względne (D13), NitroFS, `tools/litelua.py pack`. Testy: kartridże
+  `tests/carts/files` (też jako `files-zip.lcart`) i `bench` — wszystko ok w melonDS; wersja z
+  folderami potwierdzona na konsoli DSi. P2 zmierzone na konsoli (D19): −14%.
+  ROM ma w banerze punkt i czas buildu (D16). Konsola ma serwer FTP (`192.168.1.86:5000`),
+  przez który można wgrywać buildy i czytać logi (za zgodą użytkownika).
+- **Następny krok:** P4 — grafika. Najpierw ustalić z użytkownikiem otwarte szczegóły API
+  (nazwy funkcji rysujących, kolory, kamera) — D4 (krótkie nazwy), D10 (PNG), D5 (dual30
+  dopiero w P6: w P4 rysujemy 3D na górnym ekranie, dolny zostaje konsolą tekstową?).
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
   `files.lua`, `sys.lua`.
-- **Manual:** `README.md` (D15) — opisuje stan po P3 (część: kartridże z folderów).
+- **Manual:** `README.md` (D15) — opisuje stan po P3.
 - **Otwarte sprawy:** błąd jako struktura plik/linia (D13) — przy P11. Konsola tekstowa jest
   na dolnym ekranie tylko do P4.
 
@@ -38,13 +37,13 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   `lvm.c` (i ewentualnie `ltable.c`/`lgc.c`) w trybie ARM + ITCM; sprzętowy dzielnik DS dla
   `%` i `//` (sprawdzony, odrzucony); pomiar względem baseline z D3. Zrobione wg D19 (`lvm` + `ltable` w ITCM,
   `tests/carts/bench`); na konsoli DSi −14%.
-- [~] **P3 — Pliki i kartridże**
+- [x] **P3 — Pliki i kartridże**
   Nazwy chunków względne do kartridża (`src/player.lua`, D13); limit pamięci z `cart.lua`;
   `sys.run(path)` + przełączanie stanów po powrocie z callbacku (D14).
   SD + NitroFS; manifest `cart.lua`; stała struktura katalogów (D6); czytnik `.lcart` (ZIP);
   piaskownica `io`/`os`; `require` z kolejnością z D6; katalog zapisów.
-  Zrobione (D20): foldery, manifest, piaskownica, `require`, zapisy, `sys.run`/`sys.exit`,
-  lista tymczasowa. Zostało: `.lcart` (ZIP), NitroFS.
+  Zrobione: D20 (foldery, manifest, piaskownica, `require`, zapisy, `sys`, lista), D21
+  (`.lcart` przez miniz, NitroFS, `tools/litelua.py pack`).
 - [ ] **P4 — Grafika**
   Tekstury należą do stanu Lua kartridża i są zwalniane przy jego zamknięciu (D14).
   Dekompresja deflate (wspólna z P3) + własny dekoder PNG → tekstury 4/8/16 bpp wg D10

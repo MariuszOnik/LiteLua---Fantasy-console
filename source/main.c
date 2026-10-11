@@ -6,6 +6,7 @@
 #include <stdio.h>
 
 #include <fat.h>
+#include <filesystem.h>
 #include <nds.h>
 
 #include "ll_cart.h"
@@ -26,6 +27,10 @@ int main(int argc, char **argv)
     ll_log_init(fat_ok);
     ll_cart_init(fat_ok);
 
+    // Built-in files (nitro:/), e.g. libraries in nitro:/lib for require
+    bool nitro_ok = nitroFSInit(NULL);
+    ll_log("NitroFS: %s", nitro_ok ? "ok" : "not available");
+
     static LLCart cart;
     bool choose = fat_ok; // Without an SD card only the demo can run
     bool is_cart = false;
@@ -35,6 +40,7 @@ int main(int argc, char **argv)
         if (choose)
         {
             char name[LL_NAME_MAX], err[160];
+            ll_cart_close(&cart);
             is_cart = ll_menu_choose(name, sizeof(name));
             if (is_cart && !ll_cart_open(&cart, name, err, sizeof(err)))
             {
@@ -54,7 +60,8 @@ int main(int argc, char **argv)
                 choose = fat_ok;
                 break;
             case LL_RUN_NEXT:
-                cart = *ll_sys_next_cart();
+                ll_cart_close(&cart);
+                cart = ll_sys_take_next_cart(); // Takes over the open archive
                 is_cart = true;
                 choose = false;
                 break;

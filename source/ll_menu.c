@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Zlib
 //
 // LiteLua - temporary cart list (D20), replaced by the cart selection cart
-// in P10. Lists the folders in litelua/carts on the text console.
+// in P10. Lists the folders and .lcart files in litelua/carts on the text
+// console.
 
 #include <dirent.h>
 #include <stdbool.h>
@@ -39,7 +40,10 @@ static int list_carts(char *names[], int max)
     struct dirent *e;
     while (n < max && (e = readdir(dir)) != NULL)
     {
-        if (e->d_type != DT_DIR || e->d_name[0] == '.')
+        if (e->d_name[0] == '.')
+            continue;
+        if (e->d_type != DT_DIR
+            && !(e->d_type == DT_REG && ll_cart_is_file_name(e->d_name)))
             continue;
         if (strlen(e->d_name) >= LL_NAME_MAX)
             continue;

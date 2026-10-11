@@ -15,6 +15,14 @@
 static LLSysRequest request;
 static LLCart next_cart;
 
+// Closes a cart opened by sys.run that will not be started
+void ll_sys_discard(void)
+{
+    if (request == LL_SYS_RUN)
+        ll_cart_close(&next_cart);
+    request = LL_SYS_NONE;
+}
+
 // sys.run(name): runs the cart litelua/carts/<name> after this callback
 static int l_run(lua_State *L)
 {
@@ -22,8 +30,9 @@ static int l_run(lua_State *L)
     luaL_argcheck(L, *name && strchr(name, '/') == NULL
                   && strchr(name, '\\') == NULL && strchr(name, ':') == NULL
                   && strcmp(name, ".") != 0 && strcmp(name, "..") != 0,
-                  1, "cart name expected (a folder in litelua/carts)");
+                  1, "cart name expected (a folder or .lcart in litelua/carts)");
 
+    ll_sys_discard(); // An earlier sys.run in the same callback
     char err[160];
     if (!ll_cart_open(&next_cart, name, err, sizeof(err)))
         return luaL_error(L, "sys.run: %s", err);
@@ -35,6 +44,7 @@ static int l_run(lua_State *L)
 // sys.exit(): back to the cart list after this callback
 static int l_exit(lua_State *L)
 {
+    ll_sys_discard();
     request = LL_SYS_EXIT;
     return 0;
 }
@@ -47,7 +57,7 @@ void ll_sys_register(lua_State *L)
         { NULL, NULL },
     };
 
-    request = LL_SYS_NONE;
+    ll_sys_discard();
     luaL_newlib(L, funcs);
     lua_setglobal(L, "sys");
 }
@@ -57,7 +67,8 @@ LLSysRequest ll_sys_request(void)
     return request;
 }
 
-const LLCart *ll_sys_next_cart(void)
+LLCart ll_sys_take_next_cart(void)
 {
-    return &next_cart;
+    request = LL_SYS_NONE; // The caller owns the open cart now
+    return next_cart;
 }

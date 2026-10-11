@@ -26,8 +26,8 @@ demo starts directly. (This simple list will be replaced by a proper cartridge b
 
 To leave a running game and go back to the list, hold **L+R+B** together.
 
-Packed cartridges (`.lcart` files) are coming in a later version; for now a cartridge is a
-folder.
+A cartridge is either a folder or a single `.lcart` file (see below); both show up in the
+list.
 
 ## Writing a game
 
@@ -56,7 +56,22 @@ return {
 }
 ```
 
-The manifest may only contain data (no function calls). `main.lua` is Lua 5.4 code that
+The manifest may only contain data (no function calls).
+
+#### Packing a cartridge: `.lcart`
+
+A `.lcart` file is the cartridge folder packed into one ZIP file — easier to copy and share.
+LiteLua reads it directly, without unpacking. Pack it with the tool from the repository
+(Python 3):
+
+```
+python tools/litelua.py pack mygame              # -> mygame.lcart
+python tools/litelua.py pack mygame out.lcart
+```
+
+Any ZIP tool works too if `cart.lua` ends up at the top of the archive (or inside a single
+top folder) and the file is renamed to `.lcart`. Copy it to `litelua/carts/`.
+`sys.run("mygame")` finds both the folder `mygame` and `mygame.lcart`. `main.lua` is Lua 5.4 code that
 defines up to three callbacks. All of them are optional.
 
 ```lua
@@ -94,7 +109,8 @@ The game runs at **30 frames per second**. Every frame:
 
 Split bigger games into modules in `src/`. `require("enemy")` loads `src/enemy.lua`,
 `require("ai.path")` loads `src/ai/path.lua`. If it is not there, LiteLua looks in the
-cartridge's `lib/` and then in the shared `litelua/lib/` on the card.
+cartridge's `lib/`, then in the shared `litelua/lib/` on the card and last among the
+libraries built into LiteLua.
 
 ```lua
 -- src/enemy.lua
@@ -138,7 +154,8 @@ Not available to games: `os.execute`, `os.exit`, `os.getenv`, `os.tmpname`, `io.
 
 ### Switching cartridges
 
-`sys.run("othergame")` starts the cartridge `litelua/carts/othergame` and `sys.exit()` goes
+`sys.run("othergame")` starts the cartridge `litelua/carts/othergame` (a folder or
+`othergame.lcart`) and `sys.exit()` goes
 back to the cartridge list. Both take effect when the current callback returns: the game is
 closed and all its memory is freed, then the next one starts fresh.
 
@@ -246,7 +263,7 @@ folder, by default `D:\Programowanie\sdcard` (override with the `LITELUA_SDCARD`
 variable). After each build `build.ps1` copies the ROM there as `litelua.nds` and creates
 the `litelua\carts`, `litelua\lib` and `litelua\saves` folders. The test cartridges from
 `tests\carts` (VM benchmark, files and sandbox test) are copied to `litelua\carts`,
-replacing older copies.
+replacing older copies, and the files test is also packed as `files-zip.lcart`.
 
 ```powershell
 .\build.ps1 run      # build, copy to the SD folder and start melonDS
@@ -263,4 +280,5 @@ python tools/apidoc.py   # writes docs/API.md
 
 ## License
 
-zlib — see [LICENSE](LICENSE). Lua is MIT licensed (`vendor/lua/LICENSE`).
+zlib — see [LICENSE](LICENSE). Lua is MIT licensed (`vendor/lua/LICENSE`), miniz (ZIP and
+deflate) is MIT licensed (`vendor/miniz/LICENSE`).

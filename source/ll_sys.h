@@ -21,7 +21,11 @@ void ll_sys_register(lua_State *L);
 // Request made by the cart; checked by the runtime after every callback.
 LLSysRequest ll_sys_request(void);
 
-// Cart requested by sys.run (valid when the request is LL_SYS_RUN).
-const LLCart *ll_sys_next_cart(void);
+// Cart requested by sys.run (valid when the request is LL_SYS_RUN). The
+// caller takes over the open cart and must close it; the request is cleared.
+LLCart ll_sys_take_next_cart(void);
+
+// Drops the request; a cart opened by sys.run is closed.
+void ll_sys_discard(void);
 
 #endif // LL_SYS_H__

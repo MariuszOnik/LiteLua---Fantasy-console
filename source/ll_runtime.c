@@ -246,6 +246,8 @@ LLRunResult ll_run(const LLCart *cart)
         frame_loop(L);
 
     lua_close(L);
+    if (result != LL_RUN_NEXT)
+        ll_sys_discard(); // sys.run followed by an error, or L+R+B
 
     // Everything must be freed by lua_close; anything left is an allocator bug
     ll_log("closed, peak Lua mem %u KB, left after close: %u bytes",

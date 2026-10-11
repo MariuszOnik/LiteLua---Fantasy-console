@@ -8,9 +8,9 @@
 
 #include <stddef.h>
 
-// Shows the carts in litelua/carts and the built-in demo, and waits for a
-// choice. Returns false for the demo, true with the cart's folder name in
-// 'name'. The cursor position is kept between calls.
+// Shows the carts in litelua/carts (folders and .lcart files) and the
+// built-in demo, and waits for a choice. Returns false for the demo, true
+// with the cart's name in 'name'. The cursor position is kept between calls.
 bool ll_menu_choose(char *name, size_t size);
 
 #endif // LL_MENU_H__
