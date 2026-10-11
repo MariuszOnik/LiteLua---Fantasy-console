@@ -1,0 +1,8 @@
+build/
+*.nds
+*.elf
+*.sav
+sdroot/
+image.bin
+compile_commands.json
+ref/
