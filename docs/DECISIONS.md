@@ -120,3 +120,10 @@ README (po angielsku) to podręcznik użytkownika: jak uruchomić, jak napisać 
 klatki, wejście, błędy, pamięć, kartridże… Pełna referencja API jest w `docs/API.md`
 (generowana, D12). Każdy punkt planu, który zmienia coś widocznego dla gracza/twórcy,
 aktualizuje README w tym samym commicie.
+
+## D16 (2026-10-11) — Archiwum buildów z numerem punktu
+`build.ps1` po udanym buildzie (bez argumentów make) kopiuje ROM do
+`builds/litelua-P<n>.nds`, gdzie `P<n>` to punkt, nad którym trwa praca: pierwszy `[~]`,
+a jeśli go nie ma — pierwszy `[ ]` w `docs/PLAN.md`. Buildy wcześniejszych punktów zostają;
+kolejne buildy w obrębie punktu nadpisują jego plik. Build kończący punkt robimy przed
+oznaczeniem go `[x]` (kolejność z `/punkt`). `builds/` jest poza gitem.

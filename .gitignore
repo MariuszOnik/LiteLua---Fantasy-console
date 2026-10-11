@@ -6,3 +6,4 @@ sdroot/
 image.bin
 compile_commands.json
 ref/
+builds/
