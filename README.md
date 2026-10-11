@@ -51,6 +51,7 @@ return {
   author = "me",
   version = "1.0",
   api = 1,
+  -- memory = 3072,     -- optional: Lua memory limit in KB (default 2048, see "Memory")
 }
 ```
 
