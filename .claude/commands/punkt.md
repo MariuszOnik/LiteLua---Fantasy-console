@@ -21,6 +21,7 @@ jeśli jakiś punkt ma status `[~]`, kontynuuj najpierw jego).
    użytkownikowi, co ma sprawdzić w melonDS / na konsoli.
 5. **Dokumentacja.** Jeśli punkt dodał lub zmienił API Lua — zaktualizuj `docs/api/*.lua`
    (format: `docs/api/README.md`, po angielsku, z przykładem) i uruchom `python tools/apidoc.py`.
+   Jeśli zmieniło się coś widocznego dla twórcy gier — zaktualizuj manual w `README.md` (D15).
    Następnie zaktualizuj `docs/PLAN.md`: status punktu (`[x]` albo `[~]`, jeśli nie
    skończony), sekcję „Gdzie skończyliśmy” (ostatnio / następny krok / otwarte sprawy) tak, żeby
    nowe okno czatu mogło kontynuować bez tej rozmowy. Nowe decyzje dopisz do `docs/DECISIONS.md`

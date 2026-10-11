@@ -32,5 +32,7 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - `docs/api/*.lua` — dokumentacja API Lua (źródło dla edytora na DS i `docs/API.md`, D12);
   aktualizuj w każdym punkcie zmieniającym API, potem `python tools/apidoc.py`
 - `tools/` — skrypty PC (Python)
+- `README.md` — manual użytkownika (po angielsku, D15); aktualizuj w każdym punkcie, który
+  zmienia coś widocznego dla twórców gier
 - `.claude/commands/punkt.md` — komenda `/punkt`: cykl jednego punktu planu
 - `ref/` — sklonowane projekty referencyjne (MicroLua, µLibrary, libnds, maxmod, libxm7), ignorowane przez git

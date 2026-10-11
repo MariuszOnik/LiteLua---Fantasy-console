@@ -95,3 +95,28 @@ sprite'a przez API); kolory zaokrąglane do 15 bitów; boki tekstur dopełniane 
 plik czyta edytor kodu na DS (P11: podpowiedzi i pomoc z przykładami) i `tools/apidoc.py`
 (generuje `docs/API.md`). Opisy po angielsku. Każdy punkt planu, który dodaje lub zmienia API,
 aktualizuje te pliki w tym samym commicie.
+
+## D13 (2026-10-11) — Błędy: plik i linia jako dane
+Nie usuwamy informacji debugowych z chunków. Błędy składni: plik i linia z prefiksu
+komunikatu `plik:linia:`. Błędy wykonania: handler błędów czyta ramki przez
+`lua_getstack`/`lua_getinfo` i zwraca strukturę (plik, linia, komunikat, ramki stosu),
+wskazując pierwszą ramkę z kodu gracza (pomija funkcje C, np. `error()`). Chunki ładowane z
+nazwą względną do kartridża (`src/player.lua`), żeby edytor mógł otworzyć plik. Ekran błędu
+w edytorze: „Edytuj” → plik i linia; dotknięcie ramki stosu → tamto miejsce. Edytor może
+sprawdzać składnię w tle (`load` bez uruchamiania).
+
+## D14 (2026-10-11) — Każdy kartridż w nowym `lua_State`
+Gra, ekran wyboru i edytor działają każdy we własnym, nowym stanie; przy wyjściu `lua_close`
+zwalnia całą pamięć Lua. Przełączanie: `sys.run(path)` tylko zapisuje żądanie, C zamyka stan
+po powrocie z callbacku i tworzy nowy (manifest, limit pamięci, piaskownica). Zasoby poza Lua
+(tekstury, dźwięki) należą do stanu i są zwalniane przy jego zamknięciu. Po `lua_close`
+licznik alokatora powinien wynosić 0 (kontrola wycieków w wersji debug).
+Edytor → gra: **wariant A** — edytor zapisuje bufory na SD, zamyka swój stan, gra dostaje
+całą pamięć; po wyjściu lub błędzie edytor startuje od nowa i wraca do pliku, linii i
+kursora. Odrzucony wariant B (dwa stany naraz) — za mało RAM na DS (4 MB).
+
+## D15 (2026-10-11) — `README.md` jako manual, aktualizowany w każdym punkcie
+README (po angielsku) to podręcznik użytkownika: jak uruchomić, jak napisać grę, cykl
+klatki, wejście, błędy, pamięć, kartridże… Pełna referencja API jest w `docs/API.md`
+(generowana, D12). Każdy punkt planu, który zmienia coś widocznego dla gracza/twórcy,
+aktualizuje README w tym samym commicie.

@@ -1,7 +1,8 @@
 # Plan pracy LiteLua
 
 Status: `[ ]` do zrobienia, `[~]` w toku, `[x]` gotowe. Po każdym punkcie: build, aktualizacja
-tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D12), commit
+tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D12),
+**manual w `README.md`** (D15), commit
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
@@ -13,7 +14,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   względem baseline z D3; benchmark z P0 usunięty z `main.c` — odtworzyć jako `main.lua`
   albo wbudowany test, `micros()` zostało).
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`.
-- **Otwarte sprawy:** limit pamięci z manifestu (`cart.lua`) — do zrobienia w P3
+- **Manual:** `README.md` (D15) — opisuje stan po P1.
+- **Otwarte sprawy:** błąd jako struktura plik/linia (D13) — przy P3 lub P11; limit pamięci z manifestu (`cart.lua`) — do zrobienia w P3
   (`ll_mem_init` przyjmuje limit). Konsola tekstowa jest na dolnym ekranie tylko do P4.
 
 ## Punkty
@@ -29,9 +31,12 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   `lvm.c` (i ewentualnie `ltable.c`/`lgc.c`) w trybie ARM + ITCM; sprzętowy dzielnik DS dla
   `%` i `//`; pomiar względem baseline z D3.
 - [ ] **P3 — Pliki i kartridże**
+  Nazwy chunków względne do kartridża (`src/player.lua`, D13); limit pamięci z `cart.lua`;
+  `sys.run(path)` + przełączanie stanów po powrocie z callbacku (D14).
   SD + NitroFS; manifest `cart.lua`; stała struktura katalogów (D6); czytnik `.lcart` (ZIP);
   piaskownica `io`/`os`; `require` z kolejnością z D6; katalog zapisów.
 - [ ] **P4 — Grafika**
+  Tekstury należą do stanu Lua kartridża i są zwalniane przy jego zamknięciu (D14).
   Dekompresja deflate (wspólna z P3) + własny dekoder PNG → tekstury 4/8/16 bpp wg D10
   (dopełnianie do potęgi dwójki, przezroczystość, licznik VRAM); sprite'y: obrót, skala,
   odbicia, kolorowanie 4 rogów; prymitywy; kamera; przycinanie; cache bindowania;
@@ -42,13 +47,18 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 - [ ] **P6 — Tryb dual30 (domyślny)**
   Zrzut obrazu i zamiana banków C/D; `_draw(screen)` wołane dla ekranu rysowanego w klatce.
 - [ ] **P7 — Dźwięk**
+  Dźwięki/strumienie zatrzymywane i zwalniane przy zamknięciu stanu kartridża (D14).
   Maxmod: efekty WAV, muzyka `.mas` z SD (`mmPlayMAS`), strumieniowanie WAV/ADPCM z SD.
 - [ ] **P8 — Mapy kafelkowe**
 - [ ] **P9 — Narzędzie `litelua` na PC (Python)**
   `pack` (folder → `.lcart`), `audio` (MP3/OGG/FLAC → WAV ADPCM), `music` (→ `.mas`), `gfx`.
 - [ ] **P10 — Ekran wyboru kartridży** (kartridż systemowy w Lua)
+  Wyjście z gry (menu pauzy) → powrót do listy na zapamiętaną pozycję (D14).
 - [ ] **P11 — Edytor kodu na DS** z klawiaturą ekranową
-  Kod na górnym ekranie, klawiatura na dolnym; kolorowanie składni; skok do linii błędu.
+  Kod na górnym ekranie, klawiatura na dolnym; kolorowanie składni; przycisk „Edytuj” na
+  ekranie błędu → plik i linia, dotknięcie ramki stosu (D13); sprawdzanie składni w tle
+  (`load` bez uruchamiania); uruchomienie gry wg D14 wariant A (zapis buforów, powrót do
+  pliku/linii/kursora).
 - [ ] **P11a — Podpowiedzi i pomoc w edytorze**
   - Źródła: API z `docs/api/*.lua` (D12, w ROM przez NitroFS), słowa kluczowe Lua, wybrane
     funkcje biblioteki standardowej (osobny plik `docs/api/lua.lua`), nazwy z kodu gracza
