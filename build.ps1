@@ -11,6 +11,9 @@
 #   LITELUA_SDCARD  folder synced by melonDS as the DLDI SD card
 #   LITELUA_MELONDS melonDS folder
 #   LITELUA_TAG     optional word added to the ROM banner (e.g. a test variant)
+#   LITELUA_VERSION release build (e.g. v0.6.0): the banner shows the version
+#                   instead of the plan point and time, and the ROM is archived
+#                   as builds\litelua-<version>.nds (D29)
 
 $ErrorActionPreference = 'Stop'
 $msys = 'C:\msys64'
@@ -47,6 +50,9 @@ try {
         # The ROM is removed so ndstool always writes the new banner.
         $subtitle = (@($name, $env:LITELUA_TAG, (Get-Date -Format 'MM-dd HH:mm')) |
                      Where-Object { $_ }) -join ' '
+        if ($env:LITELUA_VERSION) {
+            $subtitle = "$($env:LITELUA_VERSION) Lua fantasy console"
+        }
         Remove-Item litelua.nds -ErrorAction SilentlyContinue
         $make += " GAME_SUBTITLE='$subtitle'"
     }
@@ -60,8 +66,11 @@ try {
         exit $LASTEXITCODE
     }
 
-    # Archive the ROM as builds/litelua-P<n>.nds. Builds of earlier points are
-    # kept; rebuilds within a point overwrite.
+    # Archive the ROM as builds/litelua-P<n>.nds (or -<version> for a release).
+    # Builds of earlier points are kept; rebuilds within a point overwrite.
+    if ($env:LITELUA_VERSION) {
+        $name = $env:LITELUA_VERSION
+    }
     if ($name) {
         New-Item -ItemType Directory -Force builds | Out-Null
         Copy-Item litelua.nds "builds\litelua-$name.nds" -Force

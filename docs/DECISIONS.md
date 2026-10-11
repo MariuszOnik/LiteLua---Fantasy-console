@@ -438,3 +438,16 @@ Pełny opis ze szkicami: `docs/UX.md`. Ustalone z użytkownikiem:
   pomijany (`ll_skip_bom`), jak w `luaL_loadfile`.
 - Demo i kartridże testowe przerobione: wyniki fontem na dolnym ekranie; demo nie używa
   X/Y (kolizja z L+R+X/Y): błąd = strzałka w górę, brak pamięci = w dół.
+
+## D29 (2026-10-11) — Wydania na GitHubie: numeracja i build wydaniowy
+- Repozytorium: https://github.com/MariuszOnik/LiteLua---Fantasy-console (`origin`). Push
+  i wydania tylko na prośbę użytkownika.
+- **Numeracja:** `v0.<n>.0` = stan po zamknięciu punktu P<n> (pierwsze wydanie `v0.6.0`
+  po P6); poprawki w obrębie punktu → `v0.<n>.<k>`. `v1.0` — po edytorach. Wydania jako
+  pre-release, dopóki jest przed 1.0.
+- **Build wydaniowy:** `$env:LITELUA_VERSION='v0.6.0'; .\build.ps1` — baner ROM-u pokazuje
+  wersję zamiast punktu planu i czasu (D16), ROM w `builds/litelua-<wersja>.nds`. Tag git
+  `v0.<n>.0` na commicie wydania.
+- **Pliki wydania:** `litelua.nds` + przykładowe gry jako `.lcart` (`tools/litelua.py pack`).
+  Wydanie tworzy użytkownik na stronie GitHuba (brak `gh` na tym komputerze); notatki
+  przygotowuje agent.
