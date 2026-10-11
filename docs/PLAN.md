@@ -6,17 +6,16 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
-- **Ostatnio:** P1 — jądro: pętla 30 FPS (`_init`/`_update`/`_draw(screen)`), alokator z
-  licznikiem i limitem (2 MB domyślnie), ekran błędu ze śladem stosu i restartem (START),
-  wejście `btn`/`btnp`/`btnr`/`touch` (D11). Bez `main.lua` na SD rusza wbudowane demo
-  (`source/ll_demo.c`). Potwierdzone w melonDS: 30 FPS, oba ekrany, wejście, ekran błędu,
-  log na SD `litelua/log.txt` (D18) z traceback i 0 B po `lua_close`.
-- **Następny krok:** P2 — wydajność Lua (ARM + ITCM dla `lvm.c`, dzielnik sprzętowy, pomiar
-  względem baseline z D3; benchmark z P0 usunięty z `main.c` — odtworzyć jako `main.lua`
-  albo wbudowany test, `micros()` zostało).
+- **Ostatnio:** P2 — wydajność Lua (D19): `lvm.c` + `ltable.c` jako ARM w ITCM (24,3/32 KB),
+  sprzętowy dzielnik dla całkowitych `//` i `%`, benchmark `tests/bench.lua`. melonDS: −10…11%
+  łącznie (np. `int %` 922 → 779 ms / 200k). Pomiar da się zrobić automatycznie: skopiować
+  bench jako `sdcard\main.lua`, uruchomić melonDS z ROM-em, po ~20 s zamknąć okno
+  (`CloseMainWindow`) i przeczytać `sdcard\litelua\log.txt`.
+- **Następny krok:** P3 — pliki i kartridże.
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`.
-- **Manual:** `README.md` (D15) — opisuje stan po P1.
-- **Otwarte sprawy:** błąd jako struktura plik/linia (D13) — przy P3 lub P11; limit pamięci z manifestu (`cart.lua`) — do zrobienia w P3
+- **Manual:** `README.md` (D15) — opisuje stan po P2.
+- **Otwarte sprawy:** pomiar P2 na prawdziwej konsoli (ROM-y `builds/litelua-P2-base.nds`
+  i `builds/litelua-P2.nds` + `tests/bench.lua`), wynik dopisać do D19; błąd jako struktura plik/linia (D13) — przy P3 lub P11; limit pamięci z manifestu (`cart.lua`) — do zrobienia w P3
   (`ll_mem_init` przyjmuje limit). Konsola tekstowa jest na dolnym ekranie tylko do P4.
 
 ## Punkty
@@ -29,9 +28,10 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   ekran błędu ze śladem stosu (nie zawiesza konsoli); moduł wejścia (przyciski, dotyk).
   Pliki: `source/ll_runtime.c` (pętla), `ll_mem.c`, `ll_error.c`, `ll_input.c`, `ll_demo.c`.
   Dodatek po P1: log na SD `ll_log.c` (D18), `print`/`log`.
-- [ ] **P2 — Wydajność Lua**
+- [x] **P2 — Wydajność Lua**
   `lvm.c` (i ewentualnie `ltable.c`/`lgc.c`) w trybie ARM + ITCM; sprzętowy dzielnik DS dla
-  `%` i `//`; pomiar względem baseline z D3.
+  `%` i `//`; pomiar względem baseline z D3. Zrobione wg D19 (`lvm` + `ltable` w ITCM,
+  `tests/bench.lua`); pomiar na konsoli jeszcze otwarty.
 - [ ] **P3 — Pliki i kartridże**
   Nazwy chunków względne do kartridża (`src/player.lua`, D13); limit pamięci z `cart.lua`;
   `sys.run(path)` + przełączanie stanów po powrocie z callbacku (D14).

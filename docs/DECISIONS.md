@@ -147,3 +147,25 @@ pamięci po `lua_close` (powinno zostać 0 B), wszystko z `print` (konsola + log
 zatwierdzany (`fflush` + `fsync`) raz na klatkę gry tylko gdy coś dopisano, i od razu po
 błędzie — crash traci co najwyżej ostatnią klatkę. Limit 1 MB. melonDS przenosi log do
 zsynchronizowanego folderu po zatrzymaniu emulacji.
+
+## D19 (2026-10-11) — Wydajność VM: lvm.c + ltable.c w ARM/ITCM, sprzętowy dzielnik
+- `lvm.c` i `ltable.c` kompilowane jako kod ARM i umieszczane w ITCM przez pliki-opakowania
+  `source/ll_lvm.itcm.arm.c` i `source/ll_ltable.itcm.arm.c` (`#include` pliku z vendor;
+  oryginały wyłączone z buildu w `Makefile`). Linker BlocksDS umieszcza w ITCM kod plików
+  `*.itcm*`. Osobna reguła `%.itcm.arm.c` bez `-mlong-calls` — ITCM (0x01000000) i RAM
+  główny są w zasięgu `BL`; zmierzone: szybciej i mniej miejsca. Reszta Lua zostaje w Thumb.
+- ITCM: 24,3 KB z 32 KB (wektory libnds ~1 KB, `lvm` ~19 KB, `ltable` ~4,5 KB). `ldo.c`
+  (~6 KB w ARM) się nie zmieścił z zapasem — zostawiamy ~7,7 KB na przyszłe gorące funkcje.
+- `//` i `%` na liczbach całkowitych (`luaV_idiv`, `luaV_mod`) przez sprzętowy dzielnik DS
+  (`source/ll_hwdiv.h`, jedno dzielenie daje iloraz i resztę), za `LITELUA_HWDIV`.
+  Dzielnik nie jest zapisywany przez przerwania — kod w IRQ nie może go używać.
+  Semantyka (zaokrąglenie w dół, `n//0` błąd, `mininteger//-1`) sprawdzana w `tests/bench.lua`.
+- Benchmark: `tests/bench.lua` (skopiować na SD jako `main.lua`), wyniki na ekranie i w logu.
+
+Pomiar w melonDS 1.1 (tryb DS, bez JIT), N = 200 000, ms — przed (P1) → po (P2):
+int `%` 922 → 779, float `*` 981 → 886, int `//` 935 → 784, wywołanie funkcji 1648 → 1460,
+pole tabeli 1227 → 1057…1107, tablica 917 → 773, konkatenacja 1475 → 1456, `sqrt` 297 → 286;
+razem 8401 → 7479…7530 (−10…11%). melonDS nie liczy cykli dokładnie (brak modelu cache,
+tryb ARM vs Thumb), więc ostateczny pomiar na konsoli (D17) — do zrobienia.
+Baseline z D3 (457 ms) mierzony był prawdopodobnie w innych warunkach (tryb DSi/133 MHz);
+porównujemy tylko pomiary z tej samej konfiguracji.

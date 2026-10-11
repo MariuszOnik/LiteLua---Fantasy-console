@@ -115,6 +115,9 @@ SOURCES_S	+= $(shell find -L $(SOURCEDIRS) -name "*.s")
 SOURCES_C	+= $(shell find -L $(SOURCEDIRS) -name "*.c")
 SOURCES_CPP	+= $(shell find -L $(SOURCEDIRS) -name "*.cpp")
 
+# LiteLua: Lua files built through ARM/ITCM wrappers in source/ (D19)
+SOURCES_C	:= $(filter-out vendor/lua/lvm.c vendor/lua/ltable.c,$(SOURCES_C))
+
 # Compiler and linker flags
 # -------------------------
 
@@ -300,6 +303,13 @@ $(BUILDDIR)/%.arm.cpp.o : %.arm.cpp
 	$(V)$(CXX) $(CXXFLAGS) -MMD -MP -marm -mlong-calls -c -o $@ $<
 
 endif
+
+# LiteLua: ARM code for ITCM (D19). ITCM and main RAM are within BL range, so
+# no long calls (measured: faster and smaller than the generic .arm.c rule).
+$(BUILDDIR)/%.itcm.arm.c.o : %.itcm.arm.c
+	@echo "  CC      $<"
+	@$(MKDIR) -p $(@D)
+	$(V)$(CC) $(CFLAGS) -MMD -MP -marm -c -o $@ $<
 
 $(BUILDDIR)/%.bin.o $(BUILDDIR)/%_bin.h : %.bin
 	@echo "  BIN2C   $<"
