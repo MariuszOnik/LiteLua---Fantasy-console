@@ -28,6 +28,9 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 ## Struktura repo
 - `source/` — kod silnika (C)
 - `vendor/lua/` — Lua 5.4.8 (LUA_32BITS=1)
-- `docs/` — plan, decyzje, `newCzatWorkflow.md` (jak zaczynać nowy czat), (później) dokumentacja API
+- `docs/` — plan, decyzje, `newCzatWorkflow.md` (jak zaczynać nowy czat)
+- `docs/api/*.lua` — dokumentacja API Lua (źródło dla edytora na DS i `docs/API.md`, D12);
+  aktualizuj w każdym punkcie zmieniającym API, potem `python tools/apidoc.py`
+- `tools/` — skrypty PC (Python)
 - `.claude/commands/punkt.md` — komenda `/punkt`: cykl jednego punktu planu
 - `ref/` — sklonowane projekty referencyjne (MicroLua, µLibrary, libnds, maxmod, libxm7), ignorowane przez git

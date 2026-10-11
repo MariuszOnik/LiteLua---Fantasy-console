@@ -88,3 +88,10 @@ sprite'a przez API); kolory zaokrąglane do 15 bitów; boki tekstur dopełniane 
   `cart.lua` (P3). Przekroczenie → błąd „not enough memory” na ekranie błędu, nie crash.
 - **Błąd:** ekran z komunikatem, śladem stosu i zużyciem pamięci; START restartuje kartridż
   (nowy `lua_State`). `micros()` zostaje jako globalna funkcja do pomiarów.
+
+## D12 (2026-10-11) — Dokumentacja API: dane Lua, aktualizowana w każdym punkcie
+Źródło: `docs/api/<moduł>.lua` — każdy plik zwraca tabelę z samymi literałami (format w
+`docs/api/README.md`): nazwa, rodzaj, sygnatura, argumenty, wyniki, opis, przykład. Ten sam
+plik czyta edytor kodu na DS (P11: podpowiedzi i pomoc z przykładami) i `tools/apidoc.py`
+(generuje `docs/API.md`). Opisy po angielsku. Każdy punkt planu, który dodaje lub zmienia API,
+aktualizuje te pliki w tym samym commicie.

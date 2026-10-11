@@ -1,7 +1,8 @@
 # Plan pracy LiteLua
 
 Status: `[ ]` do zrobienia, `[~]` w toku, `[x]` gotowe. Po każdym punkcie: build, aktualizacja
-tego pliku, commit `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
+tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D12), commit
+`P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
 - **Ostatnio:** P1 — jądro: pętla 30 FPS (`_init`/`_update`/`_draw(screen)`), alokator z
@@ -11,6 +12,7 @@ tego pliku, commit `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 - **Następny krok:** P2 — wydajność Lua (ARM + ITCM dla `lvm.c`, dzielnik sprzętowy, pomiar
   względem baseline z D3; benchmark z P0 usunięty z `main.c` — odtworzyć jako `main.lua`
   albo wbudowany test, `micros()` zostało).
+- **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`.
 - **Otwarte sprawy:** limit pamięci z manifestu (`cart.lua`) — do zrobienia w P3
   (`ll_mem_init` przyjmuje limit). Konsola tekstowa jest na dolnym ekranie tylko do P4.
 
@@ -46,7 +48,9 @@ tego pliku, commit `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
   `pack` (folder → `.lcart`), `audio` (MP3/OGG/FLAC → WAV ADPCM), `music` (→ `.mas`), `gfx`.
 - [ ] **P10 — Ekran wyboru kartridży** (kartridż systemowy w Lua)
 - [ ] **P11 — Edytor kodu na DS** z klawiaturą ekranową
+  Podpowiedzi (sugestie nazw i sygnatur) i pomoc z przykładami z `docs/api/*.lua` (D12),
+  pliki w ROM (NitroFS).
 - [ ] **P12 — Edytor grafiki**
 - [ ] **P13 — Edytor map**
 - [ ] **P14 — Edytor efektów dźwiękowych**
-- [ ] **P15 — Tryb single60, dokumentacja API, przykładowe kartridże**
+- [ ] **P15 — Tryb single60, przegląd dokumentacji API, przykładowe kartridże**
