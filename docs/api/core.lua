@@ -53,6 +53,25 @@ end]],
       desc = "Bottom (touch) screen id (1), passed to _draw.",
     },
     {
+      name = "print", kind = "function",
+      sig = "print(...)",
+      args = { { "...", "any", "values, separated by tabs" } },
+      desc = "Writes the values to the text console and to the log file "
+          .. "litelua/log.txt on the SD card.",
+      example = [[
+print("score", score)]],
+    },
+    {
+      name = "log", kind = "function",
+      sig = "log(...)",
+      args = { { "...", "any", "values, separated by tabs" } },
+      desc = "Writes the values only to the log file litelua/log.txt on the "
+          .. "SD card, with the time since start. The file is saved once per "
+          .. "frame; logging every frame slows the game down.",
+      example = [[
+log("enemy spawned at", x, y)]],
+    },
+    {
       name = "micros", kind = "function",
       sig = "micros() -> integer",
       ret = { { "integer", "microseconds since boot" } },

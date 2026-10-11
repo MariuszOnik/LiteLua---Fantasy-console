@@ -19,6 +19,7 @@
 
 #include "ll_error.h"
 #include "ll_input.h"
+#include "ll_log.h"
 #include "ll_mem.h"
 #include "ll_runtime.h"
 
@@ -59,7 +60,11 @@ static int msg_handler(lua_State *L)
 static int panic_handler(lua_State *L)
 {
     const char *msg = lua_tostring(L, -1);
-    ll_error_show(msg ? msg : "unprotected error", &lua_mem);
+    if (msg == NULL)
+        msg = "unprotected error";
+    ll_log("PANIC: %s", msg);
+    ll_log_flush();
+    ll_error_show(msg, &lua_mem);
     longjmp(panic_jmp, 1);
     return 0;
 }
@@ -67,7 +72,16 @@ static int panic_handler(lua_State *L)
 static void show_error(lua_State *L)
 {
     const char *msg = lua_tostring(L, -1);
-    ll_error_show(msg ? msg : "(error object is not a string)", &lua_mem);
+    if (msg == NULL)
+        msg = "(error object is not a string)";
+
+    ll_log("ERROR (Lua mem %u/%u KB, peak %u KB):",
+           (unsigned)(lua_mem.used / 1024), (unsigned)(lua_mem.limit / 1024),
+           (unsigned)(lua_mem.peak / 1024));
+    ll_log_text(msg, strlen(msg));
+    ll_log_flush();
+
+    ll_error_show(msg, &lua_mem);
 }
 
 // Calls global function 'name' if it exists. 'screen' < 0 means no argument.
@@ -104,6 +118,7 @@ static void register_api(lua_State *L)
     lua_setglobal(L, "BOTTOM");
 
     ll_input_register(L);
+    ll_log_register(L);
 }
 
 static bool load_main(lua_State *L, const char *path)
@@ -138,6 +153,7 @@ static void frame_loop(lua_State *L)
 
         if (!call_hook(L, "_draw", SCREEN_BOTTOM))
             return;
+        ll_log_flush();
         swiWaitForVBlank();
     }
 }
@@ -145,16 +161,24 @@ static void frame_loop(lua_State *L)
 void ll_run(const char *path)
 {
     ll_mem_init(&lua_mem, LL_MEM_DEFAULT_LIMIT);
+    ll_log("run: %s (Lua mem limit %u KB)", path ? path : "built-in demo",
+           (unsigned)(lua_mem.limit / 1024));
 
     lua_State *L = lua_newstate(ll_mem_alloc, &lua_mem);
     if (L == NULL)
     {
+        ll_log("cannot create Lua state");
         ll_error_show("cannot create Lua state", &lua_mem);
         return;
     }
 
     if (setjmp(panic_jmp) != 0)
+    {
+        ll_log("Lua state abandoned after panic (%u KB leaked)",
+               (unsigned)(lua_mem.used / 1024));
+        ll_log_flush();
         return;
+    }
     lua_atpanic(L, panic_handler);
 
     lua_pushcfunction(L, msg_handler); // MSGH_INDEX
@@ -165,4 +189,9 @@ void ll_run(const char *path)
         frame_loop(L);
 
     lua_close(L);
+
+    // Everything must be freed by lua_close; anything left is an allocator bug
+    ll_log("closed, peak Lua mem %u KB, left after close: %u bytes",
+           (unsigned)(lua_mem.peak / 1024), (unsigned)lua_mem.used);
+    ll_log_flush();
 }

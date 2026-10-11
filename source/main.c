@@ -8,6 +8,7 @@
 #include <fat.h>
 #include <nds.h>
 
+#include "ll_log.h"
 #include "ll_runtime.h"
 
 static bool file_exists(const char *path)
@@ -27,6 +28,7 @@ int main(int argc, char **argv)
     cpuStartTiming(0);
 
     bool fat_ok = fatInitDefault();
+    ll_log_init(fat_ok);
 
     while (1)
     {

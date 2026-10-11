@@ -9,7 +9,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 - **Ostatnio:** P1 — jądro: pętla 30 FPS (`_init`/`_update`/`_draw(screen)`), alokator z
   licznikiem i limitem (2 MB domyślnie), ekran błędu ze śladem stosu i restartem (START),
   wejście `btn`/`btnp`/`btnr`/`touch` (D11). Bez `main.lua` na SD rusza wbudowane demo
-  (`source/ll_demo.c`) — test w melonDS do potwierdzenia przez użytkownika.
+  (`source/ll_demo.c`) — potwierdzone w melonDS (30 FPS, oba ekrany). Dodany log na SD
+  `litelua/log.txt` (D18) — do sprawdzenia w melonDS.
 - **Następny krok:** P2 — wydajność Lua (ARM + ITCM dla `lvm.c`, dzielnik sprzętowy, pomiar
   względem baseline z D3; benchmark z P0 usunięty z `main.c` — odtworzyć jako `main.lua`
   albo wbudowany test, `micros()` zostało).
@@ -27,6 +28,7 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   Pętla w C wołająca `_init`, `_update`, `_draw(screen)`; własny `lua_Alloc` liczący bajty;
   ekran błędu ze śladem stosu (nie zawiesza konsoli); moduł wejścia (przyciski, dotyk).
   Pliki: `source/ll_runtime.c` (pętla), `ll_mem.c`, `ll_error.c`, `ll_input.c`, `ll_demo.c`.
+  Dodatek po P1: log na SD `ll_log.c` (D18), `print`/`log`.
 - [ ] **P2 — Wydajność Lua**
   `lvm.c` (i ewentualnie `ltable.c`/`lgc.c`) w trybie ARM + ITCM; sprzętowy dzielnik DS dla
   `%` i `//`; pomiar względem baseline z D3.

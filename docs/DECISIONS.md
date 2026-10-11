@@ -138,3 +138,12 @@ wydajność (timing melonDS nie jest cykliczny), zachowanie kart SD/DLDI, dźwi�
 (jeśli melonDS już działa — trzeba zresetować ROM). melonDS synchronizuje folder z obrazem
 przy starcie ROM-u, więc po nowym buildzie zawsze restart/reset. Ścieżki można nadpisać
 zmiennymi `LITELUA_SDCARD` i `LITELUA_MELONDS`.
+
+## D18 (2026-10-11) — Log na karcie SD
+`<dysk>litelua/log.txt` (poprzedni jako `log.old.txt`). Zawiera: start sesji (konsola, dysk,
+data buildu), start kartridża, błędy z pełnym śladem stosu i pamięcią, panikę, kontrolę
+pamięci po `lua_close` (powinno zostać 0 B), wszystko z `print` (konsola + log) i `log`
+(tylko log). Każda linia ze znacznikiem czasu od startu (licznik VBlanków). Zapis buforowany,
+zatwierdzany (`fflush` + `fsync`) raz na klatkę gry tylko gdy coś dopisano, i od razu po
+błędzie — crash traci co najwyżej ostatnią klatkę. Limit 1 MB. melonDS przenosi log do
+zsynchronizowanego folderu po zatrzymaniu emulacji.

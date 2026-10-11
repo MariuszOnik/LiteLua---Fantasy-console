@@ -94,6 +94,29 @@ run on both). When the limit is reached, the game stops with `not enough memory`
 `collectgarbage("count")` returns the memory in use in KB. Cartridges will be able to ask
 for a bigger limit in their manifest.
 
+### Debugging and the log file
+
+LiteLua writes a log to `litelua/log.txt` on the SD card; the previous run is kept as
+`litelua/log.old.txt`. It contains the start of each game, all errors with the full
+stack traceback and memory use, and everything your game sends with:
+
+- `print(...)` — to the screen console **and** the log,
+- `log(...)` — only to the log.
+
+Every line starts with the time since start in seconds:
+
+```
+[    3.142] run: built-in demo (Lua mem limit 2048 KB)
+[   10.861] B pressed in frame 230
+```
+
+The log is saved to the card once per frame (only if something was written), so even after
+a crash at most the last frame is lost. Saving takes time, so do not log every frame in a
+finished game. The file stops growing at 1 MB.
+
+In melonDS the log appears in the synced SD folder after the emulation is stopped (or
+melonDS is closed).
+
 ### Measuring speed
 
 `micros()` returns microseconds since start (wraps after about 128 s):

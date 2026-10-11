@@ -82,6 +82,42 @@ BOTTOM
 
 Bottom (touch) screen id (1), passed to _draw.
 
+### `print`
+
+```lua
+print(...)
+```
+
+Writes the values to the text console and to the log file litelua/log.txt on the SD card.
+
+| Argument | Type | Description |
+|---|---|---|
+| `...` | any | values, separated by tabs |
+
+Example:
+
+```lua
+print("score", score)
+```
+
+### `log`
+
+```lua
+log(...)
+```
+
+Writes the values only to the log file litelua/log.txt on the SD card, with the time since start. The file is saved once per frame; logging every frame slows the game down.
+
+| Argument | Type | Description |
+|---|---|---|
+| `...` | any | values, separated by tabs |
+
+Example:
+
+```lua
+log("enemy spawned at", x, y)
+```
+
 ### `micros`
 
 ```lua
