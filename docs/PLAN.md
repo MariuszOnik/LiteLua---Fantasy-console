@@ -48,8 +48,20 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   `pack` (folder → `.lcart`), `audio` (MP3/OGG/FLAC → WAV ADPCM), `music` (→ `.mas`), `gfx`.
 - [ ] **P10 — Ekran wyboru kartridży** (kartridż systemowy w Lua)
 - [ ] **P11 — Edytor kodu na DS** z klawiaturą ekranową
-  Podpowiedzi (sugestie nazw i sygnatur) i pomoc z przykładami z `docs/api/*.lua` (D12),
-  pliki w ROM (NitroFS).
+  Kod na górnym ekranie, klawiatura na dolnym; kolorowanie składni; skok do linii błędu.
+- [ ] **P11a — Podpowiedzi i pomoc w edytorze**
+  - Źródła: API z `docs/api/*.lua` (D12, w ROM przez NitroFS), słowa kluczowe Lua, wybrane
+    funkcje biblioteki standardowej (osobny plik `docs/api/lua.lua`), nazwy z kodu gracza
+    (funkcje, `local`, globalne, pola tabel — lekki tokenizer, bez pełnego parsera).
+  - Kiedy: po 1–2 znakach identyfikatora, po `.` i `:` (pola znanej tabeli/modułu).
+  - Gdzie: pasek podpowiedzi nad klawiaturą (jak w telefonie) — dotknięcie wstawia;
+    L/R przewija, A akceptuje.
+  - Kolejność: dopasowanie prefiksu, potem częstość użycia w pliku / ostatnio wybrane.
+  - Po wpisaniu `(` za znaną funkcją pasek pokazuje `sig` z podświetlonym bieżącym argumentem.
+  - Pomoc: przytrzymanie słowa (albo przycisk) otwiera stronę `desc` + `example`
+    z opcją „wstaw przykład”.
+  - Wydajność: indeks budowany raz przy starcie edytora (posortowana tablica, wyszukiwanie
+    binarne); nazwy z kodu odświeżane przy zmianie linii, nie przy każdym znaku.
 - [ ] **P12 — Edytor grafiki**
 - [ ] **P13 — Edytor map**
 - [ ] **P14 — Edytor efektów dźwiękowych**
