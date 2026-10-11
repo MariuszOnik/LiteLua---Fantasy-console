@@ -89,7 +89,8 @@ end
 
 function _draw(screen)      -- once per screen per frame
   if screen == TOP then
-    -- draw the game (graphics API comes in a later version)
+    cls(1)                  -- clear with palette color 1
+    circfill(x, y, 8, 10)   -- the player
   end
 end
 ```
@@ -104,6 +105,45 @@ The game runs at **30 frames per second**. Every frame:
 4. `_draw(BOTTOM)` is called for the bottom (touch) screen.
 
 `TOP` is `0` and `BOTTOM` is `1`. Keep game logic in `_update` and only drawing in `_draw`.
+
+### Drawing
+
+The screen is 256×192 pixels, `0, 0` is the top left corner. Drawing uses the DS 3D
+hardware, and the picture is built again in every frame: whatever `_draw` does not draw is
+not on the screen, so start with `cls()` and draw everything. Things drawn later cover
+things drawn earlier.
+
+For now only the **top screen** shows graphics; the bottom screen is a text console for
+`print` (drawing in `_draw(BOTTOM)` is ignored until a later version).
+
+```lua
+cls(1)                          -- clear with a color
+rectfill(10, 10, 40, 20, 8)     -- x, y, width, height, color
+rect(10, 10, 40, 20, 12)        -- outline
+line(0, 0, 255, 191, 4)
+circfill(128, 96, 16, 10)       -- center x, y, radius, color
+circ(128, 96, 24, 11)
+trifill(10, 100, 50, 90, 30, 130, 6)
+pset(5, 5, 7)
+```
+
+**Colors** are numbers: `0`–`15` are the built-in palette (Sweetie 16 by GrafxKid), any
+other value is `0xRRGGBB`. The DS shows 32 levels per channel, so `0xRRGGBB` is rounded.
+The color argument can be left out; then the color set with `color(c)` is used (12 by
+default).
+
+| | | | | | | | |
+|---|---|---|---|---|---|---|---|
+| 0 `1a1c2c` | 1 `5d275d` | 2 `b13e53` | 3 `ef7d57` | 4 `ffcd75` | 5 `a7f070` | 6 `38b764` | 7 `257179` |
+| 8 `29366f` | 9 `3b5dc9` | 10 `41a6f6` | 11 `73eff7` | 12 `f4f4f4` | 13 `94b0c2` | 14 `566c86` | 15 `333c57` |
+
+- `alpha(0.5)` makes what is drawn next half transparent, `alpha()` goes back to opaque.
+- `camera(x, y)` scrolls: everything drawn after it moves by `-x, -y`. `camera()` resets it
+  (draw the HUD after that).
+- `clip(x, y, w, h)` draws only inside that screen rectangle; `clip()` resets it.
+
+The DS draws at most about 2000 shapes per frame. Every call costs time in Lua too: in
+melonDS 500 `rectfill` calls take about 13 ms of the 33 ms frame.
 
 ### More files: require and data
 

@@ -11,6 +11,7 @@
 
 #include "ll_cart.h"
 #include "ll_error.h"
+#include "ll_gfx.h"
 #include "ll_log.h"
 #include "ll_menu.h"
 #include "ll_runtime.h"
@@ -18,7 +19,8 @@
 
 int main(int argc, char **argv)
 {
-    consoleDemoInit();
+    consoleDemoInit(); // Text console on the bottom screen (until P6)
+    ll_gfx_init();     // 3D engine on the top screen
 
     // Timers 0+1 as a 32-bit counter for micros()
     cpuStartTiming(0);

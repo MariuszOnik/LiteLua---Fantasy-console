@@ -250,8 +250,37 @@ Ustalone z użytkownikiem przed P4:
   rysuje `text`.
 - **Kolory:** liczba `0xRRGGBB` (zaokrąglana do 15 bitów DS) **albo** numer `0`–`15` z
   wbudowanej palety 16 kolorów. Wartości 0–15 to zawsze numery palety (prawdziwe kolory
-  `0x000000`–`0x00000F` są i tak praktycznie czarne). Paletę wybieramy w P4 (własna albo
-  wolna od praw, np. CC0); zmiana palety przez grę — do ustalenia w P4.
+  `0x000000`–`0x00000F` są i tak praktycznie czarne). Paleta: **Sweetie 16** (GrafxKid,
+  domyślna w TIC-80): `1a1c2c 5d275d b13e53 ef7d57 ffcd75 a7f070 38b764 257179 29366f
+  3b5dc9 41a6f6 73eff7 f4f4f4 94b0c2 566c86 333c57`. Zmiana palety przez grę — później.
+  Domyślny kolor rysowania (gdy brak argumentu): `color(c)`, startowo 12 (biały).
+- **Prostokąty: `rect(x, y, w, h)`** (lewy górny róg + rozmiar, ujemny rozmiar rozszerza w
+  lewo/górę), nie dwa rogi.
 - **Kąty obrotu w stopniach** (0–360, zgodnie z ruchem wskazówek zegara na ekranie).
 - **Wbudowany font 6×8 rysujemy sami** (ASCII + ąćęłńóśźż ĄĆĘŁŃÓŚŹŻ), w repo jako PNG,
   licencja zlib (D8). Teksty w UTF-8.
+
+## D23 (2026-10-11) — Rysowanie (P4a): własne prymitywy na videoGL, clip przez viewport
+- Z gl2d (libnds, zlib) bierzemy tylko inicjalizację (`glScreen2D`) i macierze
+  (`glBegin2D`/`glEnd2D`, skala ×4). Prymitywy emitujemy sami (`source/ll_gfx.c`) z własnym
+  licznikiem głębokości — gl2d trzyma swój prywatnie, a potrzebujemy też własnych
+  wielokątów (koła, w P4b sprite'y z kolorami 4 rogów). Głębokość rośnie z każdym
+  prymitywem (później = wyżej), maks. 4095 na klatkę.
+- Półprzezroczystość: `POLY_ALPHA` 1–30 z rotującym `POLY_ID` 1–62 (DS nie miesza wielokątów
+  o tym samym ID; 63 ma tło), `glFlush(GL_TRANS_MANUALSORT)` — kolejność rysowania zostaje.
+  `alpha(0)` nic nie rysuje (alfa 0 to na DS tryb siatki).
+- `clip` = zmiana viewportu i projekcji w trakcie klatki (DS przycina wielokąty sprzętowo);
+  współrzędne zostają pikselami ekranu. `camera` odejmowana w C przed wysłaniem
+  wierzchołków; współrzędne obcinane do ±8191 (wierzchołki 16-bit, skala ×4).
+- Linia = zdegenerowany trójkąt (jak gl2d), koniec przedłużony o 1 px od startu (oba końce
+  włącznie). Koło = pas trójkątów, 8 + r/2 segmentów (maks. 48); okrąg = tyle samo linii.
+  `rect` = 4 paski 1 px wewnątrz prostokąta. `cls(c)` ustawia kolor tła; jeśli w klatce już
+  coś narysowano, dodatkowo zakrywa to prostokątem na cały ekran.
+- Stan rysowania (kolor, alfa, kamera, clip) trwa między klatkami, zerowany przy starcie
+  kartridża. Do P6 rysuje tylko górny ekran (`ll_gfx_begin(TOP)`); wywołania w
+  `_draw(BOTTOM)` są ignorowane z jednym wpisem w logu.
+- Klatka: `_draw(TOP)` między `ll_gfx_begin/end` — `end` zawsze (też po błędzie), potem
+  `glFlush`; obraz widać od następnego VBlanka i zostaje na obie połówki klatki 30 FPS.
+- Pomiar (melonDS, tryb DS): 500 × `rectfill` z pętlą Lua = 13 ms, 2000 = 53 ms (~26 µs na
+  wywołanie). Pomiar na konsoli i ewentualna optymalizacja (pomijanie powtórzonych
+  `glPolyFmt`/`glColor`) — przy P5.

@@ -6,20 +6,18 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
-- **Ostatnio:** P3 — pliki i kartridże: foldery i `.lcart` (ZIP przez miniz, D21),
-  manifest `cart.lua` z limitem pamięci, piaskownica `io`/`os`/`load`, `require` (src → lib →
-  litelua/lib → nitro:/lib), zapisy w `save/`, `sys.run`/`sys.exit`, tymczasowa lista w C,
-  nazwy chunków względne (D13), NitroFS, `tools/litelua.py pack`. Testy: kartridże
-  `tests/carts/files` (też jako `files-zip.lcart`) i `bench` — wszystko ok w melonDS i na
-  konsoli DSi (także `.lcart` i NitroFS). P2 zmierzone na konsoli (D19): −14%.
-  ROM ma w banerze punkt i czas buildu (D16). Konsola ma serwer FTP (`192.168.1.86:5000`),
-  przez który można wgrywać buildy i czytać logi (za zgodą użytkownika).
-- **Następny krok:** P4a — rysowanie podstawowe (plan w punkcie P4, decyzje API w D22).
-  Do ustalenia na starcie P4a: paleta 16 kolorów, sygnatury `rect` (x, y, w, h — propozycja)
-  i sposób podawania obrotu/skali w `spr` (dodatkowe argumenty czy osobna funkcja).
+- **Ostatnio:** P4a — rysowanie podstawowe (D22, D23): 3D na górnym ekranie, globalne
+  `cls color alpha camera clip pset line rect rectfill circ circfill tri trifill`, paleta
+  Sweetie 16 + `0xRRGGBB`, kartridż testowy `tests/carts/gfx` (scena + test obciążenia:
+  melonDS 500 `rectfill` = 13 ms). Wcześniej P3 (pliki, `.lcart`) potwierdzone na DSi.
+  Testy w melonDS można robić automatycznie ze zrzutem ekranu (okno melonDS → PNG,
+  czytany przez Read) — skrypt w scratchpadzie sesji, opis w D20.
+- **Następny krok:** P4b — obrazy i sprite'y. Na starcie ustalić: jak podawać obrót, skalę,
+  odbicie i kolory rogów w `spr` (dodatkowe argumenty czy osobna funkcja / tabela opcji).
+  Do sprawdzenia na konsoli: kartridż `gfx` (wygląd + test obciążenia).
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
-  `files.lua`, `sys.lua`.
-- **Manual:** `README.md` (D15) — opisuje stan po P3.
+  `gfx.lua`, `files.lua`, `sys.lua`.
+- **Manual:** `README.md` (D15) — opisuje stan po P4a.
 - **Otwarte sprawy:** błąd jako struktura plik/linia (D13) — przy P11. Konsola tekstowa jest
   na dolnym ekranie tylko do P4.
 
@@ -44,11 +42,11 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   piaskownica `io`/`os`; `require` z kolejnością z D6; katalog zapisów.
   Zrobione: D20 (foldery, manifest, piaskownica, `require`, zapisy, `sys`, lista), D21
   (`.lcart` przez miniz, NitroFS, `tools/litelua.py pack`).
-- [ ] **P4 — Grafika** (D1, D5, D10, D22) — trzy części, każda z commitem `P4 (część)`.
+- [~] **P4 — Grafika** (D1, D5, D10, D22, D23) — trzy części, każda z commitem `P4 (część)`.
   Do P6 (dual30) 3D rysuje tylko **górny ekran**; dolny zostaje konsolą tekstową, a
   rysowanie w `_draw(BOTTOM)` jest ignorowane (jedno ostrzeżenie w logu). Tekstury i inne
   zasoby graficzne należą do stanu Lua kartridża i są zwalniane przy jego zamknięciu (D14).
-  - **P4a — rysowanie podstawowe:** inicjalizacja 3D (gl2d, D1) na górnym ekranie, klatka:
+  - [x] **P4a — rysowanie podstawowe** (D23): inicjalizacja 3D (gl2d, D1) na górnym ekranie, klatka:
     `_draw(TOP)` między `glBegin2D` a `glFlush`. API (szkic, nazwy do potwierdzenia przy
     implementacji): `cls([col])`, `pset(x, y, col)`, `line(x1, y1, x2, y2, col)`,
     `rect(x, y, w, h, col)` / `rectfill`, `circ(x, y, r, col)` / `circfill`,
@@ -56,14 +54,14 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
     półprzezroczystość (`alpha(a)` dla kolejnych rysunków — DS: 32 poziomy). Kolory i
     paleta 16 wg D22. Kolejność rysowania = kolejność wywołań (głębokość rośnie sama).
     Limity sprzętu: 2048 czworokątów / 6144 wierzchołków na klatkę — liczone dla P5.
-  - **P4b — obrazy i sprite'y:** własny dekoder PNG (inflate z miniz, D21) → tekstury
+  - [ ] **P4b — obrazy i sprite'y:** własny dekoder PNG (inflate z miniz, D21) → tekstury
     4/8/16 bpp wg D10 (paleta ≤16 / ≤256 / RGB(A)), przezroczystość (indeks 0 / alfa 0),
     dopełnianie boków do potęgi dwójki, licznik VRAM (A+B = 256 KB tekstur, palety w E),
     błąd Lua przy braku miejsca. `img = image("hero")` ładuje `gfx/hero.png` (loader dopisuje
     katalog i rozszerzenie, D4); arkusze z klatkami (`image("chars", 16, 16)`).
     `spr(img, x, y, [frame])` + wariant z obrotem (stopnie), skalą, odbiciem i kolorem
     4 rogów (własny kod quadów, gl2d tego nie ma). Cache bindowania tekstur.
-  - **P4c — tekst:** własny font 6×8 (D22) w ROM (NitroFS), `text(s, x, y, [col])`,
+  - [ ] **P4c — tekst:** własny font 6×8 (D22) w ROM (NitroFS), `text(s, x, y, [col])`,
     szerokość tekstu (`textw`), UTF-8 z polskimi znakami. Fonty z `font/` kartridża —
     później (P12 albo osobny punkt).
   Test: kartridż `tests/carts/gfx` pokazujący wszystkie funkcje + pomiar (ile sprite'ów w

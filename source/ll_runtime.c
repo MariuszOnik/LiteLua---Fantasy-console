@@ -20,6 +20,7 @@
 
 #include "ll_cart.h"
 #include "ll_error.h"
+#include "ll_gfx.h"
 #include "ll_input.h"
 #include "ll_log.h"
 #include "ll_mem.h"
@@ -144,6 +145,7 @@ static void register_api(lua_State *L)
     ll_input_register(L);
     ll_log_register(L);
     ll_sys_register(L);
+    ll_gfx_register(L);
 }
 
 // Loads and runs the entry file; the chunk is named after its path in the
@@ -197,11 +199,20 @@ static void frame_loop(lua_State *L)
         }
         if (!call_hook(L, "_update", -1))
             return;
-        if (!call_hook(L, "_draw", SCREEN_TOP))
+
+        // The frame must be ended (and sent to the 3D engine) also after an
+        // error, so the 3D state stays consistent
+        ll_gfx_begin(SCREEN_TOP);
+        bool ok = call_hook(L, "_draw", SCREEN_TOP);
+        ll_gfx_end();
+        if (!ok)
             return;
         swiWaitForVBlank();
 
-        if (!call_hook(L, "_draw", SCREEN_BOTTOM))
+        ll_gfx_begin(SCREEN_BOTTOM);
+        ok = call_hook(L, "_draw", SCREEN_BOTTOM);
+        ll_gfx_end();
+        if (!ok)
             return;
         ll_log_flush();
         swiWaitForVBlank();
@@ -220,6 +231,7 @@ LLRunResult ll_run(const LLCart *cart)
                (unsigned)(lua_mem.limit / 1024));
 
     result = LL_RUN_RESTART;
+    ll_gfx_reset();
     lua_State *L = lua_newstate(ll_mem_alloc, &lua_mem);
     if (L == NULL)
     {
