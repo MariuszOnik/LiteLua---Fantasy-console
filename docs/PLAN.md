@@ -13,9 +13,9 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   demo przerobione na dwa ekrany. Testy w melonDS ok; na konsoli — do sprawdzenia.
 - **Następny krok:** P7 — dźwięk (Maxmod, D7). Do sprawdzenia na konsoli: P6 (oba ekrany
   bez migania, nakładki, ekran błędu, lista z dotykiem, kartridże testowe).
-- **Później (uzgodnione):** kartridż testowy kosztu obiektów (middleclass vs tabele,
-  śmieci na klatkę) i wskazówki o pamięci w README. Optymalizacja: lista wyświetlania w
-  RAM, żeby oba ekrany dzieliły 33 ms (D28).
+- **Później (uzgodnione):** poradnik dobrych praktyk i biblioteka algorytmów dla gier
+  (P16, P17). Optymalizacja: lista wyświetlania w RAM, żeby oba ekrany dzieliły 33 ms
+  (D28).
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
   `gfx.lua`, `files.lua`, `sys.lua` (z `sys.stats`).
 - **Manual:** `README.md` (D15) — opisuje stan po P6.
@@ -108,3 +108,41 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 - [ ] **P13 — Edytor map**
 - [ ] **P14 — Edytor efektów dźwiękowych**
 - [ ] **P15 — Tryb single60, przegląd dokumentacji API, przykładowe kartridże**
+- [ ] **P16 — Poradnik: dobre praktyki pisania gier na LiteLua** (pomysł użytkownika)
+  Dokument dla twórców gier (`docs/GUIDE.md` po angielsku + skrót w README), oparty na
+  pomiarach z konsoli, z krótkimi przykładami kodu:
+  - pamięć i GC: pule obiektów (pociski, cząsteczki, wrogowie — jak `src/particles.lua`
+    w `starcatch`), bez nowych tabel/domknięć/stringów w każdej klatce, `table.concat`
+    zamiast `..` w pętli, ponowne użycie tabel;
+  - szybkość Lua: `local` dla gorących funkcji i wartości, liczby całkowite i `//`, stały
+    krok fizyki, licznik klatek zamiast czasu (D3), unikanie `pairs` w gorących pętlach;
+  - kod modułowy: `require` i moduły w `src/`, klasy na metatabelach i biblioteki typu
+    middleclass — **kartridż testowy z pomiarem na DSi** (koszt obiektów i wywołań metod:
+    middleclass vs zwykłe tabele vs domknięcia; śmieci na klatkę), wyniki w poradniku;
+  - grafika: budżet ~16 ms na ekran (D28), limit ~2000 kształtów na ekran, wybór PNG
+    (paleta 16 kolorów = 4× mniej VRAM), arkusze klatek i `sub` zamiast wielu plików,
+    kamera i `clip` dla HUD;
+  - struktura gry: maszyna stanów (tytuł / gra / koniec), oddzielenie logiki od
+    rysowania, zapisy w `save/`;
+  - mierzenie: nakładka L+R+Y, `sys.stats()`, `micros()`, log.
+- [ ] **P17 — Biblioteka przydatnych algorytmów dla gier** (pomysł użytkownika)
+  Moduły Lua wbudowane w ROM (`nitro:/lib/`, `require("…")` działa od P3, D21), licencja
+  zlib, każdy z dokumentacją w `docs/api/` (podpowiedzi w edytorze, D12) i małym
+  przykładem; napisane pod DS (bez śmieci na klatkę, liczby całkowite, gdzie się da).
+  Kandydaci:
+  - `pool` — pula obiektów; `timer` — opóźnienia, powtórzenia; `tween` — interpolacja i
+    funkcje wygładzania (easing);
+  - `vec` / `mathx` — clamp, lerp, sign, odległość, kąt, wektory bez alokacji;
+  - `collide` — prostokąty (AABB), koła, punkt w prostokącie/kole, odcinki;
+    `grid` — siatka/mapa kafelków, kolizja z kafelkami, sąsiedzi;
+  - `path` — A* na siatce, przeszukiwanie wszerz (mapa odległości), linia widzenia
+    (Bresenham);
+  - `spatial` — hash przestrzenny do szybkiego szukania bliskich obiektów;
+  - `rng` — generator z ziarnem (powtarzalne poziomy), losowanie ważone, tasowanie;
+    `noise` — szum wartości/Perlina do terenu;
+  - `fsm` — maszyna stanów; `anim` — odtwarzanie animacji z arkusza klatek;
+    `camera` — podążanie za graczem, martwa strefa, trzęsienie;
+  - `save` — zapis/odczyt tabeli Lua do `save/` (serializacja tekstowa);
+  - `ui` — przyciski, listy, okna (wspólne z kartridżami systemowymi, D27).
+  Kolejność i zakres ustalić na starcie punktu (część może wejść wcześniej, np. `ui` w
+  P10, `anim` przy P12).
