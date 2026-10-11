@@ -6,19 +6,16 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
-- **Ostatnio:** P4a — rysowanie podstawowe (D22, D23): 3D na górnym ekranie, globalne
-  `cls color alpha camera clip pset line rect rectfill circ circfill tri trifill`, paleta
-  Sweetie 16 + `0xRRGGBB`, kartridż testowy `tests/carts/gfx` (scena + test obciążenia:
-  melonDS 500 `rectfill` = 13 ms). Wcześniej P3 (pliki, `.lcart`) potwierdzone na DSi.
-  Testy w melonDS można robić automatycznie ze zrzutem ekranu (okno melonDS → PNG,
-  czytany przez Read) — skrypt w scratchpadzie sesji, opis w D20.
-- **Następny krok:** P4b — obrazy i sprite'y. Na starcie ustalić: jak podawać obrót, skalę,
-  odbicie i kolory rogów w `spr` (dodatkowe argumenty czy osobna funkcja / tabela opcji).
-  Konsola DSi: `rectfill` ~11,8 µs, poprawione tempo klatki potwierdzone (30 FPS do
-  2600 prostokątów, D23).
+- **Ostatnio:** P4b — obrazy i sprite'y (D24): własny dekoder PNG, tekstury 4/8/16 bpp,
+  licznik VRAM, `image`, `sub`, `spr`, `sprx`, `sspr`, `tint`, zoom kamery
+  (`camera(x, y, zoom)`), współrzędne w ćwiartkach piksela, poprawione linie. Kartridż
+  testowy `tests/carts/sprites` (obrazy generuje `make_images.py`) — wszystko ok w melonDS.
+  Wcześniej P4a (D23): kształty; tempo klatki potwierdzone na DSi.
+- **Następny krok:** P4c — tekst: własny font 6×8 (D22) z polskimi znakami, `text`,
+  `textw`. Do sprawdzenia na konsoli: kartridż `sprites` (wygląd + test obciążenia).
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
   `gfx.lua`, `files.lua`, `sys.lua`.
-- **Manual:** `README.md` (D15) — opisuje stan po P4a.
+- **Manual:** `README.md` (D15) — opisuje stan po P4b.
 - **Otwarte sprawy:** błąd jako struktura plik/linia (D13) — przy P11. Konsola tekstowa jest
   na dolnym ekranie tylko do P4.
 
@@ -43,7 +40,7 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   piaskownica `io`/`os`; `require` z kolejnością z D6; katalog zapisów.
   Zrobione: D20 (foldery, manifest, piaskownica, `require`, zapisy, `sys`, lista), D21
   (`.lcart` przez miniz, NitroFS, `tools/litelua.py pack`).
-- [~] **P4 — Grafika** (D1, D5, D10, D22, D23) — trzy części, każda z commitem `P4 (część)`.
+- [~] **P4 — Grafika** (D1, D5, D10, D22, D23, D24) — trzy części, każda z commitem `P4 (część)`.
   Do P6 (dual30) 3D rysuje tylko **górny ekran**; dolny zostaje konsolą tekstową, a
   rysowanie w `_draw(BOTTOM)` jest ignorowane (jedno ostrzeżenie w logu). Tekstury i inne
   zasoby graficzne należą do stanu Lua kartridża i są zwalniane przy jego zamknięciu (D14).
@@ -55,7 +52,7 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
     półprzezroczystość (`alpha(a)` dla kolejnych rysunków — DS: 32 poziomy). Kolory i
     paleta 16 wg D22. Kolejność rysowania = kolejność wywołań (głębokość rośnie sama).
     Limity sprzętu: 2048 czworokątów / 6144 wierzchołków na klatkę — liczone dla P5.
-  - [ ] **P4b — obrazy i sprite'y:** własny dekoder PNG (inflate z miniz, D21) → tekstury
+  - [x] **P4b — obrazy i sprite'y** (D24): własny dekoder PNG (inflate z miniz, D21) → tekstury
     4/8/16 bpp wg D10 (paleta ≤16 / ≤256 / RGB(A)), przezroczystość (indeks 0 / alfa 0),
     dopełnianie boków do potęgi dwójki, licznik VRAM (A+B = 256 KB tekstur, palety w E),
     błąd Lua przy braku miejsca. `img = image("hero")` ładuje `gfx/hero.png` (loader dopisuje

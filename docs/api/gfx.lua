@@ -3,8 +3,8 @@
 return {
   module = "gfx",
   title = "Graphics",
-  summary = "Drawing shapes. Call these in _draw; the screen is redrawn every "
-         .. "frame. Colors: 0-15 = palette, or 0xRRGGBB.",
+  summary = "Drawing shapes and images. Call these in _draw; the screen is "
+         .. "redrawn every frame. Colors: 0-15 = palette, or 0xRRGGBB.",
   since = "P4",
   entries = {
     {
@@ -40,14 +40,16 @@ alpha()]],
     },
     {
       name = "camera", kind = "function",
-      sig = "camera([x, y])",
+      sig = "camera([x, y, [zoom]])",
       args = {
         { "x", "number", "world x shown at the left edge, default 0" },
         { "y", "number", "world y shown at the top edge, default 0" },
+        { "zoom", "number", "scale 1/16 .. 16, default 1" },
       },
-      desc = "Moves the view: x, y is subtracted from all coordinates drawn "
-          .. "after it. camera() resets it. Use it to scroll the world and "
-          .. "reset it before drawing the HUD.",
+      desc = "Moves and zooms the view: everything drawn after it appears at "
+          .. "(position - camera) * zoom. camera() resets it. Use it to scroll "
+          .. "the world and reset it before drawing the HUD. Lines and "
+          .. "outlines stay 1 pixel wide when zoomed.",
       example = [[
 camera(player.x - 128, player.y - 96)
 draw_world()
@@ -167,6 +169,111 @@ tri(10, 10, 50, 10, 30, 40, 9)]],
       desc = "Draws a filled triangle.",
       example = [[
 trifill(128, 20, 100, 70, 156, 70, 10)]],
+    },
+    {
+      name = "image", kind = "function",
+      sig = "image(name, [fw, fh]) -> image",
+      args = {
+        { "name", "string", "file in gfx/ without .png, e.g. \"hero\"" },
+        { "fw", "integer", "frame width (optional)" },
+        { "fh", "integer", "frame height, default fw" },
+      },
+      ret = { { "image", "the image; fields w, h (frame size) and frames" } },
+      desc = "Loads gfx/<name>.png of the cart into video memory. With a "
+          .. "frame size the image is a sheet of frames numbered from 0, left "
+          .. "to right, top to bottom. Loading the same name again returns the "
+          .. "same image. PNG with a palette of up to 16 or 256 colors uses "
+          .. "the least memory; palette index 0 (or alpha 0) is transparent. "
+          .. "Images are at most 1024x1024; video memory holds 256 KB.",
+      example = [[
+hero = image("hero")
+walk = image("walk", 16, 16)
+print(walk.frames)]],
+    },
+    {
+      name = "sub", kind = "function",
+      sig = "sub(img, x, y, w, h, [fw, fh]) -> image",
+      args = {
+        { "img", "image", "source image" },
+        { "x", "integer", "left of the part" }, { "y", "integer", "top" },
+        { "w", "integer", "width" }, { "h", "integer", "height" },
+        { "fw", "integer", "frame width (optional)" },
+        { "fh", "integer", "frame height, default fw" },
+      },
+      ret = { { "image", "an image showing only that part" } },
+      desc = "Makes an image from a part of another one, without copying: "
+          .. "it uses the same video memory. Works everywhere an image does.",
+      example = [[
+tiles = image("tiles")
+door = sub(tiles, 32, 0, 16, 24)
+spr(door, 100, 80)]],
+    },
+    {
+      name = "spr", kind = "function",
+      sig = "spr(img, x, y, [frame], [flip])",
+      args = {
+        { "img", "image", "image to draw" },
+        { "x", "number", "left" }, { "y", "number", "top" },
+        { "frame", "integer", "frame number from 0, default 0" },
+        { "flip", "string", "\"x\", \"y\" or \"xy\" to mirror" },
+      },
+      desc = "Draws an image (or one frame of it) with its top left corner "
+          .. "at x, y.",
+      example = [[
+spr(walk, x, y, t // 6 % walk.frames)
+spr(walk, x, y, 0, "x")  -- facing left]],
+    },
+    {
+      name = "sprx", kind = "function",
+      sig = "sprx(img, x, y, [frame], [angle], [sx], [sy], [flip])",
+      args = {
+        { "img", "image", "image to draw" },
+        { "x", "number", "center x" }, { "y", "number", "center y" },
+        { "frame", "integer", "frame number from 0, default 0" },
+        { "angle", "number", "rotation in degrees, clockwise, default 0" },
+        { "sx", "number", "horizontal scale, default 1" },
+        { "sy", "number", "vertical scale, default sx" },
+        { "flip", "string", "\"x\", \"y\" or \"xy\" to mirror" },
+      },
+      desc = "Draws an image rotated and scaled around its center x, y. "
+          .. "Positions can have fractions.",
+      example = [[
+sprx(ship, x, y, 0, angle)
+sprx(coin, 64, 40, 0, 0, 2)  -- twice as big]],
+    },
+    {
+      name = "sspr", kind = "function",
+      sig = "sspr(img, sx, sy, sw, sh, dx, dy, [dw], [dh], [flip])",
+      args = {
+        { "img", "image", "source image" },
+        { "sx", "integer", "part left" }, { "sy", "integer", "part top" },
+        { "sw", "integer", "part width" }, { "sh", "integer", "part height" },
+        { "dx", "number", "screen left" }, { "dy", "number", "screen top" },
+        { "dw", "number", "drawn width, default sw" },
+        { "dh", "number", "drawn height, default sh" },
+        { "flip", "string", "\"x\", \"y\" or \"xy\" to mirror" },
+      },
+      desc = "Draws any part of an image, stretched to dw x dh. A negative "
+          .. "dw or dh mirrors it.",
+      example = [[
+sspr(tiles, 0, 0, 8, 8, 10, 10, 32, 32)]],
+    },
+    {
+      name = "tint", kind = "function",
+      sig = "tint([col]) / tint(c1, c2, c3, c4)",
+      args = {
+        { "col", "color", "color multiplied with the images drawn next" },
+        { "c1..c4", "color", "corners: top left, top right, bottom right, "
+          .. "bottom left" },
+      },
+      desc = "Colors the images drawn after it: white keeps the image as it "
+          .. "is, other colors darken and tint it. Four colors make a "
+          .. "gradient over the corners. tint() removes it. Shapes are not "
+          .. "affected.",
+      example = [[
+tint(2)              -- red flash when hit
+spr(hero, x, y)
+tint()]],
     },
   },
 }

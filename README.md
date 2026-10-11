@@ -138,12 +138,51 @@ default).
 | 8 `29366f` | 9 `3b5dc9` | 10 `41a6f6` | 11 `73eff7` | 12 `f4f4f4` | 13 `94b0c2` | 14 `566c86` | 15 `333c57` |
 
 - `alpha(0.5)` makes what is drawn next half transparent, `alpha()` goes back to opaque.
-- `camera(x, y)` scrolls: everything drawn after it moves by `-x, -y`. `camera()` resets it
-  (draw the HUD after that).
+- `camera(x, y)` scrolls: everything drawn after it moves by `-x, -y`. `camera(x, y, 2)`
+  also zooms in 2× (from 1/16 to 16). `camera()` resets it (draw the HUD after that).
 - `clip(x, y, w, h)` draws only inside that screen rectangle; `clip()` resets it.
 
-The DS draws at most about 2000 shapes per frame. Every call costs time in Lua too: in
-melonDS 500 `rectfill` calls take about 13 ms of the 33 ms frame.
+### Images and sprites
+
+Put PNG files in the cartridge's `gfx/` folder and load them once, e.g. in `_init`:
+
+```lua
+hero = image("hero")             -- gfx/hero.png
+walk = image("walk", 16, 16)     -- a sheet of 16×16 frames, numbered from 0
+door = sub(tiles, 32, 0, 16, 24) -- a part of another image (no copy)
+
+function _draw(screen)
+  cls(1)
+  spr(hero, x, y)                          -- top left corner at x, y
+  spr(walk, x, y, t // 6 % walk.frames)    -- animation
+  spr(walk, x, y, 2, "x")                  -- mirrored ("x", "y" or "xy")
+  sprx(ship, 128, 96, 0, angle, 2)         -- centered, rotated (degrees), scaled
+  sspr(tiles, 0, 0, 8, 8, 10, 10, 32, 32)  -- any part, stretched
+  tint(2) spr(hero, x, y) tint()           -- red tint (4 colors: corner gradient)
+end
+```
+
+`img.w`, `img.h` and `img.frames` give the frame size and the number of frames.
+
+**Which PNG to use.** The DS has 256 KB of video memory for images. LiteLua picks the
+format from the PNG:
+
+| PNG | memory per pixel | transparent |
+|---|---|---|
+| palette, up to 16 colors | ½ byte | palette index 0, or entries with alpha 0 |
+| palette, up to 256 colors | 1 byte | the same |
+| RGB / RGBA / gray | 2 bytes | pixels with alpha below 128 |
+
+So a 16-color palette PNG is 4× smaller than an RGBA one — use it for pixel art. Sides are
+padded to a power of two (a 40×24 image takes as much as 64×32). Images can be at most
+1024×1024; interlaced PNGs are not supported. When video memory is full, `image` fails with
+an "out of video memory" error. All images are freed when the game ends.
+
+### Speed
+
+The DS draws at most about 2000 shapes or sprites per frame. Every call costs time in Lua
+too: on a DSi about 12 µs per `rectfill` and a bit more per `spr`, so a 30 FPS frame has
+room for roughly 1500–2000 of them, less if the game logic is heavy.
 
 ### More files: require and data
 

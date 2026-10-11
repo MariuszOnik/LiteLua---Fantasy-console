@@ -21,6 +21,7 @@
 #include "ll_cart.h"
 #include "ll_error.h"
 #include "ll_gfx.h"
+#include "ll_image.h"
 #include "ll_input.h"
 #include "ll_log.h"
 #include "ll_mem.h"
@@ -146,6 +147,7 @@ static void register_api(lua_State *L)
     ll_log_register(L);
     ll_sys_register(L);
     ll_gfx_register(L);
+    ll_image_register(L);
 }
 
 // Loads and runs the entry file; the chunk is named after its path in the
@@ -243,6 +245,7 @@ LLRunResult ll_run(const LLCart *cart)
 
     result = LL_RUN_RESTART;
     ll_gfx_reset();
+    ll_image_reset(cart);
     lua_State *L = lua_newstate(ll_mem_alloc, &lua_mem);
     if (L == NULL)
     {

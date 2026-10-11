@@ -292,3 +292,41 @@ Ustalone z użytkownikiem przed P4:
   równe 30 FPS do 2600 × `rectfill` (31 ms); powyżej ~2048 kształtów DS i tak ich nie rysuje
   (limit wielokątów sprzętu). W trybie dual30 (P6) każdy
   ekran ma osobny VBlank — wtedy do przemyślenia na nowo.
+
+## D24 (2026-10-11) — Obrazy i sprite'y (P4b)
+- **API** (uzgodnione): `image(name, [fw, fh])` (z `gfx/<name>.png`, D4; nazwa z `.png`
+  używana wprost; ten sam obraz z pamięci podręcznej o słabych wartościach), `sub(img, x,
+  y, w, h, [fw, fh])` — fragment bez kopiowania (widok na tę samą teksturę, trzyma
+  właściciela przy życiu), `spr(img, x, y, [frame], [flip])` (lewy górny róg),
+  `sprx(img, x, y, [frame], [angle], [sx], [sy], [flip])` (środek, stopnie zgodnie z
+  ruchem wskazówek, skala), `sspr(img, sx, sy, sw, sh, dx, dy, [dw], [dh], [flip])`
+  (dowolny fragment, rozciągany; ujemny rozmiar odbija), `tint(c)` / `tint(c1..c4)`
+  (stan jak `color`/`alpha`; rogi: lewy górny, prawy górny, prawy dolny, lewy dolny).
+  `flip` = `"x"`, `"y"`, `"xy"`. Pola obrazu: `w`, `h` (rozmiar klatki), `frames`.
+- **Klatki numerowane od 0** (wygodne z `t // n % frames`), po wierszach. Klatka spoza
+  zakresu = błąd Lua (łatwiej znaleźć pomyłkę niż przy zawijaniu).
+- **Zoom kamery:** `camera(x, y, [zoom])` (1/16–16) — ekran = (świat − kamera) × zoom, dla
+  wszystkiego. Na życzenie użytkownika.
+- **Współrzędne w ćwiartkach piksela:** macierz modelview jednostkowa, wierzchołki ×4 w C
+  (projekcja jak w gl2d) — `sprx` i zoom dostają pozycje podpikselowe. Wejście z Lua
+  obcinane do ±2^20 px (32-bit w C); mnożenie 64-bit tylko przy zoomie ≠ 1.
+- **PNG** (`source/ll_png.c`, własny): wszystkie typy i głębie bez przeplotu (interlace →
+  błąd z podpowiedzią), inflate z miniz (D21), kanały 16-bit → starszy bajt, `tRNS` dla
+  palety i klucza koloru. Konwersja wg D10 (`source/ll_image.c`): paleta ≤16 → 4 bpp,
+  ≤256 → 8 bpp (przezroczyste wpisy alfa < 128 przestawiane na indeks 0; bez `tRNS`
+  indeks 0 przezroczysty), reszta → RGBA 1555 (alfa < 128 przezroczysta). Boki do potęgi
+  dwójki, maks. 1024.
+- **VRAM:** banki A+B = tekstury (256 KB), E = palety (64 KB), przydział przez videoGL
+  (`glTexImage2D`, `glColorTableEXT`). Własny licznik bajtów (dla P5). Brak miejsca →
+  pełne GC i jedna ponowna próba, potem błąd Lua „out of video memory” z rozmiarami.
+  Tekstury zwalnia `__gc` obrazu; przy starcie kartridża `glResetTextures()` (bezpiecznik
+  po porzuconym stanie, D14).
+- **Rysowanie:** quad z teksturą i kolorem wierzchołków (`tint`); jeden `glColor`, gdy tint
+  jednolity; cache związanej tekstury (`ll_gfx_texture_changed` po uploadzie). Odbicie:
+  współrzędne tekstury od wnętrza ostatniego tekla (DS próbkuje od lewej/górnej krawędzi
+  piksela), bez gubienia rzędu. Sprawdzanie typu obrazu przez porównanie wskaźnika
+  metatabeli (szybciej niż `luaL_checkudata`).
+- **Linie (poprawka do D23):** koniec przedłużany o 1 px tylko wzdłuż dłuższej osi —
+  przedłużanie obu osi (jak w gl2d) przechylało linie poziome/pionowe.
+- Pomiar melonDS (tryb DS): 300 × `spr` z pętlą Lua = 11,1 ms (~37 µs), 500 × `rectfill` =
+  13,8 ms. Na konsoli — do zmierzenia. Kandydat do optymalizacji w P5: `ll_gfx.c` w ITCM.
