@@ -103,6 +103,9 @@ function _draw(screen)
     io.write(('\27[6;0H%-31s'):format(("draw: %d.%d ms"):format(draw_us // frames // 1000,
       draw_us // frames % 1000 // 100)))
     io.write(('\27[7;0H%-31s'):format(("Lua mem: %d KB"):format(collectgarbage("count") // 1)))
+    -- Also to the log, so results can be read from litelua/log.txt
+    log(("%s: draw %d us/frame"):format(stress and (count .. " rects") or "scene",
+      draw_us // frames))
     draw_us, frames = 0, 0
   end
 end
