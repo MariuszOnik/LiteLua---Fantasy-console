@@ -9,11 +9,12 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 - **Ostatnio:** P5 — statystyki (D26): `sys.stats()` i nakładka L+R+Y (FPS, CPU %, czasy
   `_update`/`_draw`, pamięć Lua, wolny RAM, VRAM, wielokąty/wierzchołki). Wcześniej P4 —
   grafika (D23–D25), zmierzona na DSi.
-- **Następny krok:** P6 — tryb dual30: 3D na obu ekranach (zrzut obrazu do banku VRAM i
-  zamiana C/D, D5), `_draw(BOTTOM)` rysuje na dolnym ekranie. Do ustalenia: co z konsolą
-  tekstową (`print` → tylko log? nakładka konsoli?), ekranem błędu i tymczasową listą
-  kartridży, które dziś używają konsoli na dolnym ekranie; bank C zajmuje dziś konsola.
-  Tempo klatki (D23) do przemyślenia, bo każdy ekran ma swój VBlank.
+- **Następny krok:** P6 — tryb dual30. Projekt aplikacji gotowy (`docs/UX.md`, D27): w P6
+  ekran błędu i tymczasowa lista rysowane w C fontem 6×8, `print` → log + nakładka konsoli
+  L+R+X; bank C zajmuje dziś konsola 2D (do zwolnienia). Tempo klatki (D23) do
+  przemyślenia, bo każdy ekran ma swój VBlank.
+- **Później (uzgodnione):** kartridż testowy kosztu obiektów (middleclass vs tabele,
+  śmieci na klatkę) i wskazówki o pamięci w README.
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
   `gfx.lua`, `files.lua`, `sys.lua` (z `sys.stats`).
 - **Manual:** `README.md` (D15) — opisuje stan po P5.
@@ -70,6 +71,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   (liczona przy uploadzie), wielokąty/wierzchołki (`glGetInt`), czas `update`/`draw`.
 - [ ] **P6 — Tryb dual30 (domyślny)**
   Zrzut obrazu i zamiana banków C/D; `_draw(screen)` wołane dla ekranu rysowanego w klatce.
+  Wg D27 / `docs/UX.md`: ekran błędu i tymczasowa lista rysowane w C fontem 6×8 na 3D,
+  `print` → log + nakładka konsoli (L+R+X), dolny ekran przestaje być konsolą 2D.
 - [ ] **P7 — Dźwięk**
   Dźwięki/strumienie zatrzymywane i zwalniane przy zamknięciu stanu kartridża (D14).
   Maxmod: efekty WAV, muzyka `.mas` z SD (`mmPlayMAS`), strumieniowanie WAV/ADPCM z SD.
@@ -78,6 +81,10 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   `pack` (folder → `.lcart`), `audio` (MP3/OGG/FLAC → WAV ADPCM), `music` (→ `.mas`), `gfx`.
 - [ ] **P10 — Ekran wyboru kartridży** (kartridż systemowy w Lua)
   Wyjście z gry (menu pauzy) → powrót do listy na zapamiętaną pozycję (D14).
+  Wg D27 / `docs/UX.md`: menu pauzy (START 0,5 s), kartridże systemowe w ROM z
+  nadpisaniem z `sd:/litelua/system/`, tryb awaryjny (SELECT przy starcie), kopiowanie
+  systemowych na kartę, `sys.run("@nazwa")`, API `sys.system`, biblioteka `ui.lua`.
+  README ma już opis (sekcja „System carts”) — uaktualnić, gdy będzie działać.
 - [ ] **P11 — Edytor kodu na DS** z klawiaturą ekranową
   Kod na górnym ekranie, klawiatura na dolnym; kolorowanie składni; przycisk „Edytuj” na
   ekranie błędu → plik i linia, dotknięcie ramki stosu (D13); sprawdzanie składni w tle

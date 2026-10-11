@@ -376,3 +376,24 @@ Ustalone z użytkownikiem przed P4:
   pomiary na konsoli (np. w edytorze) pokażą potrzebę.
 - Wyniki w melonDS (tryb DS): scena `sprites` CPU 6%, 600 sprite'ów CPU 68%, „poly 600
   vtx 2400” — liczniki zgodne z liczbą narysowanych quadów.
+
+## D27 (2026-10-11) — Projekt aplikacji: przepływ, przyciski, kartridże systemowe
+Pełny opis ze szkicami: `docs/UX.md`. Ustalone z użytkownikiem:
+- **Menu pauzy:** START przytrzymany 0,5 s (krótkie START dostaje gra). Menu rysuje
+  jądro na przyciemnionej ostatniej klatce: Wznów, Restart, Edytuj kod, Wyjdź. L+R+B
+  zostaje jako awaryjne wyjście bez menu. (P10)
+- **`print`** od P6: zawsze log + nakładka konsoli z ostatnimi liniami (L+R+X), bo dolny
+  ekran przestaje być konsolą.
+- **Ekran błędu i tymczasowa lista kartridży** do P10: rysowane w C fontem 6×8 na 3D, w
+  docelowym stylu (błąd: komunikat na górze; ślad stosu i przyciski na dole).
+- **Kartridże systemowe** (launcher, edytory): wbudowane w ROM (`nitro:/system/<nazwa>`),
+  ale **wersja z karty `sd:/litelua/system/<nazwa>` ma pierwszeństwo**, jeśli jej `api`
+  pasuje do silnika (inaczej ROM + ostrzeżenie w logu). **Tryb awaryjny:** SELECT
+  trzymany przy starcie = tylko ROM. Launcher ma opcję skopiowania kartridża systemowego
+  na kartę, żeby go przerabiać na DS. Nazwa `@nazwa` w `sys.run` = kartridż systemowy.
+  Dodatkowe API (`sys.system`: lista kartridży, zapis plików dowolnego kartridża, nowy
+  kartridż, uruchomienie gry z powrotem do wywołującego) tylko dla nich. (P10)
+- Wspólny wygląd systemowych ekranów: biblioteka `ui.lua` w ROM (`nitro:/lib`), paleta
+  Sweetie 16, font 6×8.
+- Plan zostaje w dotychczasowej kolejności (decyzja użytkownika): P6 robi tylko to, co
+  wynika z dwóch ekranów; launcher, pauza i kartridże systemowe w P10, edytor w P11.

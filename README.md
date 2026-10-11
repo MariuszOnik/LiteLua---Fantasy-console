@@ -357,6 +357,41 @@ variables.
 The repository has a VM benchmark cartridge in `tests/carts/bench`: copy the folder to
 `litelua/carts/` to run it.
 
+## System carts: launcher and editors (coming in P10)
+
+*This describes how it will work; today a simple built-in list starts the games.*
+
+The cart browser (launcher) and the editors are carts too, written in Lua. They come
+**built into** `litelua.nds`, so they always work and always match the engine version.
+You can still change them:
+
+- **Your own version on the SD card wins.** If a folder `litelua/system/<name>/` (for
+  example `litelua/system/launcher/`) exists on the card, LiteLua runs it instead of the
+  built-in one. If its `api` in `cart.lua` does not match the engine, the built-in one is
+  used and the log says why.
+- **Make a copy to edit.** In the launcher, choose "Copy system carts to the card": the
+  built-in cart is copied to `litelua/system/`, and you can edit it on the DS like any
+  game.
+- **Safe mode.** Hold **SELECT** while LiteLua starts: only the built-in system carts are
+  used. A broken launcher on the card can never lock you out.
+- **Back to the original.** Delete the folder from `litelua/system/` and the built-in
+  version is used again.
+
+System carts can do a few things games cannot: list all carts, read and write the files of
+any cart and create new carts.
+
+### System buttons
+
+| buttons | what they do |
+|---|---|
+| hold **START** for half a second | pause menu: Resume, Restart, Edit code, Quit (coming in P10) |
+| **L+R+B** | leave the game at once, back to the list |
+| **L+R+Y** | statistics overlay on/off |
+| **L+R+X** | console overlay with the last `print` lines (coming in P6) |
+| hold **SELECT** at start | safe mode: built-in system carts only (coming in P10) |
+
+Games see these buttons too, so avoid using L+R together with B, X or Y in a game.
+
 ## Building from source
 
 Requires the Wonderful toolchain with BlocksDS installed in `C:\msys64\opt\wonderful`.

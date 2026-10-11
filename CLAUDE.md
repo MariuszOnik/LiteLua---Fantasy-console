@@ -34,7 +34,8 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - `vendor/lua/` — Lua 5.4.8 (LUA_32BITS=1)
 - `vendor/miniz/` — miniz 3.0.2 (MIT): ZIP (`.lcart`) i deflate, bez zmian (D21)
 - `nitrofs/` — pliki wbudowane w ROM (`nitro:/`), np. `nitrofs/lib/` dla `require`
-- `docs/` — plan, decyzje, `newCzatWorkflow.md` (jak zaczynać nowy czat)
+- `docs/` — plan, decyzje, `UX.md` (projekt aplikacji: ekrany, przepływ, przyciski,
+  kartridże systemowe), `newCzatWorkflow.md` (jak zaczynać nowy czat)
 - `docs/api/*.lua` — dokumentacja API Lua (źródło dla edytora na DS i `docs/API.md`, D12);
   aktualizuj w każdym punkcie zmieniającym API, potem `python tools/apidoc.py`
 - `assets/` — zasoby generowane do podglądu/edycji (np. `font6x8.png` z `tools/make_font.py`)
