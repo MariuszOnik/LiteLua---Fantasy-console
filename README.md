@@ -221,8 +221,8 @@ print("took " .. (micros() - t) .. " us")
 Rough costs on a DS (ARM9 at 67 MHz, measured in melonDS): a simple loop iteration with
 integer math takes about 4 µs, a Lua function call about 7 µs, a table field read+write
 about 5 µs. At 30 FPS a frame has about 33 ms for `_update` and `_draw`, so plan for a few
-thousand Lua operations per frame, not hundreds of thousands. Integer `//` and `%` use the
-DS hardware divider and are cheap. Keep hot values in `local` variables.
+thousand Lua operations per frame, not hundreds of thousands. Keep hot values in `local`
+variables.
 
 The repository has a VM benchmark cartridge in `tests/carts/bench`: copy the folder to
 `litelua/carts/` to run it.

@@ -5,5 +5,4 @@
 // in ITCM, ".arm" selects ARM mode (see the .itcm.arm.c rule in the Makefile).
 // vendor/lua/lvm.c itself is excluded from the build (Makefile).
 
-#define LITELUA_HWDIV
 #include "lvm.c"

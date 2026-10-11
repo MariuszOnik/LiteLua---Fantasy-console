@@ -30,10 +30,6 @@
 #include "ltm.h"
 #include "lvm.h"
 
-#if defined(LITELUA_HWDIV)  /* LiteLua: DS hardware divider (D19) */
-#include "ll_hwdiv.h"
-#endif
-
 
 /*
 ** By default, use jump tables in the main interpreter loop on gcc
@@ -736,18 +732,10 @@ lua_Integer luaV_idiv (lua_State *L, lua_Integer m, lua_Integer n) {
     return intop(-, 0, m);   /* n==-1; avoid overflow with 0x80000...//-1 */
   }
   else {
-#if defined(LITELUA_HWDIV)  /* LiteLua: DS hardware divider (D19) */
-    int32_t r;
-    lua_Integer q = ll_hwdiv(m, n, &r);
-    if ((m ^ n) < 0 && r != 0)  /* 'm/n' would be negative non-integer? */
-      q -= 1;  /* correct result for different rounding */
-    return q;
-#else
     lua_Integer q = m / n;  /* perform C division */
     if ((m ^ n) < 0 && m % n != 0)  /* 'm/n' would be negative non-integer? */
       q -= 1;  /* correct result for different rounding */
     return q;
-#endif
   }
 }
 
@@ -764,12 +752,7 @@ lua_Integer luaV_mod (lua_State *L, lua_Integer m, lua_Integer n) {
     return 0;   /* m % -1 == 0; avoid overflow with 0x80000...%-1 */
   }
   else {
-#if defined(LITELUA_HWDIV)  /* LiteLua: DS hardware divider (D19) */
-    int32_t r;
-    (void)ll_hwdiv(m, n, &r);
-#else
     lua_Integer r = m % n;
-#endif
     if (r != 0 && (r ^ n) < 0)  /* 'm/n' would be non-integer negative? */
       r += n;  /* correct result for different rounding */
     return r;

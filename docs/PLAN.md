@@ -10,7 +10,10 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   `cart.lua` (limit pamięci `memory`), piaskownica `io`/`os`/`load`, `require` (src → lib →
   litelua/lib), katalog zapisów `save/`, `sys.run`/`sys.exit`, nazwy chunków względne (D13).
   Kartridże testowe `tests/carts/bench`, `tests/carts/files` (wszystkie testy ok w melonDS,
-  0 B po `lua_close`). P2 (D19): pomiar na konsoli nadal otwarty.
+  0 B po `lua_close`; potwierdzone też na konsoli DSi). P2 zmierzone na konsoli (D19):
+  −14% łącznie; sprzętowy dzielnik okazał się wolniejszy i został usunięty. ROM ma w banerze
+  punkt i czas buildu (D16); konsola ma serwer FTP (`192.168.1.86:5000`), przez który można
+  wgrywać buildy i czytać logi (za zgodą użytkownika).
 - **Następny krok:** dokończyć P3 — czytnik `.lcart` (ZIP store/deflate, `tinfl` z miniz,
   MIT, D10) za tym samym interfejsem co foldery (`ll_cart_read`, `ll_cart_fopen` — dla ZIP
   np. `fmemopen` na rozpakowanym buforze; sprawdzić, czy newlib w BlocksDS go ma), `.lcart`
@@ -18,11 +21,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
   `files.lua`, `sys.lua`.
 - **Manual:** `README.md` (D15) — opisuje stan po P3 (część: kartridże z folderów).
-- **Otwarte sprawy:** pomiar P2 na prawdziwej konsoli (ROM-y `builds/litelua-P2-base.nds` i
-  `builds/litelua-P2.nds` + kartridż `tests/carts/bench`; uwaga: te dwa ROM-y uruchamiają
-  `main.lua` z katalogu głównego karty, więc tam trzeba skopiować `tests/carts/bench/main.lua`),
-  wynik dopisać do D19; błąd jako struktura plik/linia (D13) — przy P11. Konsola tekstowa
-  jest na dolnym ekranie tylko do P4.
+- **Otwarte sprawy:** błąd jako struktura plik/linia (D13) — przy P11. Konsola tekstowa jest
+  na dolnym ekranie tylko do P4.
 
 ## Punkty
 
@@ -36,8 +36,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   Dodatek po P1: log na SD `ll_log.c` (D18), `print`/`log`.
 - [x] **P2 — Wydajność Lua**
   `lvm.c` (i ewentualnie `ltable.c`/`lgc.c`) w trybie ARM + ITCM; sprzętowy dzielnik DS dla
-  `%` i `//`; pomiar względem baseline z D3. Zrobione wg D19 (`lvm` + `ltable` w ITCM,
-  `tests/bench.lua`); pomiar na konsoli jeszcze otwarty.
+  `%` i `//` (sprawdzony, odrzucony); pomiar względem baseline z D3. Zrobione wg D19 (`lvm` + `ltable` w ITCM,
+  `tests/carts/bench`); na konsoli DSi −14%.
 - [~] **P3 — Pliki i kartridże**
   Nazwy chunków względne do kartridża (`src/player.lua`, D13); limit pamięci z `cart.lua`;
   `sys.run(path)` + przełączanie stanów po powrocie z callbacku (D14).

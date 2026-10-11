@@ -23,5 +23,5 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 LiteLua modifications (marked with "LiteLua" comments):
 - luaconf.h: LUA_32BITS set to 1 (32-bit integers and floats).
 - lua.c and luac.c removed (standalone executables, not used).
-- lvm.c: integer '//' and '%' use the DS hardware divider when LITELUA_HWDIV is
-  defined (source/ll_lvm.itcm.arm.c, which builds lvm.c as ARM code in ITCM).
+- lvm.c and ltable.c are unchanged but built through source/*.itcm.arm.c as ARM
+  code in ITCM (the originals are excluded in the Makefile).
