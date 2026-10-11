@@ -4,19 +4,25 @@ Status: `[ ]` do zrobienia, `[~]` w toku, `[x]` gotowe. Po każdym punkcie: buil
 tego pliku, commit `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
-- **Ostatnio:** P0 — repozytorium, build, Lua 5.4.8 bootuje (test dymny z benchmarkiem).
-- **Następny krok:** P1 — jądro (pętla `update`/`draw` w C, alokator Lua z licznikiem, ekran
-  błędu, wejście).
-- **Otwarte sprawy:** brak. (D10: grafika tylko PNG — dodane po P0.)
+- **Ostatnio:** P1 — jądro: pętla 30 FPS (`_init`/`_update`/`_draw(screen)`), alokator z
+  licznikiem i limitem (2 MB domyślnie), ekran błędu ze śladem stosu i restartem (START),
+  wejście `btn`/`btnp`/`btnr`/`touch` (D11). Bez `main.lua` na SD rusza wbudowane demo
+  (`source/ll_demo.c`) — test w melonDS do potwierdzenia przez użytkownika.
+- **Następny krok:** P2 — wydajność Lua (ARM + ITCM dla `lvm.c`, dzielnik sprzętowy, pomiar
+  względem baseline z D3; benchmark z P0 usunięty z `main.c` — odtworzyć jako `main.lua`
+  albo wbudowany test, `micros()` zostało).
+- **Otwarte sprawy:** limit pamięci z manifestu (`cart.lua`) — do zrobienia w P3
+  (`ll_mem_init` przyjmuje limit). Konsola tekstowa jest na dolnym ekranie tylko do P4.
 
 ## Punkty
 
 - [x] **P0 — Repozytorium i build**
   git, `.gitignore`, licencja zlib, Makefile (szablon BlocksDS `rom_arm9_only`), Lua 5.4.8 w
   `vendor/lua`, `build.ps1`, `CLAUDE.md`, dokumentacja, test dymny z benchmarkiem.
-- [ ] **P1 — Jądro**
+- [x] **P1 — Jądro**
   Pętla w C wołająca `_init`, `_update`, `_draw(screen)`; własny `lua_Alloc` liczący bajty;
   ekran błędu ze śladem stosu (nie zawiesza konsoli); moduł wejścia (przyciski, dotyk).
+  Pliki: `source/ll_runtime.c` (pętla), `ll_mem.c`, `ll_error.c`, `ll_input.c`, `ll_demo.c`.
 - [ ] **P2 — Wydajność Lua**
   `lvm.c` (i ewentualnie `ltable.c`/`lgc.c`) w trybie ARM + ITCM; sprzętowy dzielnik DS dla
   `%` i `//`; pomiar względem baseline z D3.

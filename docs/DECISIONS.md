@@ -75,3 +75,16 @@ sprite'a przez API); kolory zaokrąglane do 15 bitów; boki tekstur dopełniane 
 (8–1024 px), zalecane arkusze 64/128/256 px; fonty = PNG z siatką znaków w `font/` + opcjonalny
 `.lua` z szerokościami. Opcjonalnie później: cache przekonwertowanych tekstur w `saves/`
 (poza specyfikacją kartridża).
+
+## D11 (2026-10-11) — Jądro: pętla, wejście, limit pamięci
+- **Pętla:** od razu 30 FPS (D5). Klatka gry = 2 VBlanki: `_update()` + `_draw(TOP)`, potem
+  `_draw(BOTTOM)`. Wszystkie callbacki opcjonalne, wołane przez `pcall` z traceback.
+- **Ekran w `_draw(screen)`:** liczba `0` = górny, `1` = dolny (dotykowy); stałe `TOP`, `BOTTOM`.
+- **Wejście (styl PICO-8):** `btn(n)` trzymany, `btnp(n)` wciśnięty w tej klatce, `btnr(n)`
+  puszczony; nazwy `a b x y l r start select up down left right touch`; `touch()` → `x, y`
+  albo `nil`. Próbkowanie raz na klatkę gry (30 Hz).
+- **Pamięć Lua:** własny `lua_Alloc` liczy bajty (bieżące, szczyt) i ma twardy limit;
+  domyślnie 2 MB, jednakowo na DS i DSi (przenośność). Kartridż może prosić o więcej w
+  `cart.lua` (P3). Przekroczenie → błąd „not enough memory” na ekranie błędu, nie crash.
+- **Błąd:** ekran z komunikatem, śladem stosu i zużyciem pamięci; START restartuje kartridż
+  (nowy `lua_State`). `micros()` zostaje jako globalna funkcja do pomiarów.
