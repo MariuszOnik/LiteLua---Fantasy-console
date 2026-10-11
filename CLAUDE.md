@@ -20,7 +20,8 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 
 ## Budowanie
 - Toolchain: Wonderful w `C:\msys64\opt\wonderful`, BlocksDS w `/opt/wonderful/thirdparty/blocksds/core`.
-- Buduj przez PowerShell: `.\build.ps1` (albo `.\build.ps1 clean`). Wynik: `litelua.nds`.
+- Buduj przez PowerShell: `.\build.ps1` (albo `.\build.ps1 clean`). Wynik: `litelua.nds`
+  + kopia `builds/litelua-P<n>.nds` dla bieżącego punktu planu (D16, stare buildy zostają).
 - Make z Git Basha NIE działa (gcc kończy się kodem 127 — brak `libstdc++-6.dll`, konflikt runtime'ów msys).
 - Test: melonDS w `D:\Programowanie\melonDS-1.1-windows-x86_64`. Timing melonDS nie jest
   cykliczny — ostateczne pomiary wydajności na konsoli.

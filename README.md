@@ -109,9 +109,12 @@ print("took " .. (micros() - t) .. " us")
 Requires the Wonderful toolchain with BlocksDS installed in `C:\msys64\opt\wonderful`.
 
 ```powershell
-.\build.ps1          # produces litelua.nds
+.\build.ps1          # produces litelua.nds and archives builds/litelua-P<n>.nds
 .\build.ps1 clean
 ```
+
+Every build is also copied to `builds/` named after the plan point in progress, so older
+builds stay available for comparison.
 
 The API reference is generated from `docs/api/*.lua`:
 
