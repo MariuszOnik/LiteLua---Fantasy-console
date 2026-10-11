@@ -288,5 +288,7 @@ Ustalone z użytkownikiem przed P4:
   `_draw(TOP)`, więc gdy `_update` + `_draw(TOP)` trwało ponad 16,7 ms, klatka zajmowała
   3 VBlanki (20 FPS) mimo zapasu. Teraz czeka do numerów VBlanka: start klatki + 1 (przed
   `_draw(BOTTOM)`), start + 2 (koniec). Cała klatka może trwać do ~33 ms; dłuższa zajmuje
-  3 VBlanki. Licznik VBlanków: `ll_vblanks()` (`ll_log.c`). W trybie dual30 (P6) każdy
+  3 VBlanki. Licznik VBlanków: `ll_vblanks()` (`ll_log.c`). Konsola DSi po poprawce:
+  równe 30 FPS do 2600 × `rectfill` (31 ms); powyżej ~2048 kształtów DS i tak ich nie rysuje
+  (limit wielokątów sprzętu). W trybie dual30 (P6) każdy
   ekran ma osobny VBlank — wtedy do przemyślenia na nowo.

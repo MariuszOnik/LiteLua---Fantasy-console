@@ -14,8 +14,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   czytany przez Read) — skrypt w scratchpadzie sesji, opis w D20.
 - **Następny krok:** P4b — obrazy i sprite'y. Na starcie ustalić: jak podawać obrót, skalę,
   odbicie i kolory rogów w `spr` (dodatkowe argumenty czy osobna funkcja / tabela opcji).
-  Konsola DSi: `rectfill` ~11,8 µs (D23); poprawione tempo klatki (do 33 ms na klatkę) —
-  sprawdzić na konsoli, że 1500 prostokątów trzyma 30 FPS.
+  Konsola DSi: `rectfill` ~11,8 µs, poprawione tempo klatki potwierdzone (30 FPS do
+  2600 prostokątów, D23).
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
   `gfx.lua`, `files.lua`, `sys.lua`.
 - **Manual:** `README.md` (D15) — opisuje stan po P4a.
