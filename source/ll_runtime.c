@@ -27,6 +27,7 @@
 #include "ll_mem.h"
 #include "ll_runtime.h"
 #include "ll_sandbox.h"
+#include "ll_stats.h"
 #include "ll_sys.h"
 
 #define SCREEN_TOP 0
@@ -38,6 +39,13 @@ extern const char ll_demo_lua[];
 
 // Hold all of these to leave the cart (until the pause menu of P10)
 #define KEYS_LEAVE (KEY_L | KEY_R | KEY_B)
+// L+R held, Y pressed: statistics overlay on/off
+#define KEYS_OVERLAY (KEY_L | KEY_R)
+
+static unsigned elapsed_us(u32 start_ticks)
+{
+    return timerTicks2usec(cpuGetTiming() - start_ticks);
+}
 
 static LLMem lua_mem;
 static jmp_buf panic_jmp;
@@ -146,6 +154,7 @@ static void register_api(lua_State *L)
     ll_input_register(L);
     ll_log_register(L);
     ll_sys_register(L);
+    ll_stats_register(L);
     ll_gfx_register(L);
     ll_image_register(L);
 }
@@ -210,23 +219,38 @@ static void frame_loop(lua_State *L)
             result = LL_RUN_MENU;
             return;
         }
+        if ((keysHeld() & KEYS_OVERLAY) == KEYS_OVERLAY && (keysDown() & KEY_Y))
+            ll_stats_toggle_overlay();
+
+        LLFrameStats fs;
+        u32 t0 = cpuGetTiming();
         if (!call_hook(L, "_update", -1))
             return;
+        fs.update_us = elapsed_us(t0);
 
         // The frame must be ended (and sent to the 3D engine) also after an
         // error, so the 3D state stays consistent
+        char overlay[160];
+        if (ll_stats_overlay())
+            ll_stats_overlay_text(overlay, sizeof(overlay));
+        t0 = cpuGetTiming();
         ll_gfx_begin(SCREEN_TOP);
         bool ok = call_hook(L, "_draw", SCREEN_TOP);
-        ll_gfx_end();
+        fs.draw_top_us = elapsed_us(t0);
+        ll_gfx_end(ll_stats_overlay() ? overlay : NULL);
+        ll_gfx_counts(&fs.polys, &fs.verts);
         if (!ok)
             return;
         wait_vblank(start + 1);
 
+        t0 = cpuGetTiming();
         ll_gfx_begin(SCREEN_BOTTOM);
         ok = call_hook(L, "_draw", SCREEN_BOTTOM);
-        ll_gfx_end();
+        ll_gfx_end(NULL);
+        fs.draw_bottom_us = elapsed_us(t0);
         if (!ok)
             return;
+        ll_stats_frame(&fs);
         ll_log_flush();
         wait_vblank(start + 2);
     }
@@ -245,6 +269,7 @@ LLRunResult ll_run(const LLCart *cart)
 
     result = LL_RUN_RESTART;
     ll_gfx_reset();
+    ll_stats_reset(&lua_mem);
     ll_image_reset(cart);
     ll_gfx_font_reset();
     lua_State *L = lua_newstate(ll_mem_alloc, &lua_mem);

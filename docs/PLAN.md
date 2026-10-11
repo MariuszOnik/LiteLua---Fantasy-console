@@ -6,17 +6,17 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
-- **Ostatnio:** P4 — grafika zakończona: P4a kształty (D23), P4b obrazy i sprite'y (D24),
-  P4c tekst — własny font 6×8 z polskimi znakami, `text`, `textw` (D25). Kartridże testowe
-  `gfx`, `sprites`, `text`. P4a i P4b zmierzone na DSi (30 FPS do ~2000 kształtów /
-  ~1700 sprite'ów na klatkę).
-- **Następny krok:** P5 — statystyki: nakładka + `sys.stats()` (pamięć Lua, sterta C,
-  VRAM — licznik już jest w `ll_image_vram_used()`, wielokąty/wierzchołki, czas
-  `update`/`draw`). Do rozważenia przy okazji: `ll_gfx.c` w ITCM (zostało ~7,7 KB, D19).
-  P4c na DSi: pełny ekran tekstu 2,5 ms (D25).
+- **Ostatnio:** P5 — statystyki (D26): `sys.stats()` i nakładka L+R+Y (FPS, CPU %, czasy
+  `_update`/`_draw`, pamięć Lua, wolny RAM, VRAM, wielokąty/wierzchołki). Wcześniej P4 —
+  grafika (D23–D25), zmierzona na DSi.
+- **Następny krok:** P6 — tryb dual30: 3D na obu ekranach (zrzut obrazu do banku VRAM i
+  zamiana C/D, D5), `_draw(BOTTOM)` rysuje na dolnym ekranie. Do ustalenia: co z konsolą
+  tekstową (`print` → tylko log? nakładka konsoli?), ekranem błędu i tymczasową listą
+  kartridży, które dziś używają konsoli na dolnym ekranie; bank C zajmuje dziś konsola.
+  Tempo klatki (D23) do przemyślenia, bo każdy ekran ma swój VBlank.
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
-  `gfx.lua`, `files.lua`, `sys.lua`.
-- **Manual:** `README.md` (D15) — opisuje stan po P4.
+  `gfx.lua`, `files.lua`, `sys.lua` (z `sys.stats`).
+- **Manual:** `README.md` (D15) — opisuje stan po P5.
 - **Otwarte sprawy:** błąd jako struktura plik/linia (D13) — przy P11. Dolny ekran zostaje
   konsolą tekstową do P6 (dual30).
 
@@ -65,7 +65,7 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
     później (P12 albo osobny punkt).
   Test: kartridż `tests/carts/gfx` pokazujący wszystkie funkcje + pomiar (ile sprite'ów w
   klatce przy 30 FPS) na konsoli.
-- [ ] **P5 — Statystyki**
+- [x] **P5 — Statystyki** (D26)
   Nakładka (kombinacja przycisków) + `sys.stats()`: pamięć Lua, sterta C (`mallinfo`), VRAM
   (liczona przy uploadzie), wielokąty/wierzchołki (`glGetInt`), czas `update`/`draw`.
 - [ ] **P6 — Tryb dual30 (domyślny)**

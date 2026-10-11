@@ -282,7 +282,7 @@ void ll_gfx_reset(void)
 
     // An empty frame, so the previous cart's image disappears
     ll_gfx_begin(0);
-    ll_gfx_end();
+    ll_gfx_end(NULL);
 }
 
 void ll_gfx_begin(int screen)
@@ -304,10 +304,59 @@ void ll_gfx_begin(int screen)
     apply_clip();
 }
 
-void ll_gfx_end(void)
+static void draw_text(const unsigned char *s, size_t len, int x0, int y, u16 color);
+
+// Statistics overlay: a translucent box in the top left corner, drawn in
+// screen space whatever the game's camera, zoom, clip and alpha are
+static void draw_overlay(const char *text)
+{
+    int cam_x = gs.cam_x, cam_y = gs.cam_y, zoom = gs.zoom, alpha = gs.alpha;
+    int clip_x = gs.clip_x, clip_y = gs.clip_y, clip_w = gs.clip_w, clip_h = gs.clip_h;
+
+    gs.cam_x = gs.cam_y = 0;
+    gs.zoom = ZOOM_ONE;
+    gs.clip_x = gs.clip_y = 0;
+    gs.clip_w = SCREEN_W;
+    gs.clip_h = SCREEN_H;
+    apply_clip();
+
+    int cols = 0, max_cols = 0, lines = 1;
+    for (const char *p = text; *p; p++)
+    {
+        if (*p == '\n')
+            lines++, cols = 0;
+        else if (++cols > max_cols)
+            max_cols = cols;
+    }
+
+    gs.alpha = 22;
+    draw_box(0, 0, max_cols * FONT_W + 4, lines * FONT_H + 4, palette[0]);
+    gs.alpha = 31;
+    draw_text((const unsigned char *)text, strlen(text), 2, 2, palette[5]);
+
+    gs.cam_x = cam_x, gs.cam_y = cam_y, gs.zoom = zoom, gs.alpha = alpha;
+    gs.clip_x = clip_x, gs.clip_y = clip_y, gs.clip_w = clip_w, gs.clip_h = clip_h;
+}
+
+static int count_polys, count_verts;
+
+void ll_gfx_counts(int *polys, int *verts)
+{
+    *polys = count_polys;
+    *verts = count_verts;
+}
+
+void ll_gfx_end(const char *overlay)
 {
     if (!gs.active)
         return;
+
+    // What the game sent, before the overlay adds its own polygons (waits
+    // until the geometry engine has processed the commands)
+    glGetInt(GL_GET_POLYGON_RAM_COUNT, &count_polys);
+    glGetInt(GL_GET_VERTEX_RAM_COUNT, &count_verts);
+    if (overlay)
+        draw_overlay(overlay);
 
     glClearColor(gs.clear_color & 31, (gs.clear_color >> 5) & 31,
                  (gs.clear_color >> 10) & 31, 31);
@@ -768,18 +817,13 @@ static int glyph_index(unsigned c)
     return FONT_UNKNOWN;
 }
 
-// text(s, x, y, [col]): draws text with the built-in 6x8 font. '\n' starts a
-// new line, tabs go to the next multiple of 4 columns.
-static int l_text(lua_State *L)
+// Draws text with the built-in 6x8 font. '\n' starts a new line, tabs go to
+// the next multiple of 4 columns.
+static void draw_text(const unsigned char *s, size_t len, int x0, int y, u16 color)
 {
-    size_t len;
-    const unsigned char *s = (const unsigned char *)luaL_checklstring(L, 1, &len);
     const unsigned char *end = s + len;
-    int x0 = arg_int(L, 2), y = arg_int(L, 3);
-    u16 color = arg_color(L, 4);
-
     if (font.tex == 0 || len == 0 || !poly_begin(true))
-        return 0;
+        return;
     if (gs.bound != font.tex)
     {
         glBindTexture(0, font.tex);
@@ -833,6 +877,15 @@ static int l_text(lua_State *L)
     }
     glEnd();
     prim_end();
+}
+
+// text(s, x, y, [col])
+static int l_text(lua_State *L)
+{
+    size_t len;
+    const unsigned char *s = (const unsigned char *)luaL_checklstring(L, 1, &len);
+    int x = arg_int(L, 2), y = arg_int(L, 3);
+    draw_text(s, len, x, y, arg_color(L, 4));
     return 0;
 }
 

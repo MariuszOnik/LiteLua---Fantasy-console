@@ -353,3 +353,26 @@ Ustalone z użytkownikiem przed P4:
 - Pomiar melonDS (tryb DS): 1560 znaków (40 × 39) = 7,4 ms (~4,7 µs/znak); scena testowa
   z wieloma wywołaniami 4 ms. **Konsola DSi:** ~2,7 µs/znak — pełny ekran 24 × 39 = 936
   znaków w 2,5 ms; scena testowa (dużo krótkich wywołań) 3,3 ms.
+
+## D26 (2026-10-11) — Statystyki (P5): `sys.stats()` i nakładka L+R+Y
+- **Nakładka:** L+R trzymane + Y wciśnięte przełącza (wybór użytkownika); stan trwa między
+  kartridżami do wyłączenia konsoli. Półprzezroczyste okienko w lewym górnym rogu górnego
+  ekranu, rysowane po `_draw(TOP)` w przestrzeni ekranu (bez kamery, zoomu, `clip`, alfy
+  gry, które potem wracają). Tekst z poprzedniej klatki. Gra też widzi Y w `btnp` (jak B
+  przy L+R+B).
+- **Pomiary na klatkę** (`source/ll_stats.c`, mierzy `ll_runtime.c` licznikiem
+  `cpuGetTiming`): czas `_update`, `_draw(TOP)`, `_draw(BOTTOM)`; CPU % = suma / 33 333 µs;
+  FPS z liczby klatek na ~60 VBlanków. Wielokąty i wierzchołki: `glGetInt` (rejestry
+  `GFX_POLYGON_RAM_USAGE` / `VERTEX`) tuż przed `glFlush`, przed rysowaniem nakładki — czeka
+  na koniec pracy silnika geometrii, raz na klatkę.
+- **Pamięć:** Lua z alokatora (bieżąca, szczyt, limit), wolny RAM = wolne bloki `mallinfo`
+  + nieużyta część sterty (`getHeapLimit() - getHeapEnd()`), VRAM z licznika `ll_image`
+  (całość: tekstury A+B 256 KB + palety E 64 KB = 320 KB).
+- **`sys.stats()`** zwraca tabelę: `fps cpu update_us draw_us draw_top_us draw_bottom_us mem
+  mem_peak mem_limit ram_free vram vram_total polys verts`.
+- **`ll_gfx.c` w ITCM — odłożone:** ~11,5 KB w Thumb (w ARM więcej), a w ITCM zostało
+  ~7,7 KB. Można by przenieść tylko gorące funkcje (`ITCM_CODE`/`ARM_CODE`), ale zysku nie
+  da się sprawdzić w melonDS, a dużą część czasu zajmują wywołania API Lua. Wrócić, jeśli
+  pomiary na konsoli (np. w edytorze) pokażą potrzebę.
+- Wyniki w melonDS (tryb DS): scena `sprites` CPU 6%, 600 sprite'ów CPU 68%, „poly 600
+  vtx 2400” — liczniki zgodne z liczbą narysowanych quadów.

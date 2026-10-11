@@ -320,6 +320,24 @@ finished game. The file stops growing at 1 MB.
 In melonDS the log appears in the synced SD folder after the emulation is stopped (or
 melonDS is closed).
 
+### Statistics overlay
+
+Hold **L+R** and press **Y** to show or hide a small box in the top left corner of the top
+screen:
+
+```
+FPS 30  CPU 23%        frames per second, part of the 33 ms frame in use
+upd 1.2 ms             time of _update
+drw 3.4 ms             time of _draw (both screens)
+Lua 120/2048 KB        Lua memory in use / limit
+RAM 3400 KB free       free memory of the console
+VRAM 36/320 KB         video memory used by images
+poly 512 vtx 1500      shapes and vertices drawn (the DS draws at most ~2000 / 6144)
+```
+
+The overlay stays on for the next games until the console is turned off. A game can read
+the same numbers with `sys.stats()`.
+
 ### Measuring speed
 
 `micros()` returns microseconds since start (wraps after about 128 s):

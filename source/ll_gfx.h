@@ -21,8 +21,13 @@ void ll_gfx_reset(void);
 void ll_gfx_begin(int screen);
 
 // Ends the frame started by ll_gfx_begin and sends it to the 3D engine; the
-// image is shown from the next VBlank.
-void ll_gfx_end(void);
+// image is shown from the next VBlank. 'overlay' is the text of the
+// statistics overlay, or NULL.
+void ll_gfx_end(const char *overlay);
+
+// Polygons and vertices the game sent in the last top screen frame (the
+// overlay not included).
+void ll_gfx_counts(int *polys, int *verts);
 
 // Uploads the built-in font. Call after the textures were reset (each cart).
 void ll_gfx_font_reset(void);

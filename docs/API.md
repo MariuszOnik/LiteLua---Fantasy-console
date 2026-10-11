@@ -866,3 +866,20 @@ Example:
 ```lua
 if btnp("select") then sys.exit() end
 ```
+
+### `sys.stats`
+
+```lua
+sys.stats() -> table
+```
+
+Performance numbers, also shown by the overlay (hold L+R, press Y). Fields: fps, cpu (% of the 33 ms frame), update_us, draw_us, draw_top_us, draw_bottom_us (microseconds), mem, mem_peak, mem_limit (Lua memory, bytes), ram_free (bytes), vram, vram_total (video memory, bytes), polys, verts (sent to the 3D engine).
+
+Returns: table — numbers of the last frame and memory use, see below
+
+Example:
+
+```lua
+local s = sys.stats()
+if s.cpu > 90 then log("slow frame", s.update_us, s.draw_us) end
+```
