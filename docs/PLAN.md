@@ -11,8 +11,14 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   `_update`, konsola 2D usunięta (`print` → log + nakładka L+R+X), ekran błędu i
   tymczasowa lista rysowane fontem 6×8, pomijanie BOM w plikach Lua. Kartridże testowe i
   demo przerobione na dwa ekrany. Testy w melonDS ok; na konsoli — do sprawdzenia.
-- **Następny krok:** P7 — dźwięk (Maxmod, D7). Do sprawdzenia na konsoli: P6 (oba ekrany
-  bez migania, nakładki, ekran błędu, lista z dotykiem, kartridże testowe).
+- **Następny krok:** P7 — dźwięk (Maxmod, D7). Najpierw: wynik testu P6 na konsoli (log
+  przez FTP: oba ekrany bez migania, nakładki L+R+X/Y, ekran błędu, lista z dotykiem,
+  kartridże testowe, `starcatch`).
+- **Wydania (D29):** repo na GitHubie, tag `v0.6.0` wypchnięty; pliki wydania w
+  `builds/release-v0.6.0/` (`litelua.nds`, `starcatch.lcart`, `RELEASE_NOTES.md`) —
+  wydanie na stronie GitHuba tworzy użytkownik (sprawdzić, czy opublikowane). Na
+  konsoli jest build `v0.6.0`. Przykładowa gra: `examples/carts/starcatch`; instrukcja
+  „Making a game on a PC” w README.
 - **Później (uzgodnione):** poradnik dobrych praktyk i biblioteka algorytmów dla gier
   (P16, P17). Optymalizacja: lista wyświetlania w RAM, żeby oba ekrany dzieliły 33 ms
   (D28).
