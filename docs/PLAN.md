@@ -76,6 +76,11 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 - [x] **P5 — Statystyki** (D26)
   Nakładka (kombinacja przycisków) + `sys.stats()`: pamięć Lua, sterta C (`mallinfo`), VRAM
   (liczona przy uploadzie), wielokąty/wierzchołki (`glGetInt`), czas `update`/`draw`.
+- [x] **Projekt aplikacji (UX)** (D27, `docs/UX.md`) — zrobione przed P6
+  Szkielet całej konsoli: składniki (jądro w C, launcher i edytory jako kartridże
+  systemowe), przepływ launcher → gra → pauza → edytor → gra, szkice ekranów, przyciski
+  systemowe, kartridże systemowe w ROM z nadpisaniem z karty i trybem awaryjnym, `print`
+  → log + nakładka. Realizują go P6 (zrobione), P10 i P11 — przy nich czytać `docs/UX.md`.
 - [x] **P6 — Tryb dual30 (domyślny)** (D28)
   Zrzut obrazu i zamiana banków C/D; `_draw(screen)` wołane dla ekranu rysowanego w klatce.
   Wg D27 / `docs/UX.md`: ekran błędu i tymczasowa lista rysowane w C fontem 6×8 na 3D,
