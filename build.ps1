@@ -10,6 +10,7 @@
 # Paths of the test setup (D17) can be overridden with environment variables:
 #   LITELUA_SDCARD  folder synced by melonDS as the DLDI SD card
 #   LITELUA_MELONDS melonDS folder
+#   LITELUA_TAG     optional word added to the ROM banner (e.g. a test variant)
 
 $ErrorActionPreference = 'Stop'
 $msys = 'C:\msys64'
@@ -28,28 +29,40 @@ $env:MSYS2_PATH_TYPE = 'inherit'
 $env:CHERE_INVOKING = '1'
 $env:PATH = "$msys\opt\wonderful\bin;$env:PATH"
 
-$cmd = 'export WONDERFUL_TOOLCHAIN=/opt/wonderful ' +
-       'BLOCKSDS=/opt/wonderful/thirdparty/blocksds/core ' +
-       'BLOCKSDSEXT=/opt/wonderful/thirdparty/blocksds/external; ' +
-       "make -j8 $($makeArgs -join ' ')"
-
 Push-Location $PSScriptRoot
 try {
-    & "$msys\usr\bin\bash.exe" -lc $cmd
-    if ($LASTEXITCODE -ne 0 -or $makeArgs.Count -gt 0) {
-        exit $LASTEXITCODE
-    }
-
-    # Archive the ROM as builds/litelua-P<n>.nds, where P<n> is the plan point
-    # being worked on: the first one marked [~], otherwise the first [ ] (D16).
-    # Builds of earlier points are kept; rebuilds within a point overwrite.
+    # The plan point being worked on: the first one marked [~], otherwise the
+    # first [ ] (D16). It names the archived ROM and goes into the ROM banner.
     $plan = Get-Content docs\PLAN.md -Encoding UTF8
     $point = $plan | Select-String -Pattern '^- \[~\] \*\*(P\w+)' | Select-Object -First 1
     if (-not $point) {
         $point = $plan | Select-String -Pattern '^- \[ \] \*\*(P\w+)' | Select-Object -First 1
     }
-    if ($point) {
-        $name = $point.Matches[0].Groups[1].Value
+    $name = if ($point) { $point.Matches[0].Groups[1].Value } else { '' }
+
+    $make = "make -j8 $($makeArgs -join ' ')"
+    if ($makeArgs.Count -eq 0) {
+        # Banner subtitle (shown by loader menus): plan point, optional tag from
+        # LITELUA_TAG and build time, so builds on a console can be told apart.
+        # The ROM is removed so ndstool always writes the new banner.
+        $subtitle = (@($name, $env:LITELUA_TAG, (Get-Date -Format 'MM-dd HH:mm')) |
+                     Where-Object { $_ }) -join ' '
+        Remove-Item litelua.nds -ErrorAction SilentlyContinue
+        $make += " GAME_SUBTITLE='$subtitle'"
+    }
+
+    $cmd = 'export WONDERFUL_TOOLCHAIN=/opt/wonderful ' +
+           'BLOCKSDS=/opt/wonderful/thirdparty/blocksds/core ' +
+           'BLOCKSDSEXT=/opt/wonderful/thirdparty/blocksds/external; ' + $make
+
+    & "$msys\usr\bin\bash.exe" -lc $cmd
+    if ($LASTEXITCODE -ne 0 -or $makeArgs.Count -gt 0) {
+        exit $LASTEXITCODE
+    }
+
+    # Archive the ROM as builds/litelua-P<n>.nds. Builds of earlier points are
+    # kept; rebuilds within a point overwrite.
+    if ($name) {
         New-Item -ItemType Directory -Force builds | Out-Null
         Copy-Item litelua.nds "builds\litelua-$name.nds" -Force
         Write-Host "  ARCHIVE builds\litelua-$name.nds"

@@ -127,6 +127,8 @@ aktualizuje README w tym samym commicie.
 a jeśli go nie ma — pierwszy `[ ]` w `docs/PLAN.md`. Buildy wcześniejszych punktów zostają;
 kolejne buildy w obrębie punktu nadpisują jego plik. Build kończący punkt robimy przed
 oznaczeniem go `[x]` (kolejność z `/punkt`). `builds/` jest poza gitem.
+Od P3 punkt i czas buildu (`P3 10-11 16:56`, opcjonalnie słowo z `LITELUA_TAG`) są w
+drugiej linii banera ROM-u — menu ładowarek na konsoli pokazują baner, nie nazwę pliku.
 
 ## D17 (2026-10-11) — Testowanie: melonDS na PC, konsola do pomiarów sprzętu
 Na co dzień testujemy w melonDS (`D:\Programowanie\melonDS-1.1-windows-x86_64`). melonDS ma
