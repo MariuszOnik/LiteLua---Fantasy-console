@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: Zlib
 //
-// LiteLua - error screen.
-//
-// Uses the text console (32x24). The message gets the top rows, the stack
-// traceback fills the rest and the bottom rows show memory use and the
-// restart hint. Text that does not fit is cut, never scrolled.
+// LiteLua - error screen (D27): the message and memory use on the top screen,
+// the stack traceback and the buttons on the bottom screen, drawn with the
+// built-in font. Text that does not fit is cut, never scrolled.
 
 #include <stdio.h>
 #include <string.h>
@@ -12,80 +10,107 @@
 #include <nds.h>
 
 #include "ll_error.h"
+#include "ll_gfx.h"
 
-#define COLS 32
-#define MSG_MAX_ROWS 9
-#define TRACE_LAST_ROW 20 // Rows 21-23 are the footer
+#define COLS 42
+#define ROWS 24
+#define MAX_LINES ROWS
 
-#define RED "\x1b[31;1m"
-#define WHITE "\x1b[39m"
-#define GRAY "\x1b[37;0m"
+typedef struct {
+    const char *s;
+    size_t len;
+} Line;
 
-// Prints 'len' bytes of 's' starting at 'row', wrapping at COLS and never
-// past 'last_row'. Tabs become a space. Returns the next free row.
-static int print_wrapped(const char *s, size_t len, int row, int last_row)
+typedef struct {
+    Line msg[MAX_LINES], trace[MAX_LINES];
+    int msg_lines, trace_lines;
+    char mem[64];
+} Screen;
+
+// Splits text into lines at '\n' and at COLS characters (UTF-8 aware; a tab
+// counts as up to the next multiple of 4 columns, like text())
+static int wrap(const char *s, size_t len, Line *out, int max)
 {
-    int col = 0;
-
-    if (row > last_row)
-        return row;
-    printf("\x1b[%d;0H", row);
-
-    for (size_t i = 0; i < len; i++)
+    int n = 0;
+    size_t start = 0, i = 0;
+    int cols = 0;
+    while (i < len && n < max)
     {
-        char c = s[i];
-        if (c == '\n' || col == COLS)
+        unsigned char c = (unsigned char)s[i];
+        if (c == '\n')
         {
-            if (++row > last_row)
-                return row;
-            printf("\x1b[%d;0H", row);
-            col = 0;
-            if (c == '\n')
-                continue;
+            out[n++] = (Line){ s + start, i - start };
+            start = ++i;
+            cols = 0;
+            continue;
         }
-        putchar(c == '\t' ? ' ' : c);
-        col++;
+        if ((c & 0xc0) != 0x80) // A character starts here
+        {
+            int w = c == '\t' ? 4 - cols % 4 : 1;
+            if (cols + w > COLS)
+            {
+                out[n++] = (Line){ s + start, i - start };
+                start = i;
+                cols = 0;
+                continue;
+            }
+            cols += w;
+        }
+        i++;
     }
+    if (n < max && start < len)
+        out[n++] = (Line){ s + start, len - start };
+    return n;
+}
 
-    return row + 1;
+static void draw(int screen, void *ud)
+{
+    Screen *sc = ud;
+    ll_gfx_cls(0);
+    if (screen == 0)
+    {
+        ll_gfx_rectfill(0, 0, 256, 10, 2);
+        ll_gfx_text(2, 1, "Lua error", 9, 12);
+        for (int i = 0; i < sc->msg_lines && i < ROWS - 4; i++)
+            ll_gfx_text(0, 14 + i * 8, sc->msg[i].s, sc->msg[i].len, 12);
+        ll_gfx_text(0, 184, sc->mem, strlen(sc->mem), 13);
+    }
+    else
+    {
+        for (int i = 0; i < sc->trace_lines && i < ROWS - 3; i++)
+            ll_gfx_text(0, i * 8, sc->trace[i].s, sc->trace[i].len, 13);
+        ll_gfx_rectfill(0, 176, 256, 16, 15);
+        static const char help[] = "START: restart    SELECT: cart list";
+        ll_gfx_text(2, 180, help, sizeof(help) - 1, 4);
+    }
 }
 
 bool ll_error_show(const char *err, const LLMem *mem)
 {
     static const char trace_tag[] = "\nstack traceback:";
+    static Screen sc;
 
     const char *trace = strstr(err, trace_tag);
     size_t msg_len = trace ? (size_t)(trace - err) : strlen(err);
+    sc.msg_lines = wrap(err, msg_len, sc.msg, MAX_LINES);
+    sc.trace_lines = trace ? wrap(trace + 1, strlen(trace + 1), sc.trace, MAX_LINES) : 0;
 
-    consoleClear();
-    printf(RED "\x1b[0;0HLua error" WHITE);
-
-    int row = print_wrapped(err, msg_len, 1, MSG_MAX_ROWS);
-
-    if (trace)
-    {
-        trace++; // Skip the newline
-        printf(GRAY);
-        print_wrapped(trace, strlen(trace), row + 1, TRACE_LAST_ROW);
-    }
-
-    printf(WHITE);
+    sc.mem[0] = '\0';
     if (mem)
     {
-        printf("\x1b[22;0HLua mem: %u/%u KB (peak %u)",
-               (unsigned)(mem->used / 1024), (unsigned)(mem->limit / 1024),
-               (unsigned)(mem->peak / 1024));
+        snprintf(sc.mem, sizeof(sc.mem), "Lua mem: %u/%u KB (peak %u KB)",
+                 (unsigned)(mem->used / 1024), (unsigned)(mem->limit / 1024),
+                 (unsigned)(mem->peak / 1024));
     }
-    printf("\x1b[23;0HSTART: restart  SELECT: cart list");
 
+    ll_gfx_reset(); // Draw state of the cart (camera, clip...) is not wanted
     u32 keys;
     do
     {
-        swiWaitForVBlank();
+        ll_gfx_frame(draw, &sc);
         scanKeys();
         keys = keysDown();
     } while (!(keys & (KEY_START | KEY_SELECT)));
 
-    consoleClear();
     return (keys & KEY_START) != 0;
 }

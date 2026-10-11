@@ -31,8 +31,9 @@ end]],
       name = "_draw", kind = "callback",
       sig = "_draw(screen)",
       args = { { "screen", "integer", "TOP (0) or BOTTOM (1)" } },
-      desc = "Called for each screen once per game frame, after _update: "
-          .. "first with TOP, then with BOTTOM.",
+      desc = "Called for each screen once per game frame: first with TOP, "
+          .. "then with BOTTOM. The screens are drawn in turns, one per "
+          .. "screen refresh, so each _draw has about 16 ms.",
       example = [[
 function _draw(screen)
   if screen == TOP then
@@ -56,8 +57,10 @@ end]],
       name = "print", kind = "function",
       sig = "print(...)",
       args = { { "...", "any", "values, separated by tabs" } },
-      desc = "Writes the values to the text console and to the log file "
-          .. "litelua/log.txt on the SD card.",
+      desc = "Writes the values to the log file litelua/log.txt on the SD "
+          .. "card and to the console overlay (hold L+R, press X). It does not "
+          .. "draw on the game screens; use text() for that. io.write also "
+          .. "goes to the console overlay.",
       example = [[
 print("score", score)]],
     },

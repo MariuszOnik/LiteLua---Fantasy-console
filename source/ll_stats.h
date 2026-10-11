@@ -16,7 +16,8 @@ typedef struct {
     unsigned update_us;      // _update()
     unsigned draw_top_us;    // _draw(TOP)
     unsigned draw_bottom_us; // _draw(BOTTOM)
-    int polys, verts;        // Sent to the 3D engine for the top screen
+    int polys_top, verts_top;       // Sent to the 3D engine, top screen
+    int polys_bottom, verts_bottom; // and bottom screen
 } LLFrameStats;
 
 // Starts counting for a new cart; 'mem' is its Lua allocator.

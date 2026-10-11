@@ -33,7 +33,8 @@ if btnp("select") then sys.exit() end]],
           .. "Y). Fields: fps, cpu (% of the 33 ms frame), update_us, draw_us, "
           .. "draw_top_us, draw_bottom_us (microseconds), mem, mem_peak, "
           .. "mem_limit (Lua memory, bytes), ram_free (bytes), vram, vram_total "
-          .. "(video memory, bytes), polys, verts (sent to the 3D engine).",
+          .. "(video memory, bytes), polys_top, polys_bottom, verts_top, "
+          .. "verts_bottom (sent to the 3D engine for each screen).",
       example = [[
 local s = sys.stats()
 if s.cpu > 90 then log("slow frame", s.update_us, s.draw_us) end]],

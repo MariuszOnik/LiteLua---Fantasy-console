@@ -51,7 +51,7 @@ end
 _draw(screen)
 ```
 
-Called for each screen once per game frame, after _update: first with TOP, then with BOTTOM.
+Called for each screen once per game frame: first with TOP, then with BOTTOM. The screens are drawn in turns, one per screen refresh, so each _draw has about 16 ms.
 
 | Argument | Type | Description |
 |---|---|---|
@@ -91,7 +91,7 @@ Bottom (touch) screen id (1), passed to _draw.
 print(...)
 ```
 
-Writes the values to the text console and to the log file litelua/log.txt on the SD card.
+Writes the values to the log file litelua/log.txt on the SD card and to the console overlay (hold L+R, press X). It does not draw on the game screens; use text() for that. io.write also goes to the console overlay.
 
 | Argument | Type | Description |
 |---|---|---|
@@ -873,7 +873,7 @@ if btnp("select") then sys.exit() end
 sys.stats() -> table
 ```
 
-Performance numbers, also shown by the overlay (hold L+R, press Y). Fields: fps, cpu (% of the 33 ms frame), update_us, draw_us, draw_top_us, draw_bottom_us (microseconds), mem, mem_peak, mem_limit (Lua memory, bytes), ram_free (bytes), vram, vram_total (video memory, bytes), polys, verts (sent to the 3D engine).
+Performance numbers, also shown by the overlay (hold L+R, press Y). Fields: fps, cpu (% of the 33 ms frame), update_us, draw_us, draw_top_us, draw_bottom_us (microseconds), mem, mem_peak, mem_limit (Lua memory, bytes), ram_free (bytes), vram, vram_total (video memory, bytes), polys_top, polys_bottom, verts_top, verts_bottom (sent to the 3D engine for each screen).
 
 Returns: table — numbers of the last frame and memory use, see below
 

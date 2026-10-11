@@ -90,7 +90,7 @@ MENU PAUZY (P10, rysuje jądro)   EKRAN BŁĘDU (P6, rysuje jądro)
 ```
 
 - **Ekran błędu i tymczasowa lista kartridży** (do P10) są rysowane w C fontem 6×8 na 3D,
-  już w docelowym stylu. „Edytuj” na ekranie błędu działa od P11.
+  już w docelowym stylu (zrobione w P6, D28). „Edytuj” na ekranie błędu działa od P11.
 - **Menu pauzy** rysuje jądro na ostatniej klatce gry (przyciemnionej), gra jest wtedy
   zatrzymana (nie są wołane `_update`/`_draw`).
 

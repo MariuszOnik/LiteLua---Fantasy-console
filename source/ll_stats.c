@@ -83,7 +83,7 @@ void ll_stats_overlay_text(char *buf, size_t size)
              "Lua %u/%u KB\n"
              "RAM %u KB free\n"
              "VRAM %u/%u KB\n"
-             "poly %d vtx %d",
+             "poly %d+%d vtx %d+%d",
              fps, frame_us() * 100 / FRAME_US,
              last.update_us / 1000, last.update_us / 100 % 10,
              draw / 1000, draw / 100 % 10,
@@ -91,7 +91,7 @@ void ll_stats_overlay_text(char *buf, size_t size)
              lua_mem ? (unsigned)(lua_mem->limit / 1024) : 0,
              (unsigned)(ram_free() / 1024),
              ll_image_vram_used() / 1024, VRAM_TOTAL / 1024,
-             last.polys, last.verts);
+             last.polys_top, last.polys_bottom, last.verts_top, last.verts_bottom);
 }
 
 static void set_int(lua_State *L, const char *key, lua_Integer v)
@@ -116,8 +116,10 @@ static int l_stats(lua_State *L)
     set_int(L, "ram_free", (lua_Integer)ram_free());
     set_int(L, "vram", ll_image_vram_used());
     set_int(L, "vram_total", VRAM_TOTAL);
-    set_int(L, "polys", last.polys);
-    set_int(L, "verts", last.verts);
+    set_int(L, "polys_top", last.polys_top);
+    set_int(L, "polys_bottom", last.polys_bottom);
+    set_int(L, "verts_top", last.verts_top);
+    set_int(L, "verts_bottom", last.verts_bottom);
     return 1;
 }
 

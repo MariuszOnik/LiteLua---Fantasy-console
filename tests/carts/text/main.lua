@@ -1,13 +1,23 @@
 -- LiteLua P4c text test: the built-in 6x8 font, Polish letters, textw.
 -- A: stress test on/off (Up/Down: more/fewer lines), B: back to the list.
 
+-- Result lines: shown on the bottom screen and written to the log
+local out = {}
+local function say(s)
+  out[#out + 1] = s
+  print(s)
+end
+local function draw_out(y)
+  for i, l in ipairs(out) do
+    text(l, 0, (y or 0) + (i - 1) * 8, l:sub(1, 4) == "FAIL" and 2 or 12)
+  end
+end
+
 local fails = 0
 local function check(name, cond, extra)
   if not cond then fails = fails + 1 end
-  print((cond and "ok   " or "FAIL ") .. name .. (extra and (" " .. tostring(extra)) or ""))
+  say((cond and "ok   " or "FAIL ") .. name .. (extra and (" " .. tostring(extra)) or ""))
 end
-
-io.write('\27[2J')
 
 local w, h = textw("Hello")
 check("textw", w == 30 and h == 8, w .. "x" .. h)
@@ -18,8 +28,8 @@ check("textw utf-8", w == 36, w)
 w = textw("a\tb")
 check("textw tab", w == 30, w)
 check("textw empty", select(2, textw("")) == 0)
-print(fails == 0 and "ALL OK" or (fails .. " FAILED"))
-print("A: stress  B: list")
+say(fails == 0 and "ALL OK" or (fails .. " FAILED"))
+say("A: stress  B: list")
 
 -- All glyphs of the font, 16 per line
 local all = {}
@@ -39,6 +49,7 @@ end
 sheet = table.concat(lines, "\n")
 
 local t = 0
+local status = ""
 local stress, count = false, 20
 local draw_us, frames = 0, 0
 
@@ -114,11 +125,15 @@ function _draw(screen)
     if stress then stress_scene() else scene() end
     draw_us = draw_us + (micros() - t0)
     frames = frames + 1
-  elseif frames >= 30 then
-    local what = stress and (count .. " lines x 39 chars") or "scene"
-    local msg = ("%s: draw %d us/frame"):format(what, draw_us // frames)
-    io.write(('\27[16;0H%-31s'):format(msg))
-    log(msg)
-    draw_us, frames = 0, 0
+  else
+    if frames >= 30 then
+      local what = stress and (count .. " lines x 39 chars") or "scene"
+      status = ("%s: draw %d us/frame"):format(what, draw_us // frames)
+      log(status)
+      draw_us, frames = 0, 0
+    end
+    cls(0)
+    draw_out()
+    text(status, 0, 184, 4)
   end
 end

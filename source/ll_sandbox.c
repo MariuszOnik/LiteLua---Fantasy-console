@@ -124,7 +124,8 @@ static int load_source(lua_State *L, char *src, size_t len, const char *name)
 {
     char chunkname[LL_PATH_MAX + 1];
     snprintf(chunkname, sizeof(chunkname), "@%s", name);
-    int status = luaL_loadbufferx(L, src, len, chunkname, "t");
+    const char *code = ll_skip_bom(src, &len);
+    int status = luaL_loadbufferx(L, code, len, chunkname, "t");
     free(src);
     return status;
 }

@@ -97,14 +97,19 @@ end
 
 ### The frame
 
-The game runs at **30 frames per second**. Every frame:
+The game runs at **30 frames per second** and draws on **both screens**. Every frame:
 
-1. input is read,
-2. `_update()` is called,
-3. `_draw(TOP)` is called for the top screen,
-4. `_draw(BOTTOM)` is called for the bottom (touch) screen.
+1. input is read and `_update()` is called,
+2. `_draw(TOP)` is called for the top screen,
+3. `_draw(BOTTOM)` is called for the bottom (touch) screen.
 
 `TOP` is `0` and `BOTTOM` is `1`. Keep game logic in `_update` and only drawing in `_draw`.
+
+The DS has one 3D engine, so it draws the two screens in turns: a game frame is two
+screen refreshes (1/60 s each), one per screen. That gives each `_draw` about **16 ms**;
+`_update` runs in the second half, together with `_draw(BOTTOM)`. If a screen takes
+longer, the game slows down (to 20 FPS) but nothing flickers — both screens keep their
+last picture.
 
 ### Drawing
 
@@ -113,8 +118,9 @@ hardware, and the picture is built again in every frame: whatever `_draw` does n
 not on the screen, so start with `cls()` and draw everything. Things drawn later cover
 things drawn earlier.
 
-For now only the **top screen** shows graphics; the bottom screen is a text console for
-`print` (drawing in `_draw(BOTTOM)` is ignored until a later version).
+Both screens are drawn the same way. The drawing settings (`color`, `alpha`, `camera`,
+`clip`, `tint`) are shared, so set them in each `_draw` where you need them; `cls` sets the
+background of the screen being drawn.
 
 ```lua
 cls(1)                          -- clear with a color
@@ -191,8 +197,9 @@ local w = textw("GAME OVER")
 text("GAME OVER", (256 - w) // 2, 92, 2)   -- centered
 ```
 
-`print` still writes to the console on the bottom screen and to the log; `text` draws on
-the game screen.
+`print` does not draw on the game screens: it writes to the log and to the console
+overlay (hold **L+R** and press **X** to see the last lines). Use `text` to show text in
+the game.
 
 ### Speed
 
@@ -282,8 +289,9 @@ end
 ### Errors
 
 When your code fails — a syntax error or an error while running — the game stops and the
-error screen shows the message with the file and line (`main.lua:12: ...`), the stack
-traceback (which functions were called) and the memory use. Press **START** to restart the
+error screen shows the message with the file and line (`main.lua:12: ...`) and the
+memory use on the top screen, and the stack traceback (which functions were called) on
+the bottom screen. Press **START** to restart the
 game from the beginning (with fresh memory) or **SELECT** to go back to the cartridge list.
 File names are relative to the cartridge (`src/enemy.lua:7: ...`).
 
@@ -303,7 +311,7 @@ LiteLua writes a log to `litelua/log.txt` on the SD card; the previous run is ke
 `litelua/log.old.txt`. It contains the start of each game, all errors with the full
 stack traceback and memory use, and everything your game sends with:
 
-- `print(...)` — to the screen console **and** the log,
+- `print(...)` — to the log **and** the console overlay (L+R+X),
 - `log(...)` — only to the log.
 
 Every line starts with the time since start in seconds:
@@ -332,7 +340,7 @@ drw 3.4 ms             time of _draw (both screens)
 Lua 120/2048 KB        Lua memory in use / limit
 RAM 3400 KB free       free memory of the console
 VRAM 36/320 KB         video memory used by images
-poly 512 vtx 1500      shapes and vertices drawn (the DS draws at most ~2000 / 6144)
+poly 512+40 vtx ...    shapes and vertices, top+bottom screen (at most ~2000 / 6144 each)
 ```
 
 The overlay stays on for the next games until the console is turned off. A game can read
@@ -387,7 +395,7 @@ any cart and create new carts.
 | hold **START** for half a second | pause menu: Resume, Restart, Edit code, Quit (coming in P10) |
 | **L+R+B** | leave the game at once, back to the list |
 | **L+R+Y** | statistics overlay on/off |
-| **L+R+X** | console overlay with the last `print` lines (coming in P6) |
+| **L+R+X** | console overlay with the last `print` lines (on the bottom screen) |
 | hold **SELECT** at start | safe mode: built-in system carts only (coming in P10) |
 
 Games see these buttons too, so avoid using L+R together with B, X or Y in a game.

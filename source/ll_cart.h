@@ -63,6 +63,19 @@ bool ll_cart_save_path(const LLCart *cart, const char *rel, char *out,
 // Creates litelua/saves/<id> if needed.
 void ll_cart_make_save_dir(const LLCart *cart);
 
+// Skips a UTF-8 byte order mark (EF BB BF) at the start of source text.
+// Windows editors (Notepad) add it; Lua does not accept it.
+static inline const char *ll_skip_bom(const char *s, size_t *len)
+{
+    if (*len >= 3 && (unsigned char)s[0] == 0xef && (unsigned char)s[1] == 0xbb
+        && (unsigned char)s[2] == 0xbf)
+    {
+        *len -= 3;
+        return s + 3;
+    }
+    return s;
+}
+
 // Reads a whole file into a malloc'ed buffer with a terminating 0 (not
 // counted in 'size'). Returns NULL if it cannot be read.
 char *ll_file_read(const char *abs_path, size_t *size);

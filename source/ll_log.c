@@ -17,6 +17,8 @@
 
 #include "lauxlib.h"
 
+#include "ll_console.h"
+#include "ll_gfx.h"
 #include "ll_log.h"
 
 #define LOG_MAX_SIZE (1024 * 1024)
@@ -29,6 +31,7 @@ static volatile u32 vblank_count;
 static void vblank_handler(void)
 {
     vblank_count++;
+    ll_gfx_vblank();
 }
 
 unsigned long ll_vblanks(void)
@@ -167,8 +170,8 @@ static int l_print(lua_State *L)
 {
     size_t len;
     const char *s = join_args(L, &len);
-    fwrite(s, 1, len, stdout);
-    fputc('\n', stdout);
+    ll_console_write(s, len);
+    ll_console_write("\n", 1);
     ll_log_text(s, len);
     return 0;
 }

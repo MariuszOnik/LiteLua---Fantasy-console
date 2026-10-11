@@ -1,18 +1,28 @@
 -- LiteLua P3 test cart: files, sandbox, require, save folder, sys.
--- Prints "ok"/"FAIL" lines to the console and the log.
+-- Shows "ok"/"FAIL" lines on the bottom screen and writes them to the log.
+
+-- Result lines: shown on the bottom screen and written to the log
+local out = {}
+local function say(s)
+  out[#out + 1] = s
+  print(s)
+end
+local function draw_out(y)
+  for i, l in ipairs(out) do
+    text(l, 0, (y or 0) + (i - 1) * 8, l:sub(1, 4) == "FAIL" and 2 or 12)
+  end
+end
 
 local fails = 0
 local function check(name, cond, extra)
   if not cond then fails = fails + 1 end
-  print((cond and "ok   " or "FAIL ") .. name .. (extra and (" " .. tostring(extra)) or ""))
+  say((cond and "ok   " or "FAIL ") .. name .. (extra and (" " .. tostring(extra)) or ""))
 end
 
 local function errors(f, ...)
   local ok, err = pcall(f, ...)
   return not ok, err
 end
-
-io.write('\27[2J')
 
 -- require: src/, then lib/; chunk names are relative to the cart (D13)
 local util = require("game.util")
@@ -62,12 +72,23 @@ check("dofile", errors(dofile, "data/none.lua"))
 check("os.time", type(os.time()) == "number")
 check("sys.run missing", errors(sys.run, "no-such-cart"))
 
-print(fails == 0 and "ALL OK" or (fails .. " FAILED"))
-print("A: sys.run('bench')  B: sys.exit()")
-print("X: error  L+R+B: list")
+say(fails == 0 and "ALL OK" or (fails .. " FAILED"))
+say("A: sys.run('bench')  B: sys.exit()")
+say("Down: error  L+R+B: list")
 
 function _update()
   if btnp("a") then sys.run("bench") end
   if btnp("b") then sys.exit() end
-  if btnp("x") then util.fail() end
+  if btnp("down") then util.fail() end
+end
+
+function _draw(screen)
+  if screen == BOTTOM then
+    cls(0)
+    draw_out()
+  else
+    cls(1)
+    text("Files and sandbox test", 4, 4, 12)
+    text("results on the bottom screen", 4, 14, 13)
+  end
 end

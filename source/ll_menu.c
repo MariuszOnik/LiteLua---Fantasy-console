@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Zlib
 //
 // LiteLua - temporary cart list (D20), replaced by the cart selection cart
-// in P10. Lists the folders and .lcart files in litelua/carts on the text
-// console.
+// in P10. Lists the folders and .lcart files in litelua/carts: the list is on
+// the bottom (touch) screen, the chosen cart and the help on the top one.
 
 #include <dirent.h>
 #include <stdbool.h>
@@ -13,10 +13,12 @@
 #include <nds.h>
 
 #include "ll_cart.h"
+#include "ll_gfx.h"
 #include "ll_menu.h"
 
 #define MAX_CARTS 64
-#define FIRST_ROW 2
+#define ROW_H 10
+#define LIST_Y 2
 #define VISIBLE_ROWS 19
 
 static int cursor; // Kept between calls (return to the same position, D14)
@@ -57,18 +59,51 @@ static int list_carts(char *names[], int max)
     return n;
 }
 
-static void draw(char *names[], int count, int top)
+typedef struct {
+    char **names;
+    int count, top;
+} List;
+
+static const char *label(const List *l, int item)
 {
-    printf("\x1b[2J\x1b[0;0HLiteLua - carts");
-    for (int i = 0; i < VISIBLE_ROWS && top + i <= count; i++)
+    return item == 0 ? "(built-in demo)" : l->names[item - 1];
+}
+
+static void text(int x, int y, const char *s, u32 color)
+{
+    ll_gfx_text(x, y, s, strlen(s), color);
+}
+
+static void draw(int screen, void *ud)
+{
+    const List *l = ud;
+    ll_gfx_cls(0);
+    if (screen == 0)
     {
-        int item = top + i;
-        const char *label = item == 0 ? "(built-in demo)" : names[item - 1];
-        printf("\x1b[%d;0H%c %.29s", FIRST_ROW + i, item == cursor ? '>' : ' ',
-               label);
+        ll_gfx_rectfill(0, 0, 256, 12, 8);
+        text(4, 2, "LiteLua", 4);
+        text(52, 2, "carts", 13);
+
+        text(4, 40, label(l, cursor), 12);
+        text(4, 52, cursor == 0 ? "built into LiteLua" : "litelua/carts", 14);
+
+        text(4, 150, "Up/Down or touch: choose", 13);
+        text(4, 160, "A or touch again: run", 13);
+        text(4, 170, "In a game: L+R+B back here", 14);
+        text(4, 180, "L+R+Y stats, L+R+X console", 14);
+        if (ll_base[0] == '\0')
+            text(4, 80, "No SD card: only the demo", 2);
     }
-    printf("\x1b[22;0HUp/Down: choose  A: run");
-    printf("\x1b[23;0Hcarts: %.24s", ll_base[0] ? "litelua/carts" : "no SD card");
+    else
+    {
+        for (int i = 0; i < VISIBLE_ROWS && l->top + i <= l->count; i++)
+        {
+            int item = l->top + i, y = LIST_Y + i * ROW_H;
+            if (item == cursor)
+                ll_gfx_rectfill(0, y, 256, ROW_H, 9);
+            text(6, y + 1, label(l, item), item == cursor ? 12 : 13);
+        }
+    }
 }
 
 bool ll_menu_choose(char *name, size_t size)
@@ -80,27 +115,39 @@ bool ll_menu_choose(char *name, size_t size)
     if (cursor >= items)
         cursor = items - 1;
 
-    int top = -1;
-    bool redraw = true;
+    List list = { names, count, -1 };
+    ll_gfx_reset();
     while (1)
     {
-        if (cursor < top || top < 0)
-            top = cursor, redraw = true;
-        if (cursor >= top + VISIBLE_ROWS)
-            top = cursor - VISIBLE_ROWS + 1, redraw = true;
-        if (redraw)
-            draw(names, count, top);
-        redraw = false;
+        if (cursor < list.top || list.top < 0)
+            list.top = cursor;
+        if (cursor >= list.top + VISIBLE_ROWS)
+            list.top = cursor - VISIBLE_ROWS + 1;
 
-        swiWaitForVBlank();
+        ll_gfx_frame(draw, &list);
         scanKeys();
         u32 keys = keysDownRepeat();
         if ((keys & KEY_UP) && cursor > 0)
-            cursor--, redraw = true;
+            cursor--;
         if ((keys & KEY_DOWN) && cursor < items - 1)
-            cursor++, redraw = true;
+            cursor++;
         if (keysDown() & KEY_A)
             break;
+
+        // Touch a row to choose it, touch the chosen row again to run it
+        if (keysDown() & KEY_TOUCH)
+        {
+            touchPosition t;
+            touchRead(&t);
+            int row = (t.py - LIST_Y) / ROW_H;
+            int item = list.top + row;
+            if (t.py >= LIST_Y && row < VISIBLE_ROWS && item < items)
+            {
+                if (item == cursor)
+                    break;
+                cursor = item;
+            }
+        }
     }
 
     bool is_cart = cursor > 0;
@@ -109,6 +156,5 @@ bool ll_menu_choose(char *name, size_t size)
 
     for (int i = 0; i < count; i++)
         free(names[i]);
-    consoleClear();
     return is_cart;
 }

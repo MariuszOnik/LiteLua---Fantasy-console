@@ -1,17 +1,12 @@
 -- LiteLua P4a graphics test: every drawing function on the top screen.
 -- A: stress test on/off (Up/Down: more/fewer rectangles), B: back to the list.
--- The bottom screen (text console until P6) shows the draw time.
+-- The bottom screen shows the draw time.
 
 local t = 0
 local stress, count = false, 500
 local draw_us, frames = 0, 0
 
-function _init()
-  io.write('\27[2J')
-  print("P4a graphics test")
-  print("A: stress test  Up/Down: count")
-  print("B: back to the list")
-end
+local status = { "", "", "" }
 
 function _update()
   t = t + 1
@@ -98,14 +93,20 @@ function _draw(screen)
     if stress then stress_scene() else scene() end
     draw_us = draw_us + (micros() - t0)
     frames = frames + 1
-  elseif frames >= 30 then
-    io.write(('\27[5;0H%-31s'):format(stress and ("stress: " .. count .. " rects") or "scene"))
-    io.write(('\27[6;0H%-31s'):format(("draw: %d.%d ms"):format(draw_us // frames // 1000,
-      draw_us // frames % 1000 // 100)))
-    io.write(('\27[7;0H%-31s'):format(("Lua mem: %d KB"):format(collectgarbage("count") // 1)))
-    -- Also to the log, so results can be read from litelua/log.txt
-    log(("%s: draw %d us/frame"):format(stress and (count .. " rects") or "scene",
-      draw_us // frames))
-    draw_us, frames = 0, 0
+  else
+    if frames >= 30 then
+      status[1] = stress and ("stress: " .. count .. " rects") or "scene"
+      status[2] = ("draw: %d.%d ms"):format(draw_us // frames // 1000,
+        draw_us // frames % 1000 // 100)
+      status[3] = ("Lua mem: %d KB"):format(collectgarbage("count") // 1)
+      -- Also to the log, so results can be read from litelua/log.txt
+      log(("%s: draw %d us/frame"):format(status[1], draw_us // frames))
+      draw_us, frames = 0, 0
+    end
+    cls(0)
+    text("Graphics test (P4a)", 0, 0, 12)
+    text("A: stress test  Up/Down: count", 0, 10, 13)
+    text("B: back to the list", 0, 20, 13)
+    for i, s in ipairs(status) do text(s, 0, 36 + i * 10, 4) end
   end
 end

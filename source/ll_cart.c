@@ -394,6 +394,7 @@ static bool read_manifest(LLCart *cart, const char *src, size_t len,
     lua_Integer api = 1, memory = LL_MEM_DEFAULT_LIMIT / 1024;
     char display[16] = "dual30";
 
+    src = ll_skip_bom(src, &len);
     int status = luaL_loadbufferx(L, src, len, "@" MANIFEST, "t");
     if (status == LUA_OK)
     {

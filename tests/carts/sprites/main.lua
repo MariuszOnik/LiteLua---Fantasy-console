@@ -2,13 +2,23 @@
 -- A: stress test on/off (Up/Down: more/fewer sprites), B: back to the list.
 -- Results of the checks go to the bottom screen and the log.
 
+-- Result lines: shown on the bottom screen and written to the log
+local out = {}
+local function say(s)
+  out[#out + 1] = s
+  print(s)
+end
+local function draw_out(y)
+  for i, l in ipairs(out) do
+    text(l, 0, (y or 0) + (i - 1) * 8, l:sub(1, 4) == "FAIL" and 2 or 12)
+  end
+end
+
 local fails = 0
 local function check(name, cond, extra)
   if not cond then fails = fails + 1 end
-  print((cond and "ok   " or "FAIL ") .. name .. (extra and (" " .. tostring(extra)) or ""))
+  say((cond and "ok   " or "FAIL ") .. name .. (extra and (" " .. tostring(extra)) or ""))
 end
-
-io.write('\27[2J')
 
 local hero = image("hero")             -- 16 colors -> 4 bpp
 local chars = image("chars", 16, 16)   -- frame grid
@@ -31,9 +41,10 @@ check("sub outside", not ok, err)
 -- VRAM: big.png takes all 256 KB, so it cannot load next to the others
 ok, err = pcall(image, "big")
 check("out of VRAM", not ok and err:find("video memory", 1, true), err)
-print("A: stress  B: list")
+say("A: stress  B: list")
 
 local t = 0
+local status = ""
 local stress, count = false, 300
 local draw_us, frames = 0, 0
 
@@ -112,13 +123,17 @@ function _draw(screen)
     if stress then stress_scene() else scene() end
     draw_us = draw_us + (micros() - t0)
     frames = frames + 1
-  elseif frames >= 30 then
-    local what = stress and (count .. " sprites") or "scene"
-    local msg = ("%s: draw %d us/frame"):format(what, draw_us // frames)
-    io.write(('\27[16;0H%-31s'):format(msg))
-    log(msg)
-    draw_us, frames = 0, 0
+  else
+    if frames >= 30 then
+      local what = stress and (count .. " sprites") or "scene"
+      status = ("%s: draw %d us/frame"):format(what, draw_us // frames)
+      log(status)
+      draw_us, frames = 0, 0
+    end
+    cls(0)
+    draw_out()
+    text(status, 0, 184, 4)
   end
 end
 
-print(fails == 0 and "ALL OK" or (fails .. " FAILED"))
+say(fails == 0 and "ALL OK" or (fails .. " FAILED"))

@@ -397,3 +397,44 @@ Pełny opis ze szkicami: `docs/UX.md`. Ustalone z użytkownikiem:
   Sweetie 16, font 6×8.
 - Plan zostaje w dotychczasowej kolejności (decyzja użytkownika): P6 robi tylko to, co
   wynika z dwóch ekranów; launcher, pauza i kartridże systemowe w P10, edytor w P11.
+
+## D28 (2026-10-11) — Tryb dual30 (P6): 3D na obu ekranach przez zrzut obrazu
+- **Metoda „stabilna”** jak przykład BlocksDS `video_capture/dual_screen_3d` (CC0): silnik
+  3D rysuje na przemian górny i dolny ekran, jeden na VBlank; każdy obraz trafia przez
+  display capture do swojego banku: **górny → C, dolny → D**. Ekrany zawsze pokazują
+  zrzuty: silnik główny wyświetla bank, do którego właśnie zrzuca (`MODE_VRAM_C/D`), a
+  silnik pomocniczy drugi bank (C jako tło bitmapowe 16 bpp, D jako 12 sprite'ów
+  bitmapowych 64×64). Spóźniona klatka = oba ekrany trzymają ostatni obraz, bez
+  migania i zamiany ekranów.
+- **Przełączanie w przerwaniu VBlank** (`ll_gfx_vblank`, wołane z handlera w `ll_log.c`):
+  `ll_gfx_end` po `glFlush` zapisuje, który ekran czeka na zamianę buforów; przerwanie
+  zaraz po zamianie ustawia LCD (`lcdMainOnTop/Bottom`), tryby obu silników, banki C/D i
+  `REG_DISPCAPCNT`. Niezależne od tego, czy Lua akurat liczy.
+- **Wysyłanie tekstur z wyłączonymi przerwaniami:** videoGL zapisuje i przywraca
+  mapowanie banków A–D naraz (`vramRestorePrimaryBanks`) — przerwanie w środku
+  cofnęłoby zmianę C/D. Upload i `glResetTextures` w `enterCriticalSection`.
+- **Kolejność w klatce (zmiana D11):** połowa 1: `_draw(TOP)`; połowa 2: `_draw(BOTTOM)`,
+  potem wejście i `_update` (następnej klatki; pierwsze `_update` przed pętlą). Każdy
+  ekran musi wysłać obraz przed swoim VBlankiem — budżet ~16 ms na ekran, `_update`
+  dzieli drugą połowę z dolnym ekranem. Czekanie na *następny* VBlank (polecenia dla
+  drugiego ekranu nie mogą wejść przed zamianą buforów pierwszego). Dłuższa połowa =
+  klatka 3 VBlanki (20 FPS). Pomiar melonDS: 500 × `rectfill` na górze (13,6 ms) = 30 FPS,
+  800 (21,9 ms) = 20 FPS.
+- **Możliwa optymalizacja później:** zapisywać polecenia geometrii do bufora w RAM (lista
+  wyświetlania) i wysyłać DMA we właściwym VBlanku — wtedy oba ekrany razem miałyby ~33 ms
+  niezależnie od podziału.
+- **Konsola 2D usunięta:** `print` → log + bufor konsoli (`source/ll_console.c`, 32 linie po
+  42 znaki, UTF-8, pomija kody ANSI), `io.write` → bufor konsoli. Nakładka konsoli L+R+X
+  na dolnym ekranie (jak nakładka statystyk L+R+Y na górnym). Bufor czyszczony przy starcie
+  kartridża.
+- **Ekran błędu i tymczasowa lista** rysowane w C (`ll_gfx_text/rectfill/cls`,
+  `ll_gfx_frame`): błąd — komunikat i pamięć na górze, ślad stosu i START/SELECT na dole;
+  lista — na dole z podświetleniem (dotyk: wybór, drugi dotyk: start), na górze nazwa i
+  podpowiedzi. Font wysyłany do VRAM już przy starcie (lista przed pierwszym kartridżem).
+- **Stan rysowania** (kolor, alfa, kamera, clip, tint) wspólny dla obu ekranów; `cls` —
+  osobny kolor tła dla każdego ekranu. Statystyki: wielokąty/wierzchołki osobno dla
+  ekranów (`polys_top`, `polys_bottom`, `verts_top`, `verts_bottom`).
+- **BOM UTF-8:** kod Lua i `cart.lua` z BOM (Notatnik, PowerShell) są wczytywane — BOM
+  pomijany (`ll_skip_bom`), jak w `luaL_loadfile`.
+- Demo i kartridże testowe przerobione: wyniki fontem na dolnym ekranie; demo nie używa
+  X/Y (kolizja z L+R+X/Y): błąd = strzałka w górę, brak pamięci = w dół.

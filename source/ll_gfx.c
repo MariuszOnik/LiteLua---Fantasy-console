@@ -13,7 +13,17 @@
 // so the drawing order is kept.
 //
 // The 3D image is rebuilt in every frame: what is not drawn in _draw is not
-// on the screen. Until P6 (dual30) only the top screen is drawn.
+// on the screen.
+//
+// Both screens use the 3D engine (dual30, D5, D28), like the BlocksDS example
+// video_capture/dual_screen_3d: the engine renders the top and the bottom
+// screen in turns, one per VBlank, and every rendered image is captured to a
+// VRAM bank: top -> bank C, bottom -> bank D. The screens always show
+// captured images: the main engine shows the bank it is capturing into, the
+// sub engine shows the other bank (bank C as a bitmap background, bank D as a
+// grid of 12 bitmap sprites). If a frame is late, both screens keep showing
+// their last image, without flicker. The configuration is switched in the
+// VBlank interrupt right after the buffers of a flushed screen were swapped.
 
 #include <math.h>
 #include <string.h>
@@ -55,8 +65,8 @@ static const u32 palette_rgb[16] = {
 static u16 palette[16];
 
 static struct {
-    bool active;       // Inside ll_gfx_begin/end of the top screen
-    bool warned;       // Bottom screen warning already logged
+    bool active;       // Inside ll_gfx_begin/end
+    int screen;        // Screen of the current frame (0 top, 1 bottom)
     int depth;
     int poly_id;       // Rotating ID for translucent polygons
     u16 color;
@@ -64,7 +74,7 @@ static struct {
     int cam_x, cam_y;
     int zoom;          // 20.12 fixed point
     int clip_x, clip_y, clip_w, clip_h;
-    u16 clear_color;
+    u16 clear_color[2]; // Background of each screen (cls)
     int bound;         // Texture bound in the 3D engine, -1 = unknown
     u16 tint[4];       // Sprite corner colors: top left, top right,
                        // bottom right, bottom left
@@ -120,15 +130,9 @@ static int clamp(int v, int lo, int hi)
 // Prepares a polygon: returns false if nothing would be visible
 static bool poly_begin(bool textured)
 {
+    // Outside _draw (e.g. in _update) drawing does nothing
     if (!gs.active || gs.alpha == 0 || gs.clip_w <= 0 || gs.clip_h <= 0)
-    {
-        if (!gs.active && !gs.warned)
-        {
-            ll_log("note: drawing on the bottom screen comes in P6, ignored");
-            gs.warned = true;
-        }
         return false;
-    }
 
     int id = 0;
     if (gs.alpha < 31)
@@ -251,22 +255,88 @@ static void apply_clip(void)
     glMatrixMode(GL_MODELVIEW);
 }
 
+// --- Two screens (dual30) ---------------------------------------------------
+
+static volatile int pending_screen = -1; // Flushed, waiting for the swap
+
+// Sub engine sprites showing bank D: a 4x3 grid of 64x64 bitmap sprites
+static void setup_sub_sprites(void)
+{
+    for (int i = 0; i < 128; i++)
+        OAM_SUB[i * 4] = ATTR0_DISABLED;
+
+    int i = 0;
+    for (int y = 0; y < 3; y++)
+    {
+        for (int x = 0; x < 4; x++)
+        {
+            OAM_SUB[i * 4 + 0] = ATTR0_BMP | ATTR0_SQUARE | (64 * y);
+            OAM_SUB[i * 4 + 1] = ATTR1_SIZE_64 | (64 * x);
+            OAM_SUB[i * 4 + 2] = ATTR2_ALPHA(1) | (8 * 32 * y) | (8 * x);
+            i++;
+        }
+    }
+}
+
+// Shows the screens for a frame in which the 3D engine renders 'screen'
+static void show(int screen)
+{
+    u32 capture = DCAP_SIZE(DCAP_SIZE_256x192) | DCAP_MODE(DCAP_MODE_A)
+                | DCAP_SRC_A(DCAP_SRC_A_3DONLY) | DCAP_ENABLE;
+    if (screen == 0)
+    {
+        lcdMainOnTop();
+        videoSetMode(MODE_VRAM_C);
+        videoSetModeSub(MODE_0_2D | DISPLAY_SPR_ACTIVE | DISPLAY_SPR_2D_BMP_256);
+        vramSetBankC(VRAM_C_LCD);
+        vramSetBankD(VRAM_D_SUB_SPRITE_0x06600000);
+        REG_DISPCAPCNT = capture | DCAP_BANK(DCAP_BANK_VRAM_C);
+    }
+    else
+    {
+        lcdMainOnBottom();
+        videoSetMode(MODE_VRAM_D);
+        videoSetModeSub(MODE_5_2D | DISPLAY_BG2_ACTIVE);
+        vramSetBankC(VRAM_C_SUB_BG_0x06200000);
+        vramSetBankD(VRAM_D_LCD);
+        REG_DISPCAPCNT = capture | DCAP_BANK(DCAP_BANK_VRAM_D);
+    }
+}
+
+void ll_gfx_vblank(void)
+{
+    int screen = pending_screen;
+    if (screen < 0)
+        return;
+    pending_screen = -1;
+    show(screen);
+}
+
 void ll_gfx_init(void)
 {
     for (int i = 0; i < 16; i++)
         palette[i] = rgb15(palette_rgb[i]);
 
-    videoSetMode(MODE_0_3D);
-    lcdMainOnTop();
+    // Both capture banks start black (bit 15 = opaque pixel)
+    vramSetBankC(VRAM_C_LCD);
+    vramSetBankD(VRAM_D_LCD);
+    dmaFillHalfWords(0x8000, VRAM_C, 128 * 1024);
+    dmaFillHalfWords(0x8000, VRAM_D, 128 * 1024);
+
+    videoSetModeSub(MODE_5_2D | DISPLAY_BG2_ACTIVE);
+    bgInitSub(2, BgType_Bmp16, BgSize_B16_256x256, 0, 0);
+    setup_sub_sprites();
+
     glScreen2D();
     ll_image_init();
+    show(0);
     ll_gfx_reset();
+    ll_gfx_font_reset(); // Also for the cart list before any cart runs
 }
 
 void ll_gfx_reset(void)
 {
     gs.active = false;
-    gs.warned = false;
     gs.color = palette[DEFAULT_COLOR];
     gs.alpha = 31;
     gs.cam_x = gs.cam_y = 0;
@@ -274,25 +344,16 @@ void ll_gfx_reset(void)
     gs.clip_x = gs.clip_y = 0;
     gs.clip_w = SCREEN_W;
     gs.clip_h = SCREEN_H;
-    gs.clear_color = palette[0];
+    gs.clear_color[0] = gs.clear_color[1] = palette[0];
     gs.bound = -1;
     for (int i = 0; i < 4; i++)
         gs.tint[i] = WHITE;
     gs.tint_corners = false;
-
-    // An empty frame, so the previous cart's image disappears
-    ll_gfx_begin(0);
-    ll_gfx_end(NULL);
 }
 
 void ll_gfx_begin(int screen)
 {
-    if (screen != 0)
-    {
-        gs.active = false;
-        return;
-    }
-
+    gs.screen = screen ? 1 : 0;
     glBegin2D();
     // glBegin2D scales the modelview matrix by 4; our vertices are already
     // quarter pixels
@@ -338,12 +399,12 @@ static void draw_overlay(const char *text)
     gs.clip_x = clip_x, gs.clip_y = clip_y, gs.clip_w = clip_w, gs.clip_h = clip_h;
 }
 
-static int count_polys, count_verts;
+static int count_polys[2], count_verts[2];
 
-void ll_gfx_counts(int *polys, int *verts)
+void ll_gfx_counts(int screen, int *polys, int *verts)
 {
-    *polys = count_polys;
-    *verts = count_verts;
+    *polys = count_polys[screen ? 1 : 0];
+    *verts = count_verts[screen ? 1 : 0];
 }
 
 void ll_gfx_end(const char *overlay)
@@ -353,13 +414,13 @@ void ll_gfx_end(const char *overlay)
 
     // What the game sent, before the overlay adds its own polygons (waits
     // until the geometry engine has processed the commands)
-    glGetInt(GL_GET_POLYGON_RAM_COUNT, &count_polys);
-    glGetInt(GL_GET_VERTEX_RAM_COUNT, &count_verts);
+    glGetInt(GL_GET_POLYGON_RAM_COUNT, &count_polys[gs.screen]);
+    glGetInt(GL_GET_VERTEX_RAM_COUNT, &count_verts[gs.screen]);
     if (overlay)
         draw_overlay(overlay);
 
-    glClearColor(gs.clear_color & 31, (gs.clear_color >> 5) & 31,
-                 (gs.clear_color >> 10) & 31, 31);
+    u16 clear = gs.clear_color[gs.screen];
+    glClearColor(clear & 31, (clear >> 5) & 31, (clear >> 10) & 31, 31);
     glClearPolyID(63);
 
     // Back to the full screen for the next frame's glBegin2D
@@ -367,6 +428,10 @@ void ll_gfx_end(const char *overlay)
     glEnd2D();
     glFlush(GL_TRANS_MANUALSORT);
     gs.active = false;
+
+    // The buffers are swapped at the next VBlank; the interrupt then shows
+    // this screen
+    pending_screen = gs.screen;
 }
 
 // --- Lua API ----------------------------------------------------------------
@@ -376,7 +441,8 @@ void ll_gfx_end(const char *overlay)
 static int l_cls(lua_State *L)
 {
     u16 color = lua_isnoneornil(L, 1) ? palette[0] : arg_color(L, 1);
-    gs.clear_color = color;
+    if (gs.active)
+        gs.clear_color[gs.screen] = color;
     if (gs.active && gs.depth > 0)
     {
         int alpha = gs.alpha;
@@ -939,6 +1005,44 @@ static int l_tint(lua_State *L)
     gs.tint_corners = gs.tint[1] != gs.tint[0] || gs.tint[2] != gs.tint[0]
                       || gs.tint[3] != gs.tint[0];
     return 0;
+}
+
+// --- Drawing from C (error screen, cart list) --------------------------------
+
+u16 ll_gfx_color(u32 c)
+{
+    return c < 16 ? palette[c] : rgb15(c);
+}
+
+void ll_gfx_cls(u32 color)
+{
+    gs.clear_color[gs.screen] = ll_gfx_color(color);
+}
+
+void ll_gfx_rectfill(int x, int y, int w, int h, u32 color)
+{
+    draw_box(x, y, w, h, ll_gfx_color(color));
+}
+
+void ll_gfx_text(int x, int y, const char *s, size_t len, u32 color)
+{
+    draw_text((const unsigned char *)s, len, x, y, ll_gfx_color(color));
+}
+
+void ll_gfx_alpha(int alpha)
+{
+    gs.alpha = clamp(alpha, 0, 31);
+}
+
+void ll_gfx_frame(void (*draw)(int screen, void *ud), void *ud)
+{
+    for (int screen = 0; screen < 2; screen++)
+    {
+        ll_gfx_begin(screen);
+        draw(screen, ud);
+        ll_gfx_end(NULL);
+        swiWaitForVBlank();
+    }
 }
 
 void ll_gfx_register(lua_State *L)

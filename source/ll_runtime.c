@@ -3,9 +3,9 @@
 // LiteLua - cart runtime: Lua state, callbacks and the frame loop.
 //
 // Callbacks (all optional): _init(), _update(), _draw(screen).
-// The game runs at 30 FPS: every game frame takes two VBlanks. The first one
-// runs _update() and _draw(TOP), the second one _draw(BOTTOM). In the dual30
-// mode (P6) each VBlank renders one screen with the 3D engine.
+// The game runs at 30 FPS: every game frame takes two VBlanks, one per
+// screen (dual30, D28): _draw(TOP) in the first, _draw(BOTTOM) and the
+// next _update() in the second.
 
 #include <setjmp.h>
 #include <stdio.h>
@@ -19,6 +19,7 @@
 #include "lualib.h"
 
 #include "ll_cart.h"
+#include "ll_console.h"
 #include "ll_error.h"
 #include "ll_gfx.h"
 #include "ll_image.h"
@@ -39,7 +40,7 @@ extern const char ll_demo_lua[];
 
 // Hold all of these to leave the cart (until the pause menu of P10)
 #define KEYS_LEAVE (KEY_L | KEY_R | KEY_B)
-// L+R held, Y pressed: statistics overlay on/off
+// L+R held, then Y: statistics overlay on/off, X: console overlay on/off
 #define KEYS_OVERLAY (KEY_L | KEY_R)
 
 static unsigned elapsed_us(u32 start_ticks)
@@ -177,7 +178,8 @@ static bool load_main(lua_State *L, const LLCart *cart)
         {
             char chunkname[LL_NAME_MAX + 1];
             snprintf(chunkname, sizeof(chunkname), "@%s", cart->entry);
-            status = luaL_loadbufferx(L, src, len, chunkname, "t");
+            const char *code = ll_skip_bom(src, &len);
+            status = luaL_loadbufferx(L, code, len, chunkname, "t");
             free(src);
         }
     }
@@ -197,62 +199,84 @@ static bool load_main(lua_State *L, const LLCart *cart)
     return !stop_requested();
 }
 
-// Waits until the VBlank counter reaches 'target' (no wait if it is past)
-static void wait_vblank(unsigned long target)
+// Reads the buttons and handles the system combinations. Returns false if
+// the cart must stop (L+R+B).
+static bool read_input(void)
 {
-    while ((long)(ll_vblanks() - target) < 0)
-        swiWaitForVBlank();
+    ll_input_update();
+    u32 held = keysHeld(), down = keysDown();
+    if ((held & KEYS_LEAVE) == KEYS_LEAVE)
+    {
+        ll_log("L+R+B: back to the cart list");
+        result = LL_RUN_MENU;
+        return false;
+    }
+    if ((held & KEYS_OVERLAY) == KEYS_OVERLAY && (down & KEY_Y))
+        ll_stats_toggle_overlay();
+    if ((held & KEYS_OVERLAY) == KEYS_OVERLAY && (down & KEY_X))
+        ll_console_toggle_overlay();
+    return true;
 }
 
-// A game frame is two VBlanks. Waiting for VBlank numbers (instead of "the
-// next VBlank") lets _update + _draw(TOP) take longer than one VBlank as
-// long as the whole frame fits in two; a slower frame just takes three.
+// Calls _draw(screen) inside a 3D frame of that screen. The frame is ended
+// (sent to the 3D engine) also after an error, so the 3D state stays valid.
+static bool draw_screen(lua_State *L, int screen, unsigned *us)
+{
+    static char overlay[2048];
+    const char *text = NULL;
+    if (screen == SCREEN_TOP && ll_stats_overlay())
+    {
+        ll_stats_overlay_text(overlay, sizeof(overlay));
+        text = overlay;
+    }
+    else if (screen == SCREEN_BOTTOM && ll_console_overlay())
+    {
+        ll_console_text(overlay, sizeof(overlay), 23);
+        text = overlay;
+    }
+
+    u32 t0 = cpuGetTiming();
+    ll_gfx_begin(screen);
+    bool ok = call_hook(L, "_draw", screen);
+    *us = elapsed_us(t0);
+    ll_gfx_end(text);
+    return ok;
+}
+
+// A game frame is two VBlanks, one per screen (dual30, D28): the 3D engine
+// renders one screen per VBlank, so the frame of each screen has to be sent
+// before its VBlank. The first half runs _draw(TOP); the second half
+// _draw(BOTTOM) and then input and _update for the next frame, which spreads
+// the work over both halves. A late half only delays the frame; the screens
+// keep their last image.
 static void frame_loop(lua_State *L)
 {
+    LLFrameStats fs = { 0 };
+    u32 t0 = cpuGetTiming();
+    if (!read_input() || !call_hook(L, "_update", -1))
+        return;
+    fs.update_us = elapsed_us(t0);
+
     while (1)
     {
-        unsigned long start = ll_vblanks();
-        ll_input_update();
-        if ((keysHeld() & KEYS_LEAVE) == KEYS_LEAVE)
-        {
-            ll_log("L+R+B: back to the cart list");
-            result = LL_RUN_MENU;
-            return;
-        }
-        if ((keysHeld() & KEYS_OVERLAY) == KEYS_OVERLAY && (keysDown() & KEY_Y))
-            ll_stats_toggle_overlay();
-
-        LLFrameStats fs;
-        u32 t0 = cpuGetTiming();
-        if (!call_hook(L, "_update", -1))
-            return;
-        fs.update_us = elapsed_us(t0);
-
-        // The frame must be ended (and sent to the 3D engine) also after an
-        // error, so the 3D state stays consistent
-        char overlay[160];
-        if (ll_stats_overlay())
-            ll_stats_overlay_text(overlay, sizeof(overlay));
-        t0 = cpuGetTiming();
-        ll_gfx_begin(SCREEN_TOP);
-        bool ok = call_hook(L, "_draw", SCREEN_TOP);
-        fs.draw_top_us = elapsed_us(t0);
-        ll_gfx_end(ll_stats_overlay() ? overlay : NULL);
-        ll_gfx_counts(&fs.polys, &fs.verts);
+        bool ok = draw_screen(L, SCREEN_TOP, &fs.draw_top_us);
+        ll_gfx_counts(SCREEN_TOP, &fs.polys_top, &fs.verts_top);
         if (!ok)
             return;
-        wait_vblank(start + 1);
+        swiWaitForVBlank();
 
-        t0 = cpuGetTiming();
-        ll_gfx_begin(SCREEN_BOTTOM);
-        ok = call_hook(L, "_draw", SCREEN_BOTTOM);
-        ll_gfx_end(NULL);
-        fs.draw_bottom_us = elapsed_us(t0);
+        ok = draw_screen(L, SCREEN_BOTTOM, &fs.draw_bottom_us);
+        ll_gfx_counts(SCREEN_BOTTOM, &fs.polys_bottom, &fs.verts_bottom);
         if (!ok)
             return;
         ll_stats_frame(&fs);
         ll_log_flush();
-        wait_vblank(start + 2);
+
+        t0 = cpuGetTiming();
+        if (!read_input() || !call_hook(L, "_update", -1))
+            return;
+        fs.update_us = elapsed_us(t0);
+        swiWaitForVBlank();
     }
 }
 
@@ -269,6 +293,7 @@ LLRunResult ll_run(const LLCart *cart)
 
     result = LL_RUN_RESTART;
     ll_gfx_reset();
+    ll_console_clear();
     ll_stats_reset(&lua_mem);
     ll_image_reset(cart);
     ll_gfx_font_reset();
@@ -292,6 +317,7 @@ LLRunResult ll_run(const LLCart *cart)
     lua_pushcfunction(L, msg_handler); // MSGH_INDEX
     luaL_openlibs(L);
     ll_sandbox_install(L, cart);
+    ll_console_register(L);
     register_api(L);
 
     if (load_main(L, cart) && call_hook(L, "_init", -1))

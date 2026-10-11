@@ -46,7 +46,9 @@ void ll_image_init(void)
 void ll_image_reset(const LLCart *c)
 {
     cart = c;
+    int irq = enterCriticalSection();
     glResetTextures();
+    leaveCriticalSection(irq);
     vram_used = 0;
     ll_gfx_texture_changed();
 }
@@ -156,10 +158,15 @@ int ll_image_upload(const LLPng *png, unsigned *vram, char *err, size_t err_size
         }
     }
 
+    // videoGL saves and restores the mapping of banks A-D while it copies the
+    // texture; the VBlank interrupt (which maps banks C and D for the two
+    // screens) must wait, or its change would be undone
     int name = 0;
+    int irq = enterCriticalSection();
     bool ok = glGenTextures(1, &name) && glBindTexture(0, name)
               && glTexImage2D(0, 0, type, tw, th, 0, param, data)
               && (pal_size == 0 || glColorTableEXT(0, 0, pal_size, 0, 0, pal));
+    leaveCriticalSection(irq);
     free(data);
     ll_gfx_texture_changed();
 

@@ -6,20 +6,21 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
-- **Ostatnio:** P5 — statystyki (D26): `sys.stats()` i nakładka L+R+Y (FPS, CPU %, czasy
-  `_update`/`_draw`, pamięć Lua, wolny RAM, VRAM, wielokąty/wierzchołki). Wcześniej P4 —
-  grafika (D23–D25), zmierzona na DSi.
-- **Następny krok:** P6 — tryb dual30. Projekt aplikacji gotowy (`docs/UX.md`, D27): w P6
-  ekran błędu i tymczasowa lista rysowane w C fontem 6×8, `print` → log + nakładka konsoli
-  L+R+X; bank C zajmuje dziś konsola 2D (do zwolnienia). Tempo klatki (D23) do
-  przemyślenia, bo każdy ekran ma swój VBlank.
+- **Ostatnio:** P6 — dual30 (D28): 3D na obu ekranach przez zrzut do banków C/D
+  (przełączanie w przerwaniu VBlank), kolejność klatki: `_draw(TOP)` | `_draw(BOTTOM)` +
+  `_update`, konsola 2D usunięta (`print` → log + nakładka L+R+X), ekran błędu i
+  tymczasowa lista rysowane fontem 6×8, pomijanie BOM w plikach Lua. Kartridże testowe i
+  demo przerobione na dwa ekrany. Testy w melonDS ok; na konsoli — do sprawdzenia.
+- **Następny krok:** P7 — dźwięk (Maxmod, D7). Do sprawdzenia na konsoli: P6 (oba ekrany
+  bez migania, nakładki, ekran błędu, lista z dotykiem, kartridże testowe).
 - **Później (uzgodnione):** kartridż testowy kosztu obiektów (middleclass vs tabele,
-  śmieci na klatkę) i wskazówki o pamięci w README.
+  śmieci na klatkę) i wskazówki o pamięci w README. Optymalizacja: lista wyświetlania w
+  RAM, żeby oba ekrany dzieliły 33 ms (D28).
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
   `gfx.lua`, `files.lua`, `sys.lua` (z `sys.stats`).
-- **Manual:** `README.md` (D15) — opisuje stan po P5.
-- **Otwarte sprawy:** błąd jako struktura plik/linia (D13) — przy P11. Dolny ekran zostaje
-  konsolą tekstową do P6 (dual30).
+- **Manual:** `README.md` (D15) — opisuje stan po P6.
+- **Otwarte sprawy:** błąd jako struktura plik/linia (D13) — przy P11. Konsola tekstowa 2D
+  usunięta w P6 (D28).
 
 ## Punkty
 
@@ -69,7 +70,7 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 - [x] **P5 — Statystyki** (D26)
   Nakładka (kombinacja przycisków) + `sys.stats()`: pamięć Lua, sterta C (`mallinfo`), VRAM
   (liczona przy uploadzie), wielokąty/wierzchołki (`glGetInt`), czas `update`/`draw`.
-- [ ] **P6 — Tryb dual30 (domyślny)**
+- [x] **P6 — Tryb dual30 (domyślny)** (D28)
   Zrzut obrazu i zamiana banków C/D; `_draw(screen)` wołane dla ekranu rysowanego w klatce.
   Wg D27 / `docs/UX.md`: ekran błędu i tymczasowa lista rysowane w C fontem 6×8 na 3D,
   `print` → log + nakładka konsoli (L+R+X), dolny ekran przestaje być konsolą 2D.

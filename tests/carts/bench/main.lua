@@ -71,10 +71,21 @@ local function check_div()
   assert(not pcall(function() return cases[1][1] % 0 end))
 end
 
-io.write('\27[2J')
+-- Result lines: shown on the bottom screen and written to the log
+local out = {}
+local function say(s)
+  out[#out + 1] = s
+  print(s)
+end
+local function draw_out(y)
+  for i, l in ipairs(out) do
+    text(l, 0, (y or 0) + (i - 1) * 8, l:sub(1, 4) == "FAIL" and 2 or 12)
+  end
+end
+
 check_div()
-print("int // and %: ok")
-print("LiteLua VM benchmark, N=" .. N)
+say("int // and %: ok")
+say("LiteLua VM benchmark, N=" .. N)
 local total = 0
 for _, t in ipairs(tests) do
   collectgarbage()
@@ -82,8 +93,16 @@ for _, t in ipairs(tests) do
   t[2]()
   local us = micros() - t0
   total = total + us
-  print(("%-8s %6d.%d ms"):format(t[1], us // 1000, us % 1000 // 100))
+  say(("%-8s %6d.%d ms"):format(t[1], us // 1000, us % 1000 // 100))
 end
-print(("total    %6d ms"):format(total // 1000))
-print(("mem: %d KB"):format(collectgarbage("count") // 1))
-print("done")
+say(("total    %6d ms"):format(total // 1000))
+say(("mem: %d KB"):format(collectgarbage("count") // 1))
+say("done")
+
+function _draw(screen)
+  cls(0)
+  if screen == TOP then
+    text("VM benchmark (results also in the log)", 0, 0, 13)
+    draw_out(12)
+  end
+end

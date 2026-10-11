@@ -19,14 +19,12 @@
 
 int main(int argc, char **argv)
 {
-    consoleDemoInit(); // Text console on the bottom screen (until P6)
-    ll_gfx_init();     // 3D engine on the top screen
-
     // Timers 0+1 as a 32-bit counter for micros()
     cpuStartTiming(0);
 
     bool fat_ok = fatInitDefault();
-    ll_log_init(fat_ok);
+    ll_log_init(fat_ok); // Also installs the VBlank interrupt handler
+    ll_gfx_init();       // 3D on both screens (dual30)
     ll_cart_init(fat_ok);
 
     // Built-in files (nitro:/), e.g. libraries in nitro:/lib for require
