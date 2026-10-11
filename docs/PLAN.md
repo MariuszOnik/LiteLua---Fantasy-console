@@ -10,8 +10,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   manifest `cart.lua` z limitem pamięci, piaskownica `io`/`os`/`load`, `require` (src → lib →
   litelua/lib → nitro:/lib), zapisy w `save/`, `sys.run`/`sys.exit`, tymczasowa lista w C,
   nazwy chunków względne (D13), NitroFS, `tools/litelua.py pack`. Testy: kartridże
-  `tests/carts/files` (też jako `files-zip.lcart`) i `bench` — wszystko ok w melonDS; wersja z
-  folderami potwierdzona na konsoli DSi. P2 zmierzone na konsoli (D19): −14%.
+  `tests/carts/files` (też jako `files-zip.lcart`) i `bench` — wszystko ok w melonDS i na
+  konsoli DSi (także `.lcart` i NitroFS). P2 zmierzone na konsoli (D19): −14%.
   ROM ma w banerze punkt i czas buildu (D16). Konsola ma serwer FTP (`192.168.1.86:5000`),
   przez który można wgrywać buildy i czytać logi (za zgodą użytkownika).
 - **Następny krok:** P4a — rysowanie podstawowe (plan w punkcie P4, decyzje API w D22).
