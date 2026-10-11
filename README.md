@@ -21,10 +21,10 @@ litelua/log.txt       the log (see below)
 
 LiteLua starts with a list of the cartridges in `litelua/carts` (Up/Down, **A** to run).
 The first entry is a built-in demo that shows the frame rate, input and memory use and lets
-you test the error screen (SELECT, Y) and the memory limit (L+R). Without an SD card the
+you test the error screen (SELECT, Y) and the memory limit (X). Without an SD card the
 demo starts directly. (This simple list will be replaced by a proper cartridge browser.)
 
-To leave a running game and go back to the list, hold **L+R+START+SELECT**.
+To leave a running game and go back to the list, hold **L+R+B** together.
 
 Packed cartridges (`.lcart` files) are coming in a later version; for now a cartridge is a
 folder.

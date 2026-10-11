@@ -174,7 +174,8 @@ wtedy ustawiony na DSi. Porównujemy tylko pomiary z tego samego trybu (linia `c
 - **Start (do P10):** tymczasowa lista w C (`source/ll_menu.c`) — foldery z `litelua/carts`
   posortowane + „(built-in demo)” na początku; góra/dół, A. Kursor zapamiętany między
   wywołaniami. Bez karty SD od razu demo. `main.lua` w katalogu głównym karty już nie jest
-  uruchamiany. Wyjście z gry: przytrzymanie L+R+START+SELECT (do menu pauzy w P10).
+  uruchamiany. Wyjście z gry: L+R+B trzymane razem (do menu pauzy w P10; pierwotnie L+R+START+SELECT —
+  w melonDS klawiatura PC nie przekazywała czterech klawiszy naraz).
   Ekran błędu: START — restart, SELECT — lista.
 - **Manifest `cart.lua`:** liczony w osobnym małym stanie Lua (limit 64 KB, puste `_ENV`,
   tylko tekst), więc może zawierać tylko dane. Pola z D6 plus `memory` (KB, 64…65536,

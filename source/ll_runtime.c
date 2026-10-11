@@ -35,7 +35,7 @@
 extern const char ll_demo_lua[];
 
 // Hold all of these to leave the cart (until the pause menu of P10)
-#define KEYS_LEAVE (KEY_L | KEY_R | KEY_START | KEY_SELECT)
+#define KEYS_LEAVE (KEY_L | KEY_R | KEY_B)
 
 static LLMem lua_mem;
 static jmp_buf panic_jmp;
@@ -191,7 +191,7 @@ static void frame_loop(lua_State *L)
         ll_input_update();
         if ((keysHeld() & KEYS_LEAVE) == KEYS_LEAVE)
         {
-            ll_log("L+R+START+SELECT: back to the cart list");
+            ll_log("L+R+B: back to the cart list");
             result = LL_RUN_MENU;
             return;
         }

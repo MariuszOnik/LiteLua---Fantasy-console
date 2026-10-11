@@ -16,7 +16,7 @@ typedef enum {
 // Runs one session of 'cart' (the built-in demo when NULL) in a new Lua
 // state: loads the entry file, calls _init and then the frame loop. Returns
 // when the cart stops: after an error has been shown, on sys.run/sys.exit or
-// when L+R+START+SELECT is held. The state is closed before returning (D14).
+// when L+R+B is held. The state is closed before returning (D14).
 LLRunResult ll_run(const LLCart *cart);
 
 #endif // LL_RUNTIME_H__

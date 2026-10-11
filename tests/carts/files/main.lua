@@ -59,7 +59,7 @@ check("os.time", type(os.time()) == "number")
 
 print(fails == 0 and "ALL OK" or (fails .. " FAILED"))
 print("A: sys.run('bench')  B: sys.exit()")
-print("X: error  L+R+START+SELECT: list")
+print("X: error  L+R+B: list")
 
 function _update()
   if btnp("a") then sys.run("bench") end
