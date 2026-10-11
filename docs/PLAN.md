@@ -12,7 +12,7 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   testowy `tests/carts/sprites` (obrazy generuje `make_images.py`) — wszystko ok w melonDS.
   Wcześniej P4a (D23): kształty; tempo klatki potwierdzone na DSi.
 - **Następny krok:** P4c — tekst: własny font 6×8 (D22) z polskimi znakami, `text`,
-  `textw`. Do sprawdzenia na konsoli: kartridż `sprites` (wygląd + test obciążenia).
+  `textw`. P4b na konsoli DSi: `ALL OK`, `spr` ~17,8 µs (D24).
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
   `gfx.lua`, `files.lua`, `sys.lua`.
 - **Manual:** `README.md` (D15) — opisuje stan po P4b.

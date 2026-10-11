@@ -329,4 +329,6 @@ Ustalone z użytkownikiem przed P4:
 - **Linie (poprawka do D23):** koniec przedłużany o 1 px tylko wzdłuż dłuższej osi —
   przedłużanie obu osi (jak w gl2d) przechylało linie poziome/pionowe.
 - Pomiar melonDS (tryb DS): 300 × `spr` z pętlą Lua = 11,1 ms (~37 µs), 500 × `rectfill` =
-  13,8 ms. Na konsoli — do zmierzenia. Kandydat do optymalizacji w P5: `ll_gfx.c` w ITCM.
+  13,8 ms. **Konsola DSi:** `spr` ~17,8 µs (300 = 5,4 ms, 900 = 16,0 ms, równe 30 FPS),
+  scena testowa 1,45 ms, start kartridża z testem braku VRAM 0,85 s. Kandydat do
+  optymalizacji w P5: `ll_gfx.c` w ITCM.
