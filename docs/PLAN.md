@@ -27,7 +27,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   RAM, muzyka `.mas` albo WAV strumieniowany z karty (też z `.lcart`, wpis bez
   kompresji), pamięć dźwięku w limicie `memory`. Test `tests/carts/sound` w melonDS: logika
   i pamięć ok. Konsola DSi: moduł, strumień, głośność, `_quit`, L+R+START ok; efekty
-  nie grały — błąd Maxmoda, obejście w D34 (wysłane na konsolę, **do odsłuchu**). Do
+  nie grały — błąd Maxmoda; własny bank próbek (D34), w melonDS uchwyty ok, **do odsłuchu
+  na konsoli**. Do
   sprawdzenia: strumień WAV z `.lcart`.
 - **P18 / D35:** kierunek Music Studio zatwierdzony, etapy S0–S4 w planie; S0 tylko na
   osobne polecenie.

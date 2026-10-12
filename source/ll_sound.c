@@ -2,11 +2,15 @@
 //
 // LiteLua - sound (P7, D7, D34).
 //
-// Maxmod runs without a soundbank: every cart loads its own files.
+// Maxmod gets an empty sample bank of SOUND_SLOTS entries in RAM instead of a
+// soundbank file: every cart loads its own files.
 // - Sound effects: sfx/<name>.wav (PCM, 8 or 16 bit, mono or stereo, mixed
-//   down to mono) loaded into RAM as Maxmod external samples. A sound object
-//   owns its sample; when it is collected the data is freed only after its
-//   last play has ended (the ARM7 reads it while it plays).
+//   down to mono) is turned into a sample in Maxmod's MAS format in RAM and
+//   put in a free slot of the bank; sfx() plays it by its slot number.
+//   (Maxmod's "external sample" pointer does not work without a soundbank,
+//   D34.) A sound object owns its sample; when it is collected the sample and
+//   its slot are freed only after its last play has ended (the ARM7 reads
+//   them while it plays).
 // - Music, one at a time: music/<name>.mas (a module made by mmutil, played
 //   from RAM) or music/<name>.wav streamed from the SD card through a ring
 //   buffer of half a second: the stream callback (timer interrupt) copies
@@ -20,6 +24,7 @@
 #include <strings.h>
 
 #include <maxmod9.h>
+#include <mm_mas.h>
 #include <nds.h>
 
 #include "lauxlib.h"
@@ -33,6 +38,11 @@
 #define STREAM_MAX_RATE 32768  // Highest stream rate of Maxmod
 #define STREAM_READ_MAX 8192   // Bytes read from the file per update
 #define WAV_HEADER_MAX 4096    // Chunks before the WAV data must fit here
+#define SOUND_SLOTS 256        // Sounds loaded at the same time
+
+// Maxmod's sample bank: one word per slot, the offset of a MAS sample from the
+// start of main RAM (0 = free). The ARM7 reads it.
+static mm_word sample_bank[SOUND_SLOTS] __attribute__((aligned(32)));
 
 static const LLCart *cart;
 static LLMem *mem;
@@ -43,28 +53,39 @@ static unsigned long stop_vblank; // Everything was stopped at this VBlank
 typedef struct Pending {
     struct Pending *next;
     void *data;
+    int slot;              // Sample bank slot to free with it, or -1
     unsigned long free_at; // VBlank count
 } Pending;
 
 static Pending *pending;
+
+static void slot_set(int slot, mm_word value)
+{
+    sample_bank[slot] = value;
+    DC_FlushRange(&sample_bank[slot], sizeof(mm_word));
+}
 
 static bool reached(unsigned long vblank)
 {
     return (long)(ll_vblanks() - vblank) >= 0;
 }
 
-// Frees 'data' at VBlank 'at': the ARM7 may still read it until then
-static void free_later(void *data, unsigned long at)
+// Frees 'data' (and sample bank 'slot', if not -1) at VBlank 'at': the ARM7
+// may still read them until then
+static void free_later(void *data, int slot, unsigned long at)
 {
     Pending *p = malloc(sizeof(*p));
     if (p == NULL)
     {
         // Cannot wait: stop every sound effect so nothing reads it
         mmEffectCancelAll();
+        if (slot >= 0)
+            slot_set(slot, 0);
         free(data);
         return;
     }
     p->data = data;
+    p->slot = slot;
     p->free_at = at;
     p->next = pending;
     pending = p;
@@ -78,6 +99,8 @@ static void free_due(bool all)
         if (all || reached(p->free_at))
         {
             *pp = p->next;
+            if (p->slot >= 0)
+                slot_set(p->slot, 0);
             free(p->data);
             free(p);
         }
@@ -174,15 +197,12 @@ static void cart_path(lua_State *L, const char *dir, const char *name,
 
 // --- Sound effects ----------------------------------------------------------
 
-// The sample block: Maxmod's sample header followed by the data. The ARM7
-// reads both, so they are freed together, only after the last play.
-typedef struct {
-    mm_ds_sample smp;
-    uint32_t data[];
-} SampleBlock;
+// A sample in Maxmod's MAS format: prefix, sample header, then the data
+#define SAMPLE_HEADER (sizeof(mm_mas_prefix) + sizeof(mm_mas_ds_sample))
 
 typedef struct {
-    SampleBlock *block;       // NULL after collection
+    void *block;              // The MAS sample, NULL after collection
+    int slot;                 // Its slot in the sample bank
     size_t bytes;             // Counted in the cart memory
     unsigned rate, samples;
     unsigned long last_play;  // VBlank of the last sfx() call
@@ -257,6 +277,23 @@ static int load_sound(lua_State *L, const char *name)
         return luaL_error(L, "%s: no sound data", rel);
     }
 
+    int slot = 0;
+    while (slot < SOUND_SLOTS && sample_bank[slot] != 0)
+        slot++;
+    if (slot == SOUND_SLOTS)
+    {
+        // Unused sounds may still hold slots: collect them and look again
+        lua_gc(L, LUA_GCCOLLECT);
+        free_due(false);
+        for (slot = 0; slot < SOUND_SLOTS && sample_bank[slot] != 0; slot++)
+            ;
+        if (slot == SOUND_SLOTS)
+        {
+            free(file);
+            return luaL_error(L, "%s: too many sounds loaded (%d)", rel, SOUND_SLOTS);
+        }
+    }
+
     LLSound *s = lua_newuserdatauv(L, sizeof(LLSound), 0);
     memset(s, 0, sizeof(*s));
     luaL_setmetatable(L, SOUND_MT);
@@ -273,24 +310,31 @@ static int load_sound(lua_State *L, const char *name)
                               (unsigned)(mem->limit / 1024));
         }
     }
-    SampleBlock *b = calloc(1, sizeof(SampleBlock) + bytes);
-    if (b == NULL)
+    uint8_t *b = calloc(1, SAMPLE_HEADER + bytes);
+    if (b == NULL || ((uintptr_t)b >> 24) != 0x02) // Bank: offsets in main RAM
     {
+        free(b);
         ll_mem_release(mem, bytes);
         free(file);
         return luaL_error(L, "%s: out of memory", rel);
     }
-    wav_to_mono(file + w.data_ofs, &w, samples, b->data);
+    mm_mas_prefix *prefix = (mm_mas_prefix *)b;
+    mm_mas_ds_sample *smp = (mm_mas_ds_sample *)(b + sizeof(mm_mas_prefix));
+    wav_to_mono(file + w.data_ofs, &w, samples, smp->data);
     free(file);
-    b->smp.loop_start = 0;
-    b->smp.length = bytes / 4;
-    b->smp.format = w.bits == 8 ? 0 : 1;
-    b->smp.repeat_mode = 2; // One shot
-    b->smp.base_rate = w.rate * 1024 / 32768;
-    b->smp.data = b->data;
-    DC_FlushRange(b, sizeof(SampleBlock) + bytes); // The ARM7 reads main RAM
+    prefix->size = sizeof(mm_mas_ds_sample) + bytes;
+    prefix->type = MAS_TYPE_SAMPLE_NDS;
+    smp->loop_start = 0;
+    smp->length = bytes / 4;
+    smp->format = w.bits == 8 ? MM_SFORMAT_8BIT : MM_SFORMAT_16BIT;
+    smp->repeat_mode = MM_SREPEAT_OFF;
+    smp->default_frequency = w.rate * 1024 / 32768;
+    smp->point = 0; // The data follows the header
+    DC_FlushRange(b, SAMPLE_HEADER + bytes); // The ARM7 reads main RAM
+    slot_set(slot, (uintptr_t)b - 0x2000000);
 
     s->block = b;
+    s->slot = slot;
     s->bytes = bytes;
     s->rate = w.rate;
     s->samples = samples;
@@ -332,7 +376,7 @@ static int l_sfx(lua_State *L)
     luaL_argcheck(L, pitch >= 1.0 / 16 && pitch <= 16, 4, "pitch must be 1/16 .. 16");
 
     mm_sound_effect e = {
-        .sample = &s->block->smp,
+        .id = s->slot,
         .rate = (mm_hword)(pitch * 1024 + 0.5),
         .handle = 0,
         .volume = (mm_byte)clamp((int)(vol * 255 + 0.5), 0, 255),
@@ -350,8 +394,9 @@ static int l_sfx(lua_State *L)
     s->last_play = now;
 
     if (h == 0)
-        return 0; // No free channel
-    lua_pushinteger(L, h);
+        lua_pushnil(L); // No free channel
+    else
+        lua_pushinteger(L, h);
     return 1;
 }
 
@@ -374,7 +419,7 @@ static int sound_gc(lua_State *L)
     unsigned long at = ll_vblanks() + 2;
     if (s->last_play >= stop_vblank && (long)(s->busy_until - at) > 0)
         at = s->busy_until; // Still playing: free when it ends
-    free_later(s->block, at);
+    free_later(s->block, s->slot, at);
     s->block = NULL;
     return 0;
 }
@@ -488,7 +533,7 @@ static void music_stop(void)
     if (music.type == MUSIC_MAS)
     {
         mmStop();
-        free_later(music.mas, ll_vblanks() + 2);
+        free_later(music.mas, -1, ll_vblanks() + 2);
         music.mas = NULL;
     }
     else if (music.type == MUSIC_WAV)
@@ -496,7 +541,7 @@ static void music_stop(void)
         mmStreamClose();
         fclose(music.file);
         music.file = NULL;
-        free_later(music.ring, ll_vblanks() + 2);
+        free_later(music.ring, -1, ll_vblanks() + 2);
         music.ring = NULL;
     }
     if (music.type != MUSIC_NONE && mem)
@@ -655,21 +700,19 @@ static int l_music_volume(lua_State *L)
 
 // --- Lifecycle --------------------------------------------------------------
 
-// Internal Maxmod function (comms_ds9.c): tells the ARM7 the soundbank size
-extern void mmSendBank(mm_word num_songs, mm_word num_samples, mm_addr bank_addr);
-
 void ll_sound_init(void)
 {
-    if (!mmInitNoSoundbank())
+    // No soundbank file: an empty bank of sample slots in RAM, filled by
+    // sound(). Modules are played from RAM with mmPlayMAS.
+    mm_ds_system sys = {
+        .mod_count = 0,
+        .samp_count = SOUND_SLOTS,
+        .mem_bank = sample_bank,
+        .fifo_channel = FIFO_MAXMOD,
+    };
+    if (!mmInit(&sys))
         ll_log("sound: Maxmod init failed");
-
-    // Maxmod bug (D34): on the ARM7, mmEffectEx rejects every effect whose
-    // ID is not below the soundbank's sample count before it checks for an
-    // external sample (an address >= 0x10000). Without a soundbank the count
-    // is 0, so no external sample would play. A count that no address can
-    // reach fixes that; the bank itself is only read for IDs < 0x10000,
-    // which LiteLua never uses.
-    mmSendBank(0, 0xFFFFFFFF, NULL);
+    DC_FlushRange(sample_bank, sizeof(sample_bank));
     music.volume = 1024;
 }
 

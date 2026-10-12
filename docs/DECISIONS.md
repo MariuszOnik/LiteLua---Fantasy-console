@@ -550,17 +550,16 @@ i niesymetryczne (nieparzysta liczba boków, wierzchołki zaokrąglane do piksel
 
 ## D34 (2026-10-12) — Dźwięk (P7): efekty WAV, muzyka `.mas` lub strumień WAV
 Rozwija D7.
-- **Maxmod bez soundbanku** (`mmInitNoSoundbank`, licencja ISC): każdy kartridż ładuje
-  własne pliki. Kod: `source/ll_sound.c`.
+- **Maxmod bez pliku soundbanku** (`mmInit` z pustym bankiem w RAM, licencja ISC): każdy
+  kartridż ładuje własne pliki. Kod: `source/ll_sound.c`.
 - **API globalne** jak grafika (D22): `sound(name)` → `sfx/<name>.wav` (cache po nazwie,
   słabe wartości, jak `image`), `sfx(snd, [vol], [pan], [pitch])` → uchwyt,
   `sfx_stop([h])`, `music([name], [loop])`, `music_volume(v)`. Pola dźwięku: `length`,
   `rate`.
 - **Efekty:** WAV PCM 8/16-bit, mono/stereo (stereo miksowane do mono przy wczytaniu),
-  1000–48000 Hz, w RAM jako zewnętrzne próbki Maxmoda (`mmEffectEx` z polem `sample`;
-  `mmEffectExt` z nagłówka nie istnieje w bibliotece). Nagłówek próbki (`mm_ds_sample`) i
-  dane w jednym bloku — czyta je ARM7, więc blok jest zwalniany dopiero po końcu
-  ostatniego odtworzenia (licznik VBlanków, lista „do zwolnienia”), nie w `__gc`.
+  1000–48000 Hz, w RAM jako próbki w formacie MAS we własnym banku (niżej). Czyta je
+  ARM7, więc blok jest zwalniany dopiero po końcu ostatniego odtworzenia (licznik
+  VBlanków, lista „do zwolnienia”), nie w `__gc`.
 - **Muzyka, jedna naraz:** `music/<name>.mas` (moduł z `mmutil -d -m`, cały w RAM,
   `mmPlayMAS`) albo `music/<name>.wav` strumieniowany z karty: bufor pierścieniowy na pół
   sekundy, wywołanie Maxmoda w przerwaniu timera 2 (timery 0+1 = `micros()`) kopiuje z
@@ -581,14 +580,16 @@ Rozwija D7.
   wybuch 16-bit stereo, melodia WAV, mały moduł MOD → `.mas`). melonDS: wczytanie,
   moduł, strumień z folderu i `.mas` z `.lcart`, zwolnienie (75 → 30 KB), po zamknięciu
   0 bajtów. Odsłuch i strumień WAV z `.lcart` — do sprawdzenia.
-- **Obejście błędu Maxmoda (po teście na DSi: muzyka grała, efekty nie):** na ARM7
-  `mmEffectEx` (`core/effect.c`) odrzuca efekt, gdy `id >= liczba próbek soundbanku`,
-  zanim rozpozna zewnętrzną próbkę (adres ≥ 0x10000) — bez soundbanku liczba = 0, więc
-  żaden efekt nie grał. `ll_sound_init` wysyła po `mmInitNoSoundbank` bank z liczbą próbek
-  0xFFFFFFFF (`mmSendBank`, funkcja wewnętrzna biblioteki); ARM7 czyta bank tylko dla
-  `id < 0x10000`, których LiteLua nie używa. Układ bloku próbki zgodny z
-  `mm_mas_ds_sample` (mikser bierze dane z pola `point`, gdy niezerowe). Warto zgłosić
-  błąd do BlocksDS/Maxmod.
+- **Własny bank próbek zamiast „zewnętrznych próbek” (po teście na DSi: muzyka grała,
+  efekty nie):** na ARM7 `mmEffectEx` (`core/effect.c`) odrzuca efekt, gdy
+  `id >= liczba próbek soundbanku`, zanim rozpozna wskaźnik do zewnętrznej próbki — bez
+  soundbanku nic nie grało (liczba próbek idzie do ARM7 jako 2 bajty, więc nie da się jej
+  „podbić” ponad adres). Rozwiązanie: `mmInit` z pustym bankiem 256 slotów w RAM
+  (`sample_bank`); `sound()` buduje próbkę w formacie MAS (`mm_mas_prefix` +
+  `mm_mas_ds_sample` + dane, `mm_mas.h`), wpisuje jej przesunięcie od 0x02000000 do
+  wolnego slotu, `sfx()` gra przez numer slotu — główna ścieżka Maxmoda. Slot i blok
+  zwalniane razem po końcu ostatniego odtworzenia. Limit: 256 wczytanych dźwięków naraz.
+  melonDS: uchwyty efektów poprawne. Warto zgłosić błąd do BlocksDS/Maxmod.
 
 ## D35 (2026-10-12) — LiteLua Music Studio: kierunek architektury (P18, etapy S0–S4)
 Zatwierdzony kierunek (użytkownik + przegląd „Javisa”); implementacja S0 dopiero na
