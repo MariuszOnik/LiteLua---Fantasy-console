@@ -256,3 +256,60 @@ file itself has no panning in v1.1. `render` is an **approximate preview** (puls
 synthesized in software, envelopes per frame). The WAV can be played in a game
 today with `music("song.wav")` (streamed, P7). The native player (P18 S1) will
 play `.lsong` files directly.
+
+## 11. Version 1.2 — scenes and clips (approved design, not implemented yet)
+
+*Status: design approved (D39); the tools and players still read v1 and v1.1.
+Field names may change until it is implemented.*
+
+In v1.1 a pattern holds the notes of all tracks, so a pattern is stored again
+whenever any one track changes. Measured on a 7-track MIDI import (a metal
+song): 9985 notes stored, 299 KB — over the limit. With notes kept per track
+it is 5652 notes, about 214 KB. v1.2 therefore splits a pattern into
+**clips** (the notes of one track) and **scenes** (which clip each track
+plays):
+
+```lua
+return {
+  lsong = 1.2,
+  -- tempo, ppq, instruments, tracks: as in v1.1
+  clips = {
+    riff_a = { track = "chords", length = 192, notes = { {t=0, d=12, p=52}, ... } },
+    beat_1 = { track = "drums",  length = 96,  notes = { ... } },
+    solo_1 = { track = "lead",   length = 384, notes = { ... } },
+  },
+  patterns = {                     -- now scenes
+    verse = { length = 384, clips = { chords = "riff_a", drums = "beat_1" } },
+    solo  = { length = 384, clips = { chords = "riff_a", drums = "beat_1",
+                                      lead = { clip = "solo_1", transpose = 0 } } },
+  },
+  playlist = { { pattern = "verse", times = 2 }, { pattern = "solo", tempo = 160 } },
+}
+```
+
+Rules (draft):
+
+- A **clip** belongs to one track (`track`) and has its own `length` in
+  ticks and `notes` as in section 6 (with `tie`). A clip is what the piano
+  roll edits.
+- A **scene** (`patterns` entry with `clips`) has a `length` and names the
+  clip of each track; tracks not named are silent. A clip reference is a
+  clip name, or `{ clip = name, transpose = semitones }` (riffs often come
+  back in another key).
+- **A clip shorter than its scene** plays once from the scene start; the rest
+  of the scene is silent on that track. (Looping a short clip — e.g. a
+  2-bar drum beat in an 8-bar scene — is a candidate option `repeat = true`.)
+- **A clip longer than its scene** is reserved: in v1.2 it is cut at the scene
+  end. A later version may define how it continues across scene borders
+  (with an offset), without changing the clips.
+- The **playlist**, `times`, `transpose`, `tempo`, `loop` and `tie` work as in
+  v1.1. A pattern with `notes` (v1.1 style) stays valid in a v1.2 file, so
+  v1.1 files convert without changes.
+- An editor may show a track as one continuous line across scenes; the file
+  still stores scenes.
+
+Rejected for v1.2: an independent timeline per track (like the playlist of
+FL Studio). On the same data it was not smaller (about 217 KB), and it would
+need a separate cursor per track on the DS, a global tempo map and a much
+harder MIDI import (repeats of any length). It can live in the editor's view
+instead of the file.

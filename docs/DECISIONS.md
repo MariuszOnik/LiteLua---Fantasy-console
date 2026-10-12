@@ -749,3 +749,20 @@ osobne polecenie.
 - **Testy narzędzi:** 40 (`python -m unittest discover -s tests/tools`): +7 dla v1.1
   (stare pliki ważne, nowe pola wymagają 1.1, reguły `tie`, tempo na wpis i pętla, brak
   ponownego ataku przy `tie`, zmiana tempa w playliście, zmiana tempa w środku taktu).
+
+## D39 (2026-10-12) — `.lsong` v1.2: sceny i klipy (projekt zatwierdzony, bez implementacji)
+- **Pomiar** (Master of Puppets Extended z obiema gitarami rytmicznymi, 7 ścieżek, `ppq` 96,
+  prywatny plik użytkownika — poza repo): v1.1 9985 nut, 299 KB (ponad limit); **sceny**
+  (klip = nuty jednej ścieżki, pattern = scena wskazująca klip każdej ścieżki) 5652 nuty,
+  ~214 KB; **osie czasu** (każda ścieżka z własnymi klipami w dowolnych miejscach, jak
+  Playlist FL Studio) 5689 nut, ~217 KB.
+- **Wybór: sceny** — ten sam rozmiar, prosty sekwencer na DS (jeden kursor, tempo/pętla/`tie`
+  jak w v1.1), ewolucja v1.1 (pattern z `notes` nadal ważny), import MIDI prawie bez zmian,
+  aranżacja na 256×192 jako lista scen. Osie czasu odrzucone dla pliku (osobne kursory,
+  globalna mapa tempa, trudny import); mogą być *widokiem* w edytorze.
+- **Warunek z przeglądu:** klip ma własną długość — krótszy od sceny gra raz (reszta cisza;
+  zapętlanie `repeat = true` — kandydat), dłuższy od sceny w v1.2 jest ucinany, sposób
+  grania przez granice scen zarezerwowany na później. Odwołanie do klipu może mieć
+  `transpose`.
+- Szkic w `docs/LSONG.md` sekcja 11; nazwy pól mogą się zmienić przy implementacji.
+  Kolejność prac: S0 (test sprzętu), potem P8; v1.2 w kodzie — przy S1/S2.
