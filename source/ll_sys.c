@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Zlib
 //
-// LiteLua - sys module: switching carts (D14).
+// LiteLua - sys module: switching carts (D14), console info (D33).
 //
 // sys.run and sys.exit only record the request. The runtime closes the Lua
 // state after the current callback returns and then starts the next cart in
@@ -51,11 +51,26 @@ static int l_exit(lua_State *L)
     return 0;
 }
 
+// sys.info(): the console the game runs on (D33)
+static int l_info(lua_State *L)
+{
+    bool dsi = isDSiMode();
+    lua_createtable(L, 0, 3);
+    lua_pushstring(L, dsi ? "DSi" : "DS");
+    lua_setfield(L, -2, "console");
+    lua_pushinteger(L, dsi && (REG_SCFG_CLK & SCFG_CLK_ARM9_TWL) ? 134 : 67);
+    lua_setfield(L, -2, "cpu_mhz");
+    lua_pushinteger(L, dsi ? 16384 : 4096);
+    lua_setfield(L, -2, "ram_kb");
+    return 1;
+}
+
 void ll_sys_register(lua_State *L)
 {
     static const luaL_Reg funcs[] = {
         { "run", l_run },
         { "exit", l_exit },
+        { "info", l_info },
         { NULL, NULL },
     };
 
@@ -78,7 +93,7 @@ LLCart ll_sys_take_next_cart(void)
 #define KEYS_QUIT (KEY_L | KEY_R | KEY_START)
 #define QUIT_HOLD_VBLANKS 60 // One second
 
-void ll_sys_quit_poll(u32 held)
+bool ll_sys_quit_poll(u32 held)
 {
     static bool holding;
     static unsigned long since;
@@ -86,20 +101,21 @@ void ll_sys_quit_poll(u32 held)
     if ((held & KEYS_QUIT) != KEYS_QUIT)
     {
         holding = false;
-        return;
+        return false;
     }
     if (!holding)
     {
         holding = true;
         since = ll_vblanks();
-        return;
     }
-    if (ll_vblanks() - since >= QUIT_HOLD_VBLANKS)
-    {
-        ll_log("L+R+START: quit LiteLua");
-        ll_log_flush();
-        // exit() closes the open files (log, cart archive) and returns to
-        // the loader through its boot stub, or turns the console off
-        exit(0);
-    }
+    return ll_vblanks() - since >= QUIT_HOLD_VBLANKS;
+}
+
+void ll_sys_quit(void)
+{
+    ll_log("L+R+START: quit LiteLua");
+    ll_log_flush();
+    // exit() closes the open files (log, cart archive) and returns to the
+    // loader through its boot stub, or turns the console off
+    exit(0);
 }

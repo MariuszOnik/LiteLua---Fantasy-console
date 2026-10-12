@@ -12,6 +12,13 @@ local status = { "", "", "" }
 
 function _init()
   color(2) -- outside _draw: no effect, one line in the log (D30)
+  local i = sys.info() -- D33
+  log(("console %s, %d MHz, %d KB RAM"):format(i.console, i.cpu_mhz, i.ram_kb))
+end
+
+-- D33: called when the cart is left without an error (L+R+B, L+R+START)
+function _quit()
+  log("gfx: _quit called")
 end
 
 function _update()

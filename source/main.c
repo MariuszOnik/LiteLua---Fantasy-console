@@ -65,6 +65,9 @@ int main(int argc, char **argv)
                 is_cart = true;
                 choose = false;
                 break;
+            case LL_RUN_QUIT:
+                ll_cart_close(&cart);
+                ll_sys_quit();
         }
     }
 

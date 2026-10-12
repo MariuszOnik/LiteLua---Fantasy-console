@@ -158,7 +158,7 @@ python tools/litelua.py pack mygame out.lcart
 Any ZIP tool works too if `cart.lua` ends up at the top of the archive (or inside a single
 top folder) and the file is renamed to `.lcart`. Copy it to `litelua/carts/`.
 `sys.run("mygame")` finds both the folder `mygame` and `mygame.lcart`. `main.lua` is Lua 5.4 code that
-defines up to three callbacks. All of them are optional.
+defines up to four callbacks. All of them are optional.
 
 ```lua
 local x, y
@@ -179,7 +179,14 @@ function _draw(surface)      -- once per screen per frame
     circfill(x, y, 8, 10)   -- the player
   end
 end
+
+function _quit()            -- the game is left: save here if needed
+end
 ```
+
+`_quit` is called when the player leaves the game (L+R+B, L+R+START) or it calls
+`sys.exit()` or `sys.run()`, but not after an error. It has at most 1 second; drawing does
+nothing there.
 
 ### The frame
 
@@ -303,6 +310,16 @@ the game.
 The DS draws at most about 2000 shapes, sprites or characters per frame. Every call costs time in Lua
 too: on a DSi about 12 µs per `rectfill` and a bit more per `spr`, so a 30 FPS frame has
 room for roughly 1500–2000 of them, less if the game logic is heavy.
+
+**DS and DSi.** LiteLua games are made for the DS. On a DSi (or a 3DS) the processor runs
+twice as fast (134 MHz instead of 67 MHz), so Lua code — game logic and the number of
+drawing calls — gets about twice as fast by itself; the 3D drawing limits stay the same.
+melonDS runs as a DS, so a game that is smooth in melonDS has room to spare on a DSi.
+To add extras on a DSi, ask `sys.info()`:
+
+```lua
+if sys.info().console == "DSi" then max_particles = 400 else max_particles = 150 end
+```
 
 ### More files: require and data
 

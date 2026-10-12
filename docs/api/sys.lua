@@ -3,7 +3,7 @@
 return {
   module = "sys",
   title = "System",
-  summary = "Starting another cartridge and leaving the current one.",
+  summary = "Starting another cartridge, leaving the current one, the console.",
   since = "P3",
   entries = {
     {
@@ -24,6 +24,18 @@ if btnp("start") then sys.run("mygame2") end]],
           .. "to the cartridge list.",
       example = [[
 if btnp("select") then sys.exit() end]],
+    },
+    {
+      name = "sys.info", kind = "function",
+      sig = "sys.info() -> table",
+      ret = { { "table", "console, cpu_mhz, ram_kb" } },
+      desc = "The console the game runs on: console is \"DS\" or \"DSi\" "
+          .. "(also a 3DS in DSi mode), cpu_mhz 67 or 134 (the DSi runs Lua "
+          .. "about twice as fast), ram_kb 4096 or 16384. Games should run on "
+          .. "a DS; use the DSi only for extras.",
+      example = [[
+local extra = sys.info().console == "DSi"
+max_particles = extra and 400 or 150]],
     },
     {
       name = "sys.stats", kind = "function",

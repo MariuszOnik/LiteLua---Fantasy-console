@@ -532,3 +532,18 @@ i niesymetryczne (nieparzysta liczba boków, wierzchołki zaokrąglane do piksel
   melonDS bez loadera: wyłączenie (sprawdzone).
 - Ekran błędu: START przy trzymanych L+R nie restartuje gry (to początek L+R+START).
 - Gry nie powinny używać L+R razem ze START (jak z B/X/Y, UX.md §3).
+
+## D33 (2026-10-12) — `_quit()` przy wyjściu z gry, `sys.info()` (DS / DSi)
+- **Cel sprzętowy: DS.** Gra ma działać na DS (melonDS w trybie DS ≈ najgorszy przypadek);
+  DSi daje dodatki. Na DSi (i 3DS w trybie DSi) ARM9 działa z 134 MHz — Lua ~2× szybciej
+  bez żadnych zmian (pomiar: D31); limity 3D, VRAM i tempo klatki takie same.
+- **`sys.info()`** → `{ console = "DS" | "DSi", cpu_mhz = 67 | 134, ram_kb = 4096 | 16384 }`
+  (`isDSiMode`, `REG_SCFG_CLK`). Wersja LiteLua — później (dziś tylko w banerze ROM-u, D29).
+- **`_quit()`:** wołane, gdy gra kończy się bez błędu — L+R+B, L+R+START (D32),
+  `sys.exit()`, `sys.run()`; nie po błędzie (stan gry może być zepsuty). Do zapisu gry.
+  `sys.run`/`sys.exit` usuwane z tabeli `sys` przed wywołaniem (wyjście już trwa). Limit
+  1 s (hook licznika instrukcji co 1000): błąd lub przekroczenie → wpis w logu, gra i tak
+  zamykana. L+R+START w grze: runtime zwraca `LL_RUN_QUIT`, `main` zamyka kartridż i
+  woła `ll_sys_quit()` (D32). Na liście i ekranie błędu — od razu `ll_sys_quit()`.
+- Starcatch: `_quit` zapisuje rekord z nieskończonej gry. Test: `tests/carts/gfx` loguje
+  `sys.info()` i `_quit`; zapętlony `_quit` sprawdzony w melonDS (przerwany po 1 s).

@@ -110,7 +110,8 @@ bool ll_error_show(const char *err, const LLMem *mem)
     {
         ll_gfx_frame(draw, &sc);
         scanKeys();
-        ll_sys_quit_poll(keysHeld());
+        if (ll_sys_quit_poll(keysHeld()))
+            ll_sys_quit();
         keys = keysDown();
         // START with L+R held is the start of L+R+START (quit), not a restart
         if ((keysHeld() & (KEY_L | KEY_R)) == (KEY_L | KEY_R))

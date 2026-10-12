@@ -2,7 +2,7 @@
 //
 // LiteLua - cart runtime: Lua state, callbacks and the frame loop.
 //
-// Callbacks (all optional): _init(), _update(), _draw(screen).
+// Callbacks (all optional): _init(), _update(), _draw(screen), _quit().
 // The game runs at 30 FPS: every game frame takes two VBlanks, one per
 // screen (dual30, D28): _draw(TOP) in the first, _draw(BOTTOM) and the
 // next _update() in the second.
@@ -51,6 +51,10 @@ static unsigned elapsed_us(u32 start_ticks)
 static LLMem lua_mem;
 static jmp_buf panic_jmp;
 static LLRunResult result;
+static bool failed; // The cart stopped with an error: no _quit
+
+#define QUIT_TIME_US 1000000 // Time limit of _quit
+static u32 quit_start;
 
 // Elapsed microseconds since boot (wraps after ~128 s)
 static int l_micros(lua_State *L)
@@ -81,6 +85,7 @@ static int panic_handler(lua_State *L)
     const char *msg = lua_tostring(L, -1);
     if (msg == NULL)
         msg = "unprotected error";
+    failed = true;
     ll_log("PANIC: %s", msg);
     ll_log_flush();
     result = ll_error_show(msg, &lua_mem) ? LL_RUN_RESTART : LL_RUN_MENU;
@@ -93,6 +98,7 @@ static void show_error(lua_State *L)
     const char *msg = lua_tostring(L, -1);
     if (msg == NULL)
         msg = "(error object is not a string)";
+    failed = true;
 
     ll_log("ERROR (Lua mem %u/%u KB, peak %u KB):",
            (unsigned)(lua_mem.used / 1024), (unsigned)(lua_mem.limit / 1024),
@@ -141,6 +147,46 @@ static bool call_hook(lua_State *L, const char *name, int screen)
         return false;
     }
     return !stop_requested();
+}
+
+// Stops a _quit that runs too long, so it cannot block leaving the cart
+static void quit_time_hook(lua_State *L, lua_Debug *ar)
+{
+    (void)ar;
+    if (elapsed_us(quit_start) > QUIT_TIME_US)
+        luaL_error(L, "_quit took longer than 1 s");
+}
+
+// _quit(): the cart is closed without an error (L+R+B, L+R+START, sys.exit,
+// sys.run), e.g. to save the game (D33). Errors only go to the log; the cart
+// is closed anyway.
+static void call_quit(lua_State *L)
+{
+    if (lua_getglobal(L, "_quit") == LUA_TNIL)
+    {
+        lua_pop(L, 1);
+        return;
+    }
+    // The cart is already leaving: sys.run and sys.exit cannot change that
+    if (lua_getglobal(L, "sys") == LUA_TTABLE)
+    {
+        lua_pushnil(L);
+        lua_setfield(L, -2, "run");
+        lua_pushnil(L);
+        lua_setfield(L, -2, "exit");
+    }
+    lua_pop(L, 1);
+
+    quit_start = cpuGetTiming();
+    lua_sethook(L, quit_time_hook, LUA_MASKCOUNT, 1000);
+    if (lua_pcall(L, 0, 0, MSGH_INDEX) != LUA_OK)
+    {
+        const char *msg = lua_tostring(L, -1);
+        ll_log("_quit failed:");
+        ll_log_text(msg ? msg : "?", msg ? strlen(msg) : 1);
+        lua_pop(L, 1);
+    }
+    lua_sethook(L, NULL, 0, 0);
 }
 
 static void register_api(lua_State *L)
@@ -205,7 +251,11 @@ static bool read_input(void)
 {
     ll_input_update();
     u32 held = keysHeld(), down = keysDown();
-    ll_sys_quit_poll(held);
+    if (ll_sys_quit_poll(held))
+    {
+        result = LL_RUN_QUIT;
+        return false;
+    }
     if ((held & KEYS_LEAVE) == KEYS_LEAVE)
     {
         ll_log("L+R+B: back to the cart list");
@@ -293,6 +343,7 @@ LLRunResult ll_run(const LLCart *cart)
                (unsigned)(lua_mem.limit / 1024));
 
     result = LL_RUN_RESTART;
+    failed = false;
     ll_gfx_reset();
     ll_console_clear();
     ll_stats_reset(&lua_mem);
@@ -323,6 +374,8 @@ LLRunResult ll_run(const LLCart *cart)
 
     if (load_main(L, cart) && call_hook(L, "_init", -1))
         frame_loop(L);
+    if (!failed)
+        call_quit(L);
 
     lua_close(L);
     if (result != LL_RUN_NEXT)

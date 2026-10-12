@@ -116,6 +116,15 @@ local function update_play()
   end
 end
 
+-- Called when the game is left (L+R+B, L+R+START): keep a best score made
+-- in a game that was not finished
+function _quit()
+  if score > best then
+    best = score
+    save_best()
+  end
+end
+
 function _update()
   t = t + 1
   if shake > 0 then shake = shake - 1 end

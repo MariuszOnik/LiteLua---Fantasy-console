@@ -128,7 +128,8 @@ bool ll_menu_choose(char *name, size_t size)
 
         ll_gfx_frame(draw, &list);
         scanKeys();
-        ll_sys_quit_poll(keysHeld());
+        if (ll_sys_quit_poll(keysHeld()))
+            ll_sys_quit();
         u32 keys = keysDownRepeat();
         if ((keys & KEY_UP) && cursor > 0)
             cursor--;

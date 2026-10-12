@@ -28,6 +28,21 @@ function _update()
 end]],
     },
     {
+      name = "_quit", kind = "callback",
+      sig = "_quit()",
+      desc = "Called when the game is left without an error: L+R+B, L+R+START, "
+          .. "sys.exit() or sys.run(). Use it to save the game. Drawing does "
+          .. "nothing here and sys.run/sys.exit are gone. It may take at most "
+          .. "1 second; an error or a longer run only goes to the log and the "
+          .. "game is closed anyway. Not called after an error.",
+      example = [[
+function _quit()
+  local f = io.open("save/progress.txt", "w")
+  f:write(level)
+  f:close()
+end]],
+    },
+    {
       name = "_draw", kind = "callback",
       sig = "_draw(surface)",
       args = { { "surface", "integer", "TOP (0) or BOTTOM (1)" } },
