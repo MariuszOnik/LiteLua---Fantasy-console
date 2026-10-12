@@ -581,3 +581,44 @@ Rozwija D7.
   wybuch 16-bit stereo, melodia WAV, mały moduł MOD → `.mas`). melonDS: wczytanie,
   moduł, strumień z folderu i `.mas` z `.lcart`, zwolnienie (75 → 30 KB), po zamknięciu
   0 bajtów. Odsłuch i strumień WAV z `.lcart` — do sprawdzenia.
+- **Obejście błędu Maxmoda (po teście na DSi: muzyka grała, efekty nie):** na ARM7
+  `mmEffectEx` (`core/effect.c`) odrzuca efekt, gdy `id >= liczba próbek soundbanku`,
+  zanim rozpozna zewnętrzną próbkę (adres ≥ 0x10000) — bez soundbanku liczba = 0, więc
+  żaden efekt nie grał. `ll_sound_init` wysyła po `mmInitNoSoundbank` bank z liczbą próbek
+  0xFFFFFFFF (`mmSendBank`, funkcja wewnętrzna biblioteki); ARM7 czyta bank tylko dla
+  `id < 0x10000`, których LiteLua nie używa. Układ bloku próbki zgodny z
+  `mm_mas_ds_sample` (mikser bierze dane z pola `point`, gdy niezerowe). Warto zgłosić
+  błąd do BlocksDS/Maxmod.
+
+## D35 (2026-10-12) — LiteLua Music Studio: kierunek architektury (P18, etapy S0–S4)
+Zatwierdzony kierunek (użytkownik + przegląd „Javisa”); implementacja S0 dopiero na
+osobne polecenie.
+- **Cel stylistyczny, nie emulacja:** brzmienie inspirowane NES (np. *Chip 'n Dale:
+  Rescue Rangers*); nie deklarujemy wierności 1:1 układowi APU (np. nieliniowy miks NES
+  nie jest odtwarzany).
+- **Edytor jak FL Studio, nie tracker:** piano roll rysikiem (dolny ekran), channel rack /
+  playlista / instrument na górnym; bez wpisywania `C-4 01 F A03`.
+- **Warstwy:** edytor (Lua) → dane utworu (format niezależny od edytora) → sekwencer (C,
+  przenośny rdzeń) → backend audio. Edytor nie steruje sprzętem.
+- **Backend DS:** kanały sprzętowe — PSG 8–13 (prostokąt, 8 stopni wypełnienia ⊇ 12,5/25/
+  50/75% NES), szum 14–15; trójkąt NES (32 kroki) i „krótki” szum jako malutkie zapętlone
+  próbki; DPCM = próbki. Kanały sekwencera rezerwowane w Maxmodzie (`mmLockChannels`),
+  efekty WAV / moduły / strumień z P7 dzielą resztę. **Inne platformy:** synteza programowa
+  z tym samym rdzeniem sekwencera i tymi samymi plikami.
+- **Odrzucone na DS:** synteza programowa na ARM9 do strumienia — identyczna wszędzie, ale
+  ~5–15% CPU (szacunek) zabrane Lua i zajmuje jedyny strumień Maxmoda (konflikt z muzyką WAV).
+- **Timing:** sekwencer w przerwaniu timera 3 (0+1 = `micros()`, 2 = strumień P7),
+  niezależnie od FPS Lua; tick zależny od tempa (np. 24 na ćwierćnutę). Parametry kanałów
+  przez FIFO do ARM7 (`soundPlayPSG`/`soundSetFreq`/`soundSetVolume` z libnds); własny kod
+  ARM7 tylko, jeśli S0 pokaże taką potrzebę.
+- **Format:** nuty jako lista zdarzeń (start, długość, wysokość, głośność) na kanał —
+  naturalny dla piano rolla; instrumenty (wypełnienie, obwiednia głośności, arpeggio,
+  vibrato, slide, presety); utwór = tempo + playlista patternów. Plik tekstowy z danymi
+  Lua (`.lsong`, jak `cart.lua`), kompilowany przy wczytaniu do postaci binarnej.
+- **Lua:** nazwy, nie numery (spójnie z D34): `music("level1")` → `music/level1.lsong`.
+  Efekty ze studia mogą na chwilę zabierać kanał utworu (jak w grach NES).
+- **Tryby:** „NES Classic” (ograniczenia NES w edytorze: kanały, wypełnienia) i „Extended”
+  (więcej kanałów DS) — ten sam silnik.
+- Etapy S0–S4 w `docs/PLAN.md` (P18). Edytor-prototyp może powstać przed P10 jako zwykły
+  kartridż zapisujący utwory w swoim `save/`; pełna integracja (zapis do innych kartridży,
+  kartridż systemowy) po P10.

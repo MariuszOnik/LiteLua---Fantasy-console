@@ -26,8 +26,11 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 - **P7 zrobione (D34):** dźwięk — `sound/sfx/sfx_stop/music/music_volume`, efekty WAV w
   RAM, muzyka `.mas` albo WAV strumieniowany z karty (też z `.lcart`, wpis bez
   kompresji), pamięć dźwięku w limicie `memory`. Test `tests/carts/sound` w melonDS: logika
-  i pamięć ok. **Do sprawdzenia:** odsłuch (melonDS i konsola), strumień WAV z `.lcart`
-  (automatyczny test przerwany — okno melonDS straciło fokus).
+  i pamięć ok. Konsola DSi: moduł, strumień, głośność, `_quit`, L+R+START ok; efekty
+  nie grały — błąd Maxmoda, obejście w D34 (wysłane na konsolę, **do odsłuchu**). Do
+  sprawdzenia: strumień WAV z `.lcart`.
+- **P18 / D35:** kierunek Music Studio zatwierdzony, etapy S0–S4 w planie; S0 tylko na
+  osobne polecenie.
 - **Następny krok:** P8 — mapy kafelkowe. Wcześniej: odsłuch P7 na konsoli; log z konsoli
   po D32/D33 (`sys.info` na DSi, powrót L+R+START do loadera).
 - **Wydania (D29):** repo na GitHubie, tag `v0.6.0` wypchnięty; pliki wydania w
@@ -179,10 +182,20 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   - `ui` — przyciski, listy, okna (wspólne z kartridżami systemowymi, D27).
   Kolejność i zakres ustalić na starcie punktu (część może wejść wcześniej, np. `ui` w
   P10, `anim` przy P12).
-- [ ] **P18 — Chiptune jak NES: kanały PSG, sekwencer, tracker** (pomysł użytkownika)
-  Sprzęt DS: kanały 8–13 generują falę prostokątną z wypełnieniem (jak „pulse” NES),
-  14–15 szum (jak „noise”); trójkąt — mała zapętlona próbka. Kanały rezerwowane w Maxmodzie
-  (`mmLockChannels`), więc grają razem z efektami i muzyką z P7. Sekwencer wzorców w C
-  (równe tempo niezależnie od 30 FPS Lua), API Lua do odtwarzania i do grania nut na żywo,
-  format pliku utworu w kartridżu; edytor-tracker jako kartridż systemowy (obok `sfx`/
-  `music` z D27). Zakres ustalić na starcie punktu.
+- [ ] **P18 — LiteLua Music Studio: chiptune w stylu NES, edytor jak FL Studio** (D35)
+  - **S0 — próba sprzętu** (1–2 dni, tylko na osobne polecenie): sekwencer na sztywno w C
+    (2× pulse, triangle, noise) w przerwaniu timera 3, odsłuch na DSi. Zweryfikować: timing
+    ARM9 → FIFO → ARM7 (opóźnienia, równość tempa), współpracę z Maxmodem
+    (`mmLockChannels`, efekty i muzyka z P7 naraz), zachowanie kanałów przy zmianie
+    parametrów w trakcie nuty (wypełnienie, głośność, częstotliwość — trzaski, restart
+    fazy), koszt CPU. Wynik decyduje: libnds przez FIFO czy własny kod ARM7.
+  - **S1 — rdzeń:** format `.lsong`, sekwencer z instrumentami (wypełnienie, obwiednia,
+    arpeggio, vibrato, slide), `music("x")` dla `.lsong`, test w grze.
+  - **S2 — prototyp edytora (przed P10):** piano roll rysikiem, 4 kanały, patterny, wybór
+    instrumentu, odtwarzanie, zapis do `save/` własnego kartridża (eksport do gry ręcznie
+    lub później przez P10).
+  - **S3 — pełne studio:** edytor instrumentów z presetami, playlista, efekty ze studia
+    (kradzież kanału), integracja jako kartridż systemowy (po P10: zapis do innych
+    kartridży, `sys.system`).
+  - **S4 — rozszerzenia:** tryb Extended (więcej kanałów), DPCM/próbki, import MIDI /
+    eksport w narzędziu `litelua` na PC, backend syntezy programowej dla portów.

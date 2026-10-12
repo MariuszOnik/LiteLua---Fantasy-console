@@ -655,10 +655,21 @@ static int l_music_volume(lua_State *L)
 
 // --- Lifecycle --------------------------------------------------------------
 
+// Internal Maxmod function (comms_ds9.c): tells the ARM7 the soundbank size
+extern void mmSendBank(mm_word num_songs, mm_word num_samples, mm_addr bank_addr);
+
 void ll_sound_init(void)
 {
     if (!mmInitNoSoundbank())
         ll_log("sound: Maxmod init failed");
+
+    // Maxmod bug (D34): on the ARM7, mmEffectEx rejects every effect whose
+    // ID is not below the soundbank's sample count before it checks for an
+    // external sample (an address >= 0x10000). Without a soundbank the count
+    // is 0, so no external sample would play. A count that no address can
+    // reach fixes that; the bank itself is only read for IDs < 0x10000,
+    // which LiteLua never uses.
+    mmSendBank(0, 0xFFFFFFFF, NULL);
     music.volume = 1024;
 }
 

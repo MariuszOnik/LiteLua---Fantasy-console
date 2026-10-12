@@ -33,8 +33,8 @@ function _init()
 end
 
 function _update()
-  if btnp("a") then sfx(beep) end
-  if btnp("b") then sfx(boom, 1, math.random() * 2 - 1) end
+  if btnp("a") then say("beep: handle " .. tostring(sfx(beep))) end
+  if btnp("b") then say("boom: handle " .. tostring(sfx(boom, 1, math.random() * 2 - 1))) end
   if btnp("y") then sfx(beep, 0.8, 0, 0.5 + math.random() * 1.5) end
   if btnp("x") then
     track = track % #tracks + 1
