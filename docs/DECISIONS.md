@@ -767,7 +767,7 @@ osobne polecenie.
 - Szkic w `docs/LSONG.md` sekcja 11; nazwy pól mogą się zmienić przy implementacji.
   Kolejność prac: S0 (test sprzętu), potem P8; v1.2 w kodzie — przy S1/S2.
 
-## D40 (2026-10-12) — S0: próba syntezy na żywo (w toku)
+## D40 (2026-10-12) — S0: próba syntezy na żywo (zrobione)
 - **Cel (mały test, nie studio):** czy DS gra pulse / trójkąt / szum na żywo z nut, ile to
   kosztuje, jak współpracuje z Maxmodem i czy zmiany parametrów w trakcie nuty trzaskają.
 - **Kod:** `source/ll_chiptest.c` (eksperymentalna tabela Lua `chiptest`: `start(mode)`,
@@ -786,5 +786,14 @@ osobne polecenie.
   częstotliwość + głośność, koniec nuty = głośność 0.
 - **Tryby do porównania uchem:** 0 = parametry w miejscu (faza fali biegnie dalej), 1 =
   restart kanału (pause + resume) przy każdej nucie i kroku arpeggio.
-- **Do uzupełnienia po odsłuchu na DSi:** trzaski w trybach 0/1, równość tempa, czas
-  przerwania (maks./średni), liczba słów FIFO na sekundę, efekty i moduł Maxmoda naraz.
+- **Wyniki na DSi (~100 s, oba tryby, 70+ efektów Maxmoda i moduł `.mas` w trakcie):**
+  tryb 0 — przerwanie śr. 52 µs, maks. ~100 µs (ok. 0,3% CPU przy 60 tickach/s), 127 słów
+  FIFO/s; tryb 1 — śr. 58 µs, maks. 135 µs, 205 słów/s. Odstęp ticków 16 630–16 680 µs
+  (wzorzec 16 667, ±0,2%), 0 spóźnionych. Efekty Maxmoda dostawały poprawne uchwyty, moduł
+  grał razem z syntezą, brak zawieszeń; po L+R+B synteza zatrzymana, pamięć 0 B. Odsłuch
+  użytkownika: trzaski akceptowalne.
+- **Wnioski dla S1:** libnds przez FIFO wystarcza — własny kod ARM7 niepotrzebny.
+  Sekwencer w przerwaniu timera z samymi komendami „set”; **tryb 0** (zmiany w miejscu) —
+  tańszy i z mniejszą liczbą komunikatów; restart kanału tylko tam, gdzie słychać potrzebę
+  (np. atak perkusji). Kanały sekwencera blokowane w Maxmodzie działają razem z P7.
+  `chiptest` zostaje do S1 (potem usunięty).

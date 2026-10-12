@@ -41,11 +41,11 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   przez parser danych (`source/ll_data.c`, 29/29 manifestów zgodnych), strażnik L+R+B dla
   zapętlonej gry (bez kosztu w normalnej grze); 40 testów narzędzi.
   **D39:** projekt `.lsong` v1.2 (sceny i klipy) zatwierdzony, bez implementacji.
-  **S0 w toku (D40):** `source/ll_chiptest.c` + `tests/carts/chip` — synteza na żywo w
-  przerwaniu timera 3, tryby „w miejscu”/„restart”, pomiary; do zrobienia: odsłuch i log
-  z DSi, wyniki do D40. Potem P8.
-- **Następny krok:** P8 — mapy kafelkowe. Wcześniej: odsłuch P7 na konsoli; log z konsoli
-  po D32/D33 (`sys.info` na DSi, powrót L+R+START do loadera).
+  **S0 zrobione (D40):** synteza na żywo na DSi — przerwanie śr. 52 µs (ok. 0,3% CPU),
+  tempo ±0,2%, 0 spóźnionych ticków, efekty i moduł Maxmoda naraz; trzaski akceptowalne.
+  S1 (sekwencer `.lsong`) — na osobne polecenie.
+- **Następny krok:** P8 — mapy kafelkowe. (P7, D32/D33 sprawdzone na DSi: dźwięk, efekty,
+  L+R+START, `_quit`.)
 - **Wydania (D29):** repo na GitHubie, tag `v0.6.0` wypchnięty; pliki wydania w
   `builds/release-v0.6.0/` (`litelua.nds`, `starcatch.lcart`, `RELEASE_NOTES.md`) —
   wydanie na stronie GitHuba tworzy użytkownik (sprawdzić, czy opublikowane). Na
@@ -208,8 +208,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
     nuty łączone) — do decyzji.
   - [x] **`.lsong` v1.1** (D38): `tempo` we wpisie playlisty, `tie`; import tnie patterny
     przy zmianach tempa (też w środku taktu) i łączy nuty.
-  - [~] **S0 — próba sprzętu** (D40, w toku: kod i test `tests/carts/chip` gotowe, czeka na
-    odsłuch na DSi i pomiary) (1–2 dni, tylko na osobne polecenie): sekwencer na sztywno w C
+  - [x] **S0 — próba sprzętu** (D40): synteza na żywo działa na DSi — ok. 0,3% CPU, tempo
+    ±0,2%, razem z Maxmodem; libnds przez FIFO wystarcza. (1–2 dni, tylko na osobne polecenie): sekwencer na sztywno w C
     (2× pulse, triangle, noise) w przerwaniu timera 3, odsłuch na DSi. Zweryfikować: timing
     ARM9 → FIFO → ARM7 (opóźnienia, równość tempa), współpracę z Maxmodem
     (`mmLockChannels`, efekty i muzyka z P7 naraz), zachowanie kanałów przy zmianie
