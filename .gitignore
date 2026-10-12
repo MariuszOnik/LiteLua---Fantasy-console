@@ -9,3 +9,4 @@ ref/
 builds/
 tests/carts/sound/music/sky.wav
 __pycache__/
+tests/carts/sound/music/rock.wav

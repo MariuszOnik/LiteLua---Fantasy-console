@@ -355,7 +355,12 @@ into a WAV on the PC and played with `music`; a native player is planned (P18):
 ```
 python tools/litelua.py song check  mysong.lsong
 python tools/litelua.py song render mysong.lsong music/mysong.wav
+python tools/litelua.py song import mysong.mid mysong.lsong     # from a MIDI file
 ```
+
+`song import` arranges a MIDI file for the chiptune tracks (melody, chords as arpeggios,
+bass, drums); `--list` shows the parts of the file so you can choose them. Only use music
+you may use: your own, licensed, or for your private play.
 
 See `examples/songs/sky_hopper.lsong` for a complete song.
 

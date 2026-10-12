@@ -225,7 +225,20 @@ about 100 KB after compiling) and make reading time predictable.
 python tools/litelua.py song check   song.lsong          # validate, list errors and warnings
 python tools/litelua.py song convert song.lsong song.lsong.json   # Lua -> JSON (and back)
 python tools/litelua.py song render  song.lsong song.wav [--rate 22050] [--bits 16] [--loops 1]
+python tools/litelua.py song import  song.mid --list            # the parts of a MIDI file
+python tools/litelua.py song import  song.mid song.lsong [--lead 2 --chords 1 --bass 3 --drums 4]
 ```
+
+`import` arranges a MIDI file (format 0 or 1) for the monophonic tracks: each
+role (`lead`, `lead2`, `chords`, `bass`, `drums`) takes one or more parts of
+the file, chords are reduced to one note (`--lead-mode top|bottom|last|arp`
+etc.; `arp` turns chords into arpeggio instruments), General MIDI drums become
+a `kit`, and repeated bars are stored once. It reports what it had to change:
+notes not heard, drums dropped, and the measured timing error. A MIDI file with
+tempo changes cannot be followed exactly by one `tempo`: `--tempo-mode time`
+keeps the timing, `grid` keeps the bars (`auto` picks `time` when `grid` would
+be more than 30 ms off). The settings are stored in the song (`x_import`); the
+MIDI file stays the source.
 
 `render` is an **approximate preview** (pulse, NES-like triangle and noise
 synthesized in software, envelopes per frame). The WAV can be played in a game

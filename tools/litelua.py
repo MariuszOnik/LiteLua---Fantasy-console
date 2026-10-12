@@ -4,7 +4,7 @@
 # LiteLua - PC tool for cartridges.
 #
 #   python tools/litelua.py pack <cart folder> [out.lcart] [--store]
-#   python tools/litelua.py song check|convert|render ...   (.lsong, D36)
+#   python tools/litelua.py song check|convert|render|import ...   (.lsong, D36, D37)
 #
 # pack: folder -> .lcart (a ZIP with cart.lua at the top, D6). Files are
 # deflated, except already compressed ones (PNG, ...) and WAV, which are
@@ -13,7 +13,8 @@
 #
 # song: .lsong music files (docs/LSONG.md): check validates, convert turns
 # Lua data into JSON and back (by the output extension), render writes an
-# approximate WAV preview.
+# approximate WAV preview, import turns a MIDI file into a chiptune
+# arrangement (--list shows its parts first).
 
 import argparse
 import pathlib
@@ -21,6 +22,8 @@ import sys
 import zipfile
 
 import lsong
+import midi
+import midi_import
 
 STORED_EXT = {".png", ".mas", ".wav", ".lcart", ".zip"}
 
@@ -74,6 +77,21 @@ def main() -> int:
     c.add_argument("--bits", type=int, choices=(8, 16), default=16)
     c.add_argument("--loops", type=int, default=1,
                    help="1 = once through; 2 = then the loop part once more")
+    c = ssub.add_parser("import", help="MIDI -> .lsong (see --list first)")
+    c.add_argument("file", type=pathlib.Path, help=".mid file")
+    c.add_argument("out", type=pathlib.Path, nargs="?", help=".lsong or .lsong.json")
+    c.add_argument("--list", action="store_true", help="show the MIDI parts (sources)")
+    for role in midi_import.ROLES:
+        c.add_argument(f"--{role}", metavar="N[,N]",
+                       help=f"sources for the {role} track (default: automatic)")
+    for role in ("lead", "lead2", "chords", "bass"):
+        c.add_argument(f"--{role}-mode", choices=midi_import.MODES,
+                       help=f"chords -> one note: default {midi_import.DEFAULT_MODE[role]}")
+    c.add_argument("--tempo-mode", choices=("auto", "grid", "time"), default="auto",
+                   help="tempo changes: grid keeps bars, time keeps timing")
+    c.add_argument("--ppq", type=int, default=24, help="ticks per quarter, default 24")
+    c.add_argument("--bars", type=int, help="bars per pattern (default: best fit)")
+    c.add_argument("--profile", choices=("nes", "extended"))
     args = ap.parse_args()
 
     if args.cmd == "pack":
@@ -84,7 +102,50 @@ def main() -> int:
     return 1
 
 
+def song_import(args) -> int:
+    try:
+        if args.list:
+            mf = midi.read(args.file)
+            print(f"{args.file}: MIDI format {mf.format}, {mf.division} ticks per quarter")
+            for w in mf.warnings:
+                print(f"warning: {w}")
+            for s in midi_import.sources(mf):
+                print(s.describe())
+            return 0
+        if args.out is None:
+            print("error: give an output file (or --list)", file=sys.stderr)
+            return 1
+        roles = {}
+        for role in midi_import.ROLES:
+            v = getattr(args, role)
+            if v:
+                roles[role] = [int(x) for x in v.split(",")]
+        modes = {r: getattr(args, f"{r}_mode") for r in ("lead", "lead2", "chords", "bass")
+                 if getattr(args, f"{r}_mode")}
+        data, report = midi_import.import_midi(
+            args.file, roles or None, modes, args.tempo_mode, args.ppq, args.bars,
+            args.profile)
+    except (midi.MidiError, midi_import.MidiImportError, OSError, ValueError) as e:
+        print(f"{args.file}: {e}", file=sys.stderr)
+        return 1
+    for line in report:
+        print(line)
+    check = lsong.validate(data)
+    for e in check.errors:
+        print(f"error: {e}", file=sys.stderr)
+    if check.errors:
+        return 1
+    is_json = args.out.name.lower().endswith(".json")
+    text = lsong.to_json(data) if is_json else lsong.to_lua(data)
+    args.out.write_text(text, encoding="utf-8", newline="\n")
+    print(f"{args.out}: {lsong.duration(data):.1f} s, {len(text)} bytes, "
+          f"{len(check.warnings)} validator warnings")
+    return 0
+
+
 def song(args) -> int:
+    if args.song_cmd == "import":
+        return song_import(args)
     try:
         data = lsong.load(args.file)
     except (lsong.LsongError, OSError) as e:

@@ -664,3 +664,52 @@ osobne polecenie.
   hook licznika instrukcji przy wczytywaniu manifestu; (3) osobno: strażnik dla kodu gry —
   hook co N instrukcji sprawdza L+R+B, żeby zawieszona pętla w `_update` dała się przerwać
   (dziś nie da się z niej wyjść).
+
+## D37 (2026-10-12) — Import MIDI → `.lsong` (P18 S-1b)
+- **Kod:** `tools/midi.py` (czytanie SMF typu 0 i 1: running status, sysex/meta kasują
+  running status, note-on z prędkością 0 = note-off, nakładające się te same nuty —
+  najstarsza kończy się pierwsza, nuty bez końca → koniec ścieżki z ostrzeżeniem; mapa
+  tempa, metrum, nazwy ścieżek; zapis SMF do testów i przyszłego eksportu) i
+  `tools/midi_import.py`; komenda `python tools/litelua.py song import x.mid out.lsong`
+  (`--list` pokazuje źródła).
+- **MIDI zostaje źródłem:** import to konfigurowalna aranżacja; ustawienia zapisywane w
+  utworze (`x_import`: plik, role, tryby, tryb tempa, `ppq`, takty na pattern), więc da
+  się go powtórzyć z innymi ustawieniami. Format v1 bez zmian.
+- **Źródła i role:** źródło = ścieżka + kanał. Role `lead`, `lead2` (tylko profil
+  `extended`), `chords`, `bass`, `drums`; ręcznie (`--lead 2 --chords 1,3 …`) albo
+  automatycznie (perkusja = kanał 10, bas = program basowy lub najniższa partia, akordy =
+  najbardziej polifoniczna, melodia = najwyższa z pozostałych). Nieużyte źródła w raporcie.
+- **Redukcja polifonii (konfigurowalna, `--<rola>-mode`):** `top` (melodia, domyślnie),
+  `bottom` (bas, domyślnie), `last` (ostatnio zagrana), `arp` (akordy, domyślnie):
+  współbrzmienie → nuta podstawowa + instrument z `arp` (interwały, maks. 4 dźwięki w 2
+  oktawach; kształty najczęstsze, reszta w limicie 32 instrumentów → pojedyncza nuta z
+  ostrzeżeniem). Liczba nut, których nie słychać, jest raportowana.
+- **Perkusja GM → `kit`:** stopa, werbel, tom (wysokość wg numeru), hi-hat zamknięty /
+  otwarty, crash, ride; inne nuty perkusyjne → hi-hat (raport). Jeden bęben naraz wg
+  priorytetu stopa > werbel > tom > crash > hi-hat otwarty > hi-hat > ride (raport).
+- **Tempo:** v1 ma jedno tempo (średnie, zachowuje długość utworu). Zmiany tempa są
+  wykrywane i zgłaszane. Tryb `grid` zachowuje siatkę taktów, tryb `time` zachowuje
+  czas; `auto` wybiera `time`, gdy `grid` myli się o > 30 ms. **Błąd czasu jest mierzony**
+  dla każdej nuty (maks. i średni, w raporcie), nie zakładany.
+- **Patterny:** podział na takty (metrum z pliku), patterny po 1/2/4/8/16 taktów —
+  wybierany wariant mieszczący się w limitach v1 z najmniejszą liczbą zapisanych nut;
+  identyczne patterny zapisywane raz, powtórzenia jako `times`. Nuty przechodzące przez
+  granicę patternu są tam grane od nowa (raport — v1 nie ma nut łączonych).
+- **Testy:** `tests/tools/test_midi.py` (14): typ 0 z ręcznie zapisanym running status i
+  note-on 0, zapis z running status, typ 1 (ścieżki, kanały, nazwy, metrum), nakładające
+  się te same nuty, mapa tempa, 5 zepsutych plików, tryby `top/bottom/arp`, raport
+  niesłyszalnych nut, perkusja GM (priorytet, mapowanie, spoza GM), powtórzone takty →
+  1 pattern `times = 8`, zmiana tempa (auto → `time` < 25 ms; `grid` > 300 ms), jedno
+  tempo → `grid` < 1 ms, automatyczne role + render, `lead2` wymaga `extended`. Razem z
+  D36: 33 testy.
+- **Przykład całej drogi:** `examples/songs/demo_rock.mid` („Pixel Riff”, własny utwór,
+  generator `make_demo_rock.py`: typ 1, 130 → 150 BPM, akordy mocy, perkusja GM) →
+  `song import` → `demo_rock.lsong` (tryb `time`, błąd maks. 8,9 ms) → WAV → DS (test
+  `sound`, `rock.wav`). W trybie `grid` ten sam plik: błąd do 992 ms, ale 9 różnych
+  patternów z 16 taktów.
+- **Propozycja v1.1 (do decyzji, nie wdrożona):** (1) opcjonalne `tempo` we wpisie
+  playlisty — import dzieliłby utwór przy zmianach tempa i miałby jednocześnie dokładny
+  czas i siatkę taktów (dziś trzeba wybrać); (2) `tie = true` na nucie z `t = 0` —
+  kontynuacja nuty z poprzedniego patternu bez ponownego ataku (długie nuty na granicach
+  patternów); (3) ewentualnie `meter` we wpisie playlisty dla zmian metrum (tylko edytor).
+  Wszystkie trzy są zgodne wstecz (pola opcjonalne).

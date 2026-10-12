@@ -35,7 +35,9 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   `litelua.py song check|convert|render`, 19 testów (`python -m unittest discover -s
   tests/tools`), przykład „Sky Hopper” (w teście `sound` pod X jako `sky.wav`).
   Do decyzji (D36): bezpieczne wczytywanie `cart.lua` (parser danych / hook) i strażnik
-  L+R+B dla zawieszonej pętli w grze.
+  L+R+B dla zawieszonej pętli w grze. **S-1b zrobione (D37):** import MIDI
+  (`song import`), 33 testy narzędzi, „Pixel Riff” MIDI → `.lsong` → WAV → DS (test
+  `sound`, X). Do decyzji: `.lsong` v1.1 (D37).
 - **Następny krok:** P8 — mapy kafelkowe. Wcześniej: odsłuch P7 na konsoli; log z konsoli
   po D32/D33 (`sys.info` na DSi, powrót L+R+START do loadera).
 - **Wydania (D29):** repo na GitHubie, tag `v0.6.0` wypchnięty; pliki wydania w
@@ -194,6 +196,10 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   - [x] **S-1 — format `.lsong` v1** (D36): `docs/LSONG.md`, walidator, konwersja
     Lua ↔ JSON, renderer WAV (`tools/litelua.py song`), testy `tests/tools`, przykład
     `examples/songs/sky_hopper.lsong`.
+  - [x] **S-1b — import MIDI** (D37): `song import`, role, redukcja polifonii (arp),
+    perkusja GM, pomiar błędu czasu przy zmianach tempa, wykrywanie powtórzeń; przykład
+    `examples/songs/demo_rock.mid`. Propozycja `.lsong` v1.1 (tempo we wpisie playlisty,
+    nuty łączone) — do decyzji.
   - **S0 — próba sprzętu** (1–2 dni, tylko na osobne polecenie): sekwencer na sztywno w C
     (2× pulse, triangle, noise) w przerwaniu timera 3, odsłuch na DSi. Zweryfikować: timing
     ARM9 → FIFO → ARM7 (opóźnienia, równość tempa), współpracę z Maxmodem

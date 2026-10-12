@@ -8,6 +8,7 @@
 #   music/tune.wav  8-bit mono 16000 Hz, a looping melody (streamed)
 #   music/song.mas  4-channel MOD made here, converted with mmutil -d -m
 #   music/sky.wav   examples/songs/sky_hopper.lsong rendered (not in git)
+#   music/rock.wav  examples/songs/demo_rock.mid imported and rendered (not in git)
 #
 #   python tests/carts/sound/make_assets.py
 
@@ -160,11 +161,22 @@ def sky():
     lsong.render(song, HERE / "music/sky.wav", rate=22050, bits=16)
 
 
+def rock():
+    # The whole chain of D37: MIDI -> .lsong -> WAV
+    import sys
+    sys.path.insert(0, str(HERE.parents[2] / "tools"))
+    import lsong
+    import midi_import
+    song, _ = midi_import.import_midi(HERE.parents[2] / "examples/songs/demo_rock.mid")
+    lsong.render(song, HERE / "music/rock.wav", rate=22050, bits=16)
+
+
 if __name__ == "__main__":
     beep()
     boom()
     tune()
     mod_song()
     sky()
+    rock()
     for p in sorted((HERE / "sfx").iterdir()) + sorted((HERE / "music").iterdir()):
         print(p.relative_to(HERE), p.stat().st_size, "bytes")
