@@ -39,7 +39,11 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   (`song import`), 33 testy narzędzi, „Pixel Riff” MIDI → `.lsong` → WAV → DS (test
   `sound`, X). **D38 zrobione:** `.lsong` v1.1 (tempo w playliście, `tie`), `cart.lua`
   przez parser danych (`source/ll_data.c`, 29/29 manifestów zgodnych), strażnik L+R+B dla
-  zapętlonej gry (bez kosztu w normalnej grze); 40 testów narzędzi. S0 wstrzymane.
+  zapętlonej gry (bez kosztu w normalnej grze); 40 testów narzędzi.
+  **D39:** projekt `.lsong` v1.2 (sceny i klipy) zatwierdzony, bez implementacji.
+  **S0 w toku (D40):** `source/ll_chiptest.c` + `tests/carts/chip` — synteza na żywo w
+  przerwaniu timera 3, tryby „w miejscu”/„restart”, pomiary; do zrobienia: odsłuch i log
+  z DSi, wyniki do D40. Potem P8.
 - **Następny krok:** P8 — mapy kafelkowe. Wcześniej: odsłuch P7 na konsoli; log z konsoli
   po D32/D33 (`sys.info` na DSi, powrót L+R+START do loadera).
 - **Wydania (D29):** repo na GitHubie, tag `v0.6.0` wypchnięty; pliki wydania w
@@ -204,7 +208,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
     nuty łączone) — do decyzji.
   - [x] **`.lsong` v1.1** (D38): `tempo` we wpisie playlisty, `tie`; import tnie patterny
     przy zmianach tempa (też w środku taktu) i łączy nuty.
-  - **S0 — próba sprzętu** (1–2 dni, tylko na osobne polecenie): sekwencer na sztywno w C
+  - [~] **S0 — próba sprzętu** (D40, w toku: kod i test `tests/carts/chip` gotowe, czeka na
+    odsłuch na DSi i pomiary) (1–2 dni, tylko na osobne polecenie): sekwencer na sztywno w C
     (2× pulse, triangle, noise) w przerwaniu timera 3, odsłuch na DSi. Zweryfikować: timing
     ARM9 → FIFO → ARM7 (opóźnienia, równość tempa), współpracę z Maxmodem
     (`mmLockChannels`, efekty i muzyka z P7 naraz), zachowanie kanałów przy zmianie

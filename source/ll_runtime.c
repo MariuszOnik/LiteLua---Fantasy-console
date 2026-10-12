@@ -19,6 +19,7 @@
 #include "lualib.h"
 
 #include "ll_cart.h"
+#include "ll_chiptest.h"
 #include "ll_console.h"
 #include "ll_error.h"
 #include "ll_gfx.h"
@@ -258,6 +259,7 @@ static void register_api(lua_State *L)
     ll_gfx_register(L);
     ll_image_register(L);
     ll_sound_register(L);
+    ll_chiptest_register(L); // S0 experiment (D40)
 }
 
 // Loads and runs the entry file; the chunk is named after its path in the

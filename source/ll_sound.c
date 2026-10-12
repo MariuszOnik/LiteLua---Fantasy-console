@@ -29,6 +29,7 @@
 
 #include "lauxlib.h"
 
+#include "ll_chiptest.h"
 #include "ll_log.h"
 #include "ll_sound.h"
 
@@ -739,6 +740,7 @@ void ll_sound_update(void)
 
 void ll_sound_stop_all(void)
 {
+    ll_chiptest_stop();
     music_stop();
     mmEffectCancelAll();
     stop_vblank = ll_vblanks();

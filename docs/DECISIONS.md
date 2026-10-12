@@ -766,3 +766,25 @@ osobne polecenie.
   `transpose`.
 - Szkic w `docs/LSONG.md` sekcja 11; nazwy pól mogą się zmienić przy implementacji.
   Kolejność prac: S0 (test sprzętu), potem P8; v1.2 w kodzie — przy S1/S2.
+
+## D40 (2026-10-12) — S0: próba syntezy na żywo (w toku)
+- **Cel (mały test, nie studio):** czy DS gra pulse / trójkąt / szum na żywo z nut, ile to
+  kosztuje, jak współpracuje z Maxmodem i czy zmiany parametrów w trakcie nuty trzaskają.
+- **Kod:** `source/ll_chiptest.c` (eksperymentalna tabela Lua `chiptest`: `start(mode)`,
+  `stop()`, `stats()` — tylko do S0, zniknie w S1, poza dokumentacją API),
+  `tests/carts/chip`, dane utworu `source/ll_chiptest_song.inc` z
+  `tools/make_chiptest_song.py` (pattern `a` „Sky Hopper”; przy 150 BPM i `ppq` 24 tick =
+  1/60 s). Sekwencer w przerwaniu timera 3 (60 Hz); kanały 8 (pulse, melodia), 9 (pulse,
+  arpeggio co klatkę), 10 (próbka trójkąta 32 kroki, pętla), 14 (szum, perkusja) —
+  zablokowane w Maxmodzie (`mmLockChannels`), zatrzymywane przy końcu kartridża.
+- **Ustalenie z kodu libnds (przed pomiarem):** funkcje „play” (`soundPlayPSGChannel`,
+  `soundPlayNoiseChannel`, `soundPlaySampleChannel`) czekają na odpowiedź ARM7 pod mutexem
+  FIFO — **nie wolno ich wołać z przerwania**. Funkcje „set” (`soundSetVolume`,
+  `soundSetFreq`, `soundSetWaveDuty`, `soundPause/Resume`) wysyłają jedno słowo FIFO i
+  wracają; po stronie ARM7 zmieniają rejestr kanału bez restartu. Sekwencer więc ustawia
+  kanały „play” przy starcie (głośność 0), a w przerwaniu używa tylko „set”: nuta =
+  częstotliwość + głośność, koniec nuty = głośność 0.
+- **Tryby do porównania uchem:** 0 = parametry w miejscu (faza fali biegnie dalej), 1 =
+  restart kanału (pause + resume) przy każdej nucie i kroku arpeggio.
+- **Do uzupełnienia po odsłuchu na DSi:** trzaski w trybach 0/1, równość tempa, czas
+  przerwania (maks./średni), liczba słów FIFO na sekundę, efekty i moduł Maxmoda naraz.
