@@ -11,7 +11,9 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   `_update`, konsola 2D usunięta (`print` → log + nakładka L+R+X), ekran błędu i
   tymczasowa lista rysowane fontem 6×8, pomijanie BOM w plikach Lua. Kartridże testowe i
   demo przerobione na dwa ekrany. Testy w melonDS ok; na konsoli — do sprawdzenia.
-- **Następny krok:** P7 — dźwięk (Maxmod, D7). Najpierw: wynik testu P6 na konsoli (log
+- **Następny krok:** implementacja D30 (reset stanu rysowania na początku każdego `_draw`,
+  powierzchnie TOP/BOTTOM) — mała zmiana w `ll_gfx.c` + dokumentacja, build, test w melonDS.
+  Potem P7 — dźwięk (Maxmod, D7). Najpierw: wynik testu P6 na konsoli (log
   przez FTP: oba ekrany bez migania, nakładki L+R+X/Y, ekran błędu, lista z dotykiem,
   kartridże testowe, `starcatch`).
 - **Wydania (D29):** repo na GitHubie, tag `v0.6.0` wypchnięty; pliki wydania w
@@ -20,8 +22,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   konsoli jest build `v0.6.0`. Przykładowa gra: `examples/carts/starcatch`; instrukcja
   „Making a game on a PC” w README.
 - **Później (uzgodnione):** poradnik dobrych praktyk i biblioteka algorytmów dla gier
-  (P16, P17). Optymalizacja: lista wyświetlania w RAM, żeby oba ekrany dzieliły 33 ms
-  (D28).
+  (P16, P17). Optymalizacja: lista wyświetlania w RAM (D28) — tylko po pomiarach
+  na konsoli; wspólne 33 ms kosztuje +1 klatkę opóźnienia (D30).
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
   `gfx.lua`, `files.lua`, `sys.lua` (z `sys.stats`).
 - **Manual:** `README.md` (D15) — opisuje stan po P6.

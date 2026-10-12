@@ -451,3 +451,45 @@ Pełny opis ze szkicami: `docs/UX.md`. Ustalone z użytkownikiem:
 - **Pliki wydania:** `litelua.nds` + przykładowe gry jako `.lcart` (`tools/litelua.py pack`).
   Wydanie tworzy użytkownik na stronie GitHuba (brak `gh` na tym komputerze); notatki
   przygotowuje agent.
+
+## D30 (2026-10-12) — Kontrakt stanu rysowania: powierzchnie TOP/BOTTOM, reset na początku `_draw`
+Zmienia D23 (stan trwa między klatkami) i D28 (stan wspólny dla obu ekranów). `_draw(screen)`
+i kolejność klatki z D28 bez zmian. Wynik przeglądu architektury (czy zastąpić `_draw(screen)`
+dwoma callbackami albo wirtualnymi powierzchniami — nie: sygnatura oddaje sprzęt, pęknięcie
+było we wspólnym stanie rysowania).
+- **Powierzchnie:** `TOP` i `BOTTOM` to logiczne powierzchnie 256×192 (początek w lewym górnym
+  rogu, Y w dół), nie fizyczne ekrany. Mapowanie na wyświetlacz należy do platformy (na DS:
+  `lcdMainOnTop/Bottom` w `ll_gfx_vblank`, D28); port może je pokazać pod sobą, obok siebie
+  albo w różnych rozmiarach bez zmiany API. W dokumentacji argument `_draw` nazywamy
+  `surface` (stałe `TOP`/`BOTTOM` zostają).
+- **Wywołania:** w trybie dual30 `_draw` raz na powierzchnię w każdej klatce, zawsze `TOP`,
+  potem `BOTTOM`. W single60 (P15) tylko dla powierzchni 3D — szczegóły przy P15.
+- **`touch()`** zwraca współrzędne w przestrzeni `BOTTOM`; port przelicza dotyk/mysz na nią.
+- **Bez dodatkowych powierzchni** (offscreen, render-to-texture): na DS każda to osobny
+  przebieg 3D (+1 VBlank) i 96 KB VRAM, a banki A–D są zajęte.
+- **Reset w `ll_gfx_begin`:** każde `_draw` zaczyna od tego samego stanu, cokolwiek ustawiło
+  poprzednie (druga powierzchnia, poprzednia klatka, przerwanie błędem): `color` 12
+  (`DEFAULT_COLOR`), `alpha` 1, `camera` 0, 0, zoom 1, `clip` cała powierzchnia, `tint` brak
+  (biały), kolor tła 0 z palety. Kolor tła nie jest wyjątkiem — `clear_color[2]` nie
+  przecieka między ekranami, ale przeciekał między klatkami; gra z tłem woła `cls(c)` w
+  `_draw` (jak wszystkie obecne kartridże). Liczniki `depth`, `poly_id`, `bound` jak dotąd.
+- **Co trwa:** tylko zasoby kartridża (obrazy, `sub`, font) i stan Lua (D14, D24). Nic z
+  rysowania nie przechodzi między powierzchniami ani klatkami.
+- **Poza `_draw`:** `color`, `alpha`, `camera`, `clip`, `tint`, `cls` w `_init`/`_update` nie
+  działają (reset i tak by je nadpisał); pierwsze takie wywołanie = jeden wpis w logu.
+  Funkcje rysujące poza `_draw` są ignorowane już dziś. Wspólna kamera dla obu powierzchni:
+  własna zmienna gry i `camera(cx, cy)` na początku `_draw`.
+- **Implementacja:** `reset_draw_state()` (wartości domyślne w jednym miejscu) wołane z
+  `ll_gfx_begin` i z `ll_gfx_reset` (która dokłada `active = false` i kolor tła obu ekranów).
+  Ekran błędu i lista (`ll_gfx_frame`) dostają reset automatycznie; ich `ll_gfx_reset()`
+  staje się zbędne. `draw_overlay` tylko ustawia swój stan, bez zapisywania i odtwarzania
+  stanu gry (po nakładce nic już nie rysuje, następne `begin` resetuje). Do tego
+  `docs/api/gfx.lua` + `tools/apidoc.py`, README (D15), komentarze D23/D28 w kodzie.
+- **Koszt:** pamięć 0; czas kilkanaście zapisów do `gs` na powierzchnię. Obecne kartridże
+  (`starcatch`, `tests/carts/*`) same przywracają stan i nic nie ustawiają poza `_draw` —
+  zgodne wstecz, ręczne sprzątanie przestaje być obowiązkowe.
+- **Poza zakresem:** rozmiar powierzchni w API zamiast `local W, H = 256, 192` w każdym
+  kartridżu (nazwa do ustalenia, osobna decyzja). Lista wyświetlania z D28 — **korekta:**
+  nie daje wspólnych 33 ms za darmo. Geometria powierzchni musi trafić do silnika 3D przed
+  jej VBlankiem, więc pełny wspólny budżet wymaga nagrywania klatki N podczas wysyłania
+  N−1 (+1 klatka opóźnienia, ~33 ms). Tylko po pomiarach na konsoli (FIFO/DMA, VBlanki).
