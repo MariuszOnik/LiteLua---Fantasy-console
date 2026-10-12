@@ -231,7 +231,7 @@ about 100 KB after compiling) and make reading time predictable.
 ```
 python tools/litelua.py song check   song.lsong          # validate, list errors and warnings
 python tools/litelua.py song convert song.lsong song.lsong.json   # Lua -> JSON (and back)
-python tools/litelua.py song render  song.lsong song.wav [--rate 22050] [--bits 16] [--loops 1]
+python tools/litelua.py song render  song.lsong song.wav [--rate 22050] [--bits 16] [--loops 1] [--stereo] [--pan lead=-0.5]
 python tools/litelua.py song import  song.mid --list            # the parts of a MIDI file
 python tools/litelua.py song import  song.mid song.lsong [--lead 2 --chords 1 --bass 3 --drums 4]
 ```
@@ -250,7 +250,9 @@ changes are kept in the playlist (`--tempo-mode entries`), patterns are cut
 where the tempo changes inside a bar, and notes crossing pattern borders are
 tied.
 
-`render` is an **approximate preview** (pulse, NES-like triangle and noise
+`render --stereo` places the tracks left and right (melody a bit left, chords a bit
+right, bass and drums in the middle; `--pan` changes it) — a choice of the renderer, the
+file itself has no panning in v1.1. `render` is an **approximate preview** (pulse, NES-like triangle and noise
 synthesized in software, envelopes per frame). The WAV can be played in a game
 today with `music("song.wav")` (streamed, P7). The native player (P18 S1) will
 play `.lsong` files directly.

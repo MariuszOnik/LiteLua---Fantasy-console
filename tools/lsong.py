@@ -930,29 +930,51 @@ def _render_track(notes, total, rate):
     return buf
 
 
-def render(song, path, rate=22050, bits=16, loops=1):
-    """Approximate preview (not an emulation): writes a mono WAV. Returns seconds."""
+# Default stereo placement (renderer only; .lsong v1.1 has no panning):
+# melody a bit left, harmony a bit right, bass and drums in the middle
+DEFAULT_PAN = {"lead": -0.35, "lead2": 0.35, "chords": 0.35, "bass": 0.0, "drums": 0.0}
+
+
+def render(song, path, rate=22050, bits=16, loops=1, stereo=False, pans=None):
+    """Approximate preview (not an emulation): writes a mono or stereo WAV.
+    pans: {track name: -1 (left) .. 1 (right)}, used with stereo; tracks not
+    given use DEFAULT_PAN by name, else the middle. Returns seconds."""
     events, seconds = _events(song, loops)
     total = int(seconds * rate) + rate // 2  # Room for the last release
-    mix = [0.0] * total
-    for notes in events.values():
+    channels = 2 if stereo else 1
+    mix = [[0.0] * total for _ in range(channels)]
+    for name, notes in events.items():
         tb = _render_track(notes, total, rate)
-        for i, v in enumerate(tb):
-            mix[i] += v
-    # DC blocker (like the output filter of a console), then clip
-    out = bytearray()
-    prev_x = prev_y = 0.0
-    a = 1 - 2 * math.pi * 30 / rate
-    for x in mix:
-        y = x - prev_x + a * prev_y
-        prev_x, prev_y = x, y
-        y = max(-1.0, min(1.0, y))
-        if bits == 8:
-            out.append(int(y * 127) + 128)
+        if stereo:
+            pan = max(-1.0, min(1.0, (pans or {}).get(name, DEFAULT_PAN.get(name, 0.0))))
+            gains = (min(1.0, 1 - pan), min(1.0, 1 + pan))  # Middle: full on both sides
         else:
-            out += struct.pack("<h", int(y * 32767))
+            gains = (1.0,)
+        for ch, g in enumerate(gains):
+            m = mix[ch]
+            for i, v in enumerate(tb):
+                m[i] += v * g
+    # DC blocker (like the output filter of a console), then clip
+    a = 1 - 2 * math.pi * 30 / rate
+    outs = []
+    for m in mix:
+        prev_x = prev_y = 0.0
+        o = []
+        for x in m:
+            y = x - prev_x + a * prev_y
+            prev_x, prev_y = x, y
+            o.append(max(-1.0, min(1.0, y)))
+        outs.append(o)
+    out = bytearray()
+    for i in range(total):
+        for o in outs:
+            y = o[i]
+            if bits == 8:
+                out.append(int(y * 127) + 128)
+            else:
+                out += struct.pack("<h", int(y * 32767))
     with wave.open(str(path), "wb") as w:
-        w.setnchannels(1)
+        w.setnchannels(channels)
         w.setsampwidth(bits // 8)
         w.setframerate(rate)
         w.writeframes(bytes(out))

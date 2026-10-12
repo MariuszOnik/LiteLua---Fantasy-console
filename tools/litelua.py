@@ -77,6 +77,10 @@ def main() -> int:
     c.add_argument("--bits", type=int, choices=(8, 16), default=16)
     c.add_argument("--loops", type=int, default=1,
                    help="1 = once through; 2 = then the loop part once more")
+    c.add_argument("--stereo", action="store_true",
+                   help="stereo WAV: melody a bit left, chords a bit right (see --pan)")
+    c.add_argument("--pan", action="append", default=[], metavar="TRACK=P",
+                   help="stereo position of a track, -1 left .. 1 right (repeatable)")
     c = ssub.add_parser("import", help="MIDI -> .lsong (see --list first)")
     c.add_argument("file", type=pathlib.Path, help=".mid file")
     c.add_argument("out", type=pathlib.Path, nargs="?", help=".lsong or .lsong.json")
@@ -184,9 +188,21 @@ def song(args) -> int:
         if args.rate < 4000 or args.rate > 48000:
             print("error: --rate must be 4000 .. 48000", file=sys.stderr)
             return 1
-        seconds = lsong.render(data, args.out, args.rate, args.bits, max(1, args.loops))
-        print(f"{args.out}: {seconds:.1f} s, {args.rate} Hz, {args.bits} bit "
-              "(approximate preview)")
+        pans = {}
+        for item in args.pan:
+            name, _, value = item.partition("=")
+            try:
+                pans[name] = float(value)
+            except ValueError:
+                print(f"error: --pan {item}: use TRACK=number", file=sys.stderr)
+                return 1
+            if name not in {t["name"] for t in data["tracks"]}:
+                print(f"error: --pan: there is no track '{name}'", file=sys.stderr)
+                return 1
+        seconds = lsong.render(data, args.out, args.rate, args.bits, max(1, args.loops),
+                               args.stereo or bool(pans), pans)
+        print(f"{args.out}: {seconds:.1f} s, {args.rate} Hz, {args.bits} bit, "
+              f"{'stereo' if args.stereo or args.pan else 'mono'} (approximate preview)")
     return 0
 
 

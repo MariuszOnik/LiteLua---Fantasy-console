@@ -274,6 +274,21 @@ def crossings_hz(samples, rate, start, end):
 
 
 class RendererTest(unittest.TestCase):
+    def test_stereo_pan(self):
+        s = minimal()
+        with tempfile.TemporaryDirectory() as d:
+            path = pathlib.Path(d) / "s.wav"
+            lsong.render(s, path, stereo=True, pans={"lead": -1})
+            with wave.open(str(path)) as w:
+                self.assertEqual(w.getnchannels(), 2)
+                n = w.getnframes()
+                data = struct.unpack(f"<{2 * n}h", w.readframes(n))
+        left = max(abs(x) for x in data[0::2])
+        right = max(abs(x) for x in data[1::2])
+        self.assertGreater(left, 1000)
+        self.assertEqual(right, 0)   # hard left: nothing on the right
+
+
     def test_pitch_pulse_and_triangle(self):
         for kind in ("pulse", "triangle"):
             s = minimal()

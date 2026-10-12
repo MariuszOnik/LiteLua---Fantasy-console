@@ -8,11 +8,15 @@
 
 local beep, boom
 local tracks = { "song", "tune.wav", "sky.wav", "rock.wav", false }
--- Your own private test music (never in the repository): music/private.wav
-local private = io.open("music/private.wav")
-if private then
-  private:close()
-  table.insert(tracks, #tracks, "private.wav")
+-- Your own private test music (never in the repository):
+-- music/private.wav, private2.wav .. private9.wav
+for k = 1, 9 do
+  local name = k == 1 and "private.wav" or ("private" .. k .. ".wav")
+  local f = io.open("music/" .. name)
+  if f then
+    f:close()
+    table.insert(tracks, #tracks, name)
+  end
 end
 local track = 0
 local volume = 1
