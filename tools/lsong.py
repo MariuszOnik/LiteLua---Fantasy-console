@@ -341,13 +341,17 @@ def _write(v, lua, indent):
     if isinstance(v, str):
         return _lua_str(v) if lua else json.dumps(v, ensure_ascii=False)
     if isinstance(v, dict):
+        # Small maps of scalars (notes) are written tightly: {t=0, d=12, p=72}
+        tight = _inline(v) and len(v) <= 6
         if lua:
-            parts = [f"{_lua_key(k)} = {_write(x, lua, indent + 1)}" for k, x in v.items()]
-            open_, close = "{", "}"
+            eq = "=" if tight else " = "
+            parts = [f"{_lua_key(k)}{eq}{_write(x, lua, indent + 1)}" for k, x in v.items()]
         else:
             parts = [f"{json.dumps(k, ensure_ascii=False)}: {_write(x, lua, indent + 1)}"
                      for k, x in v.items()]
-            open_, close = "{", "}"
+        open_, close = "{", "}"
+        if tight:
+            return open_ + ", ".join(parts) + close
     else:
         parts = [_write(x, lua, indent + 1) for x in v]
         open_, close = ("{", "}") if lua else ("[", "]")
@@ -355,6 +359,16 @@ def _write(v, lua, indent):
         return open_ + close
     if _inline(v):
         return open_ + (" " if lua else "") + ", ".join(parts) + (" " if lua else "") + close
+    if isinstance(v, list) and all(isinstance(x, dict) and _inline(x) for x in v):
+        # Lists of notes: several per line, up to about 96 columns
+        lines, line = [], ""
+        for part in parts:
+            if line and len(inner) + len(line) + len(part) + 2 > 96:
+                lines.append(line + ",")
+                line = ""
+            line = f"{line}, {part}" if line else part
+        lines.append(line + ("," if lua else ""))
+        return open_ + "\n" + inner + ("\n" + inner).join(lines) + "\n" + pad + close
     sep = ",\n" + inner
     return open_ + "\n" + inner + sep.join(parts) + ("," if lua else "") + "\n" + pad + close
 

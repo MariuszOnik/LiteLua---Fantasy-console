@@ -218,6 +218,19 @@ class ImportTest(unittest.TestCase):
         self.assertEqual(song["x_import"]["tempo_mode"], "grid")
         self.assertLess(timing_ms(report), 1)
 
+    def test_meter_change_bar_lines(self):
+        # Two bars of 3/4, then two of 4/4: patterns follow the bars
+        sig34 = bytes([0xFF, 0x58, 0x04, 0x03, 0x02, 0x18, 0x08])
+        sig44 = bytes([0xFF, 0x58, 0x04, 0x04, 0x02, 0x18, 0x08])
+        notes = [(q, 1, 60) for q in range(6)] + [(6 + q, 1, 62) for q in range(8)]
+        path = write(self.tmp.name, "m.mid", [[(0, sig34), (6 * Q, sig44)], notes_ev(0, notes)])
+        song, report, check = run_import(path, roles={"lead": [1]}, bars=1)
+        self.assertEqual(check.errors, [])
+        lengths = [song["patterns"][e["pattern"]]["length"] * e.get("times", 1)
+                   for e in song["playlist"]]
+        self.assertEqual(lengths, [144, 192])          # 2 x 72, then 2 x 96
+        self.assertTrue(any("2 different time signatures" in x for x in report))
+
     def test_auto_roles_and_render(self):
         tracks = [
             [midi.tempo_event(0, 150)],

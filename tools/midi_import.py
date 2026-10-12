@@ -326,15 +326,17 @@ def import_midi(path, roles=None, modes=None, tempo_mode="auto", ppq=24, bars=No
         k = max(0, bisect.bisect_right(ch_ticks, t) - 1)
         return ch_secs[k] + (t - ch_ticks[k]) * 60 / (changes[k][1] * ppq)
 
-    # Meter (bars for patterns)
+    # Meter: bar lines follow the time signatures of the file (patterns are
+    # cut at bar lines, so repeated bars are found even when the meter changes)
     sigs = sorted(mf.time_sigs)
     num, den = (sigs[0][1], sigs[0][2]) if sigs and sigs[0][0] == 0 else (4, 4)
-    if len({(n_, d_) for _, n_, d_ in sigs}) > 1:
-        report.append("warning: the meter changes; bars follow the first one "
-                      f"({num}/{den})")
     if den not in (1, 2, 4, 8, 16):
         num, den = 4, 4
-    bar = ppq * 4 * num // den
+    meters = len({(n_, d_) for _, n_, d_ in sigs})
+    if meters > 1:
+        report.append(f"meter: {meters} different time signatures; bar lines follow them "
+                      f"(.lsong keeps only the first, {num}/{den}, for editors)")
+    bar_lines = _bar_lines(mf, sigs, end_tick, to_tick)
 
     # Roles -> monophonic notes in .lsong ticks
     parts, errors_s = {}, []
@@ -399,12 +401,15 @@ def import_midi(path, roles=None, modes=None, tempo_mode="auto", ppq=24, bars=No
 
     total = max(n[1] for q in parts.values() for n in q)
     cuts = [t for t, _ in changes[1:] if 0 < t < total]
-    options = [bars] if bars else [b for b in (1, 2, 4, 8, 16) if b * bar <= ppq * 64]
+    lines = [t for t in bar_lines if t < total]
+    options = [bars] if bars else [1, 2, 4, 8, 16]
     best = None
     for b in options:
-        if b * bar > ppq * 64:
-            raise MidiImportError(f"--bars {b} is longer than 64 quarter notes")
-        borders = sorted(set(range(0, total, b * bar)) | set(cuts)) + [total]
+        if b < 1:
+            raise MidiImportError("--bars must be at least 1")
+        borders = sorted(set(lines[::b]) | set(cuts) | {0}) + [total]
+        if any(y - x > ppq * 64 for x, y in zip(borders, borders[1:])):
+            continue  # A pattern would be longer than 64 quarter notes
         cand = _chunk(parts, borders, note_dict, version == 1.1, changes)
         cand["bars"] = b
         if cand["ok"] and (best is None or (cand["stored"], len(cand["playlist"]))
@@ -418,7 +423,7 @@ def import_midi(path, roles=None, modes=None, tempo_mode="auto", ppq=24, bars=No
             "tied (no new attack)" if version == 1.1
             else "warning: played again there (.lsong 1 has no tied notes)"))
     if tempo_mode == "entries" and n_changes:
-        mid = sum(1 for t in cuts if t % bar)
+        mid = sum(1 for t in cuts if t not in set(bar_lines))
         report.append(f"tempo changes kept in the playlist: {len(cuts)}"
                       + (f", {mid} inside a bar (patterns cut there)" if mid else ""))
     report.append(f"patterns: {best['bars']} bars each, {len(best['patterns'])} different "
@@ -453,6 +458,23 @@ def import_midi(path, roles=None, modes=None, tempo_mode="auto", ppq=24, bars=No
     if any(not 20 <= b <= 400 for _, b in changes):
         report.append("warning: a tempo is outside 20 .. 400 BPM")
     return song, report
+
+
+def _bar_lines(mf, sigs, end_tick, to_tick):
+    """Ticks (.lsong) where bars start, following the time signatures."""
+    out, tick, k = [], 0, 0
+    num, den = 4, 4
+    while tick < end_tick:
+        while k < len(sigs) and sigs[k][0] <= tick:
+            num, den = sigs[k][1], sigs[k][2]
+            k += 1
+        out.append(to_tick(tick))
+        length = mf.division * 4 * num // den
+        nxt = tick + max(1, length)
+        if k < len(sigs) and tick < sigs[k][0] < nxt:
+            nxt = sigs[k][0]  # A new meter starts inside this bar
+        tick = nxt
+    return sorted(set(out))
 
 
 def _chunk(parts, borders, note_dict, tie_ok, changes):

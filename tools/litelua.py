@@ -87,8 +87,11 @@ def main() -> int:
     for role in ("lead", "lead2", "chords", "bass"):
         c.add_argument(f"--{role}-mode", choices=midi_import.MODES,
                        help=f"chords -> one note: default {midi_import.DEFAULT_MODE[role]}")
-    c.add_argument("--tempo-mode", choices=("auto", "grid", "time"), default="auto",
-                   help="tempo changes: grid keeps bars, time keeps timing")
+    c.add_argument("--tempo-mode", choices=("auto", "entries", "grid", "time"),
+                   default="auto", help="tempo changes: entries (v1.1) keeps both; "
+                   "with one tempo, grid keeps bars, time keeps timing")
+    c.add_argument("--lsong", type=float, choices=(1, 1.1), default=1.1,
+                   help="format version to write, default 1.1")
     c.add_argument("--ppq", type=int, default=24, help="ticks per quarter, default 24")
     c.add_argument("--bars", type=int, help="bars per pattern (default: best fit)")
     c.add_argument("--profile", choices=("nes", "extended"))
@@ -124,7 +127,7 @@ def song_import(args) -> int:
                  if getattr(args, f"{r}_mode")}
         data, report = midi_import.import_midi(
             args.file, roles or None, modes, args.tempo_mode, args.ppq, args.bars,
-            args.profile)
+            args.profile, 1.1 if args.lsong == 1.1 else 1)
     except (midi.MidiError, midi_import.MidiImportError, OSError, ValueError) as e:
         print(f"{args.file}: {e}", file=sys.stderr)
         return 1
@@ -137,6 +140,12 @@ def song_import(args) -> int:
         return 1
     is_json = args.out.name.lower().endswith(".json")
     text = lsong.to_json(data) if is_json else lsong.to_lua(data)
+    size = len(text.encode("utf-8"))
+    if size > lsong.MAX_FILE:
+        print(f"error: the song would be {size // 1024} KB; .lsong files may have at most "
+              f"{lsong.MAX_FILE // 1024} KB (try --ppq 24, --bars 4 or fewer roles)",
+              file=sys.stderr)
+        return 1
     args.out.write_text(text, encoding="utf-8", newline="\n")
     print(f"{args.out}: {lsong.duration(data):.1f} s, {len(text)} bytes, "
           f"{len(check.warnings)} validator warnings")
