@@ -41,8 +41,10 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
   aktualizuj w każdym punkcie zmieniającym API, potem `python tools/apidoc.py`
 - `assets/` — zasoby generowane do podglądu/edycji (np. `font6x8.png` z `tools/make_font.py`)
 - `examples/carts/` — przykładowe gry (np. `starcatch`); `build.ps1` kopiuje je na kartę emulatora
-- `tools/` — skrypty PC (Python): `litelua.py` (`pack` → `.lcart`, reszta w P9), `apidoc.py`, `make_font.py` (font 6×8)
-- `tests/carts/` — kartridże testowe (`bench` — benchmark VM, D19; `files` — piaskownica, D20); `build.ps1` kopiuje je na kartę emulatora
+- `examples/songs/` — przykładowe utwory `.lsong` (D36, `docs/LSONG.md`)
+- `tools/` — skrypty PC (Python): `litelua.py` (`pack` → `.lcart`, `song check|convert|render` — D36, reszta w P9), `lsong.py` (format `.lsong`), `apidoc.py`, `make_font.py` (font 6×8)
+- `tests/carts/` — kartridże testowe (`bench` — benchmark VM, D19; `files` — piaskownica, D20; `sound` — P7); `build.ps1` kopiuje je na kartę emulatora
+- `tests/tools/` — testy narzędzi PC: `python -m unittest discover -s tests/tools`
 - `README.md` — manual użytkownika (po angielsku, D15); aktualizuj w każdym punkcie, który
   zmienia coś widocznego dla twórców gier
 - `.claude/commands/punkt.md` — komenda `/punkt`: cykl jednego punktu planu

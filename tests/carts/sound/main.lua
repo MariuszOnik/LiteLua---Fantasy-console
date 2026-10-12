@@ -1,11 +1,12 @@
 -- LiteLua sound test (P7). Sounds are made by make_assets.py.
 -- A: beep   B: boom (stereo file, random pan)   Y: beep, random pitch
--- X: music: module (song.mas) -> streamed WAV (tune.wav) -> off
+-- X: music: module (song.mas) -> streamed WAV (tune.wav) -> Sky Hopper
+-- (sky.wav, rendered from examples/songs/sky_hopper.lsong) -> off
 -- Up/Down: music volume   SELECT: free the sounds and load them again
 -- (Lua memory must go back)   L+R+B: back to the list
 
 local beep, boom
-local tracks = { "song", "tune.wav", false }
+local tracks = { "song", "tune.wav", "sky.wav", false }
 local track = 0
 local volume = 1
 local lines = {}
@@ -66,7 +67,7 @@ function _draw(surface)
   if surface == TOP then
     text("Sound test (P7)", 4, 4, 12)
     text("A beep  B boom  Y pitch", 4, 24, 13)
-    text("X music: module/stream/off", 4, 34, 13)
+    text("X music: module/stream/song/off", 4, 34, 13)
     text("Up/Down volume  SELECT reload", 4, 44, 13)
     text(("music: %s  volume %.1f"):format(tracks[track] or "off", volume), 4, 70, 4)
     text(("Lua + sound memory: %d KB"):format(mem_kb()), 4, 82, 4)

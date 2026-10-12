@@ -7,6 +7,7 @@
 #   sfx/boom.wav    16-bit stereo 32000 Hz, noise burst (tests the downmix)
 #   music/tune.wav  8-bit mono 16000 Hz, a looping melody (streamed)
 #   music/song.mas  4-channel MOD made here, converted with mmutil -d -m
+#   music/sky.wav   examples/songs/sky_hopper.lsong rendered (not in git)
 #
 #   python tests/carts/sound/make_assets.py
 
@@ -144,10 +145,19 @@ def mod_song():
     path = HERE / "song.mod"
     path.write_bytes(mod)
     (HERE / "music").mkdir(exist_ok=True)
-    subprocess.run([str(MMUTIL), "-d", "-m", str(path),
-                    "-o" + str(HERE / "music/song.mas")], check=True,
-                   stdout=subprocess.DEVNULL)
+    out = HERE / "music/song.mas"
+    out.unlink(missing_ok=True)  # mmutil would ask before overwriting
+    subprocess.run([str(MMUTIL), "-d", "-m", str(path), "-o" + str(out)], check=True,
+                   stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
     path.unlink()
+
+
+def sky():
+    import sys
+    sys.path.insert(0, str(HERE.parents[2] / "tools"))
+    import lsong
+    song = lsong.load(HERE.parents[2] / "examples/songs/sky_hopper.lsong")
+    lsong.render(song, HERE / "music/sky.wav", rate=22050, bits=16)
 
 
 if __name__ == "__main__":
@@ -155,5 +165,6 @@ if __name__ == "__main__":
     boom()
     tune()
     mod_song()
+    sky()
     for p in sorted((HERE / "sfx").iterdir()) + sorted((HERE / "music").iterdir()):
         print(p.relative_to(HERE), p.stat().st_size, "bytes")

@@ -31,7 +31,11 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   na konsoli**. Do
   sprawdzenia: strumień WAV z `.lcart`.
 - **P18 / D35:** kierunek Music Studio zatwierdzony, etapy S0–S4 w planie; S0 tylko na
-  osobne polecenie.
+  osobne polecenie. **S-1 zrobione (D36):** specyfikacja `.lsong` v1, `tools/lsong.py` +
+  `litelua.py song check|convert|render`, 19 testów (`python -m unittest discover -s
+  tests/tools`), przykład „Sky Hopper” (w teście `sound` pod X jako `sky.wav`).
+  Do decyzji (D36): bezpieczne wczytywanie `cart.lua` (parser danych / hook) i strażnik
+  L+R+B dla zawieszonej pętli w grze.
 - **Następny krok:** P8 — mapy kafelkowe. Wcześniej: odsłuch P7 na konsoli; log z konsoli
   po D32/D33 (`sys.info` na DSi, powrót L+R+START do loadera).
 - **Wydania (D29):** repo na GitHubie, tag `v0.6.0` wypchnięty; pliki wydania w
@@ -187,6 +191,9 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   Kolejność i zakres ustalić na starcie punktu (część może wejść wcześniej, np. `ui` w
   P10, `anim` przy P12).
 - [ ] **P18 — LiteLua Music Studio: chiptune w stylu NES, edytor jak FL Studio** (D35)
+  - [x] **S-1 — format `.lsong` v1** (D36): `docs/LSONG.md`, walidator, konwersja
+    Lua ↔ JSON, renderer WAV (`tools/litelua.py song`), testy `tests/tools`, przykład
+    `examples/songs/sky_hopper.lsong`.
   - **S0 — próba sprzętu** (1–2 dni, tylko na osobne polecenie): sekwencer na sztywno w C
     (2× pulse, triangle, noise) w przerwaniu timera 3, odsłuch na DSi. Zweryfikować: timing
     ARM9 → FIFO → ARM7 (opóźnienia, równość tempa), współpracę z Maxmodem

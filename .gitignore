@@ -7,3 +7,5 @@ image.bin
 compile_commands.json
 ref/
 builds/
+tests/carts/sound/music/sky.wav
+__pycache__/

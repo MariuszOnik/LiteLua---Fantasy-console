@@ -623,3 +623,44 @@ osobne polecenie.
 - Etapy S0–S4 w `docs/PLAN.md` (P18). Edytor-prototyp może powstać przed P10 jako zwykły
   kartridż zapisujący utwory w swoim `save/`; pełna integracja (zapis do innych kartridży,
   kartridż systemowy) po P10.
+
+## D36 (2026-10-12) — Format `.lsong` v1, narzędzia na PC, bezpieczne wczytywanie danych (P18 S-1)
+- **Specyfikacja:** `docs/LSONG.md` (po angielsku — format publiczny dla twórców, narzędzi
+  i modeli językowych). Opis muzyki, nie sprzętu. Wysokość = numer nuty MIDI, czas w
+  tickach, `ppq` = ticki na ćwierćnutę (nie „beat”); metrum tylko dla edytora.
+- **Model:** instrumenty `pulse` / `triangle` / `noise` / `kit` (obwiednia i `release` na
+  klatkę 1/60 s, `arp`, `vibrato`, `duty`, `mode`); ścieżki monofoniczne z instrumentem
+  domyślnym, „rodzaj” ścieżki = typ instrumentu, nuta może zmienić instrument tego samego
+  rodzaju; zestaw perkusyjny `kit` mapuje wysokość nuty na instrument i wysokość; nuty
+  `{t, d, p, v?, i?, s?}`; playlista `{pattern, times, transpose}` (`times`, bo `repeat`
+  to słowo kluczowe Lua) i `loop` (numer wpisu albo `false`). Profile `nes` (2 pulse,
+  1 triangle, 1 noise, wypełnienia NES) i `extended` (do 8 ścieżek).
+- **Kolizje:** nuta zaczynająca się w trakcie poprzedniej ucina ją (ostrzeżenie), dwie nuty
+  z tym samym `t` na ścieżce — błąd, nuta za końcem patternu — ucięta (ostrzeżenie).
+- **Limity:** plik 256 KB, zagnieżdżenie 16, napis 512, 16384 nut w utworze, 1024 na
+  ścieżkę w patternie, 32 instrumenty / 8 ścieżek / 256 patternów / 256 wpisów
+  playlisty, 30 minut jednego przejścia. Nieznane pola to błąd (literówki), poza `x_*`.
+- **Dwa zapisy, jeden model:** dane Lua (`.lsong`, czyta DS) i JSON (`.lsong.json`,
+  wymiana na PC); konwersja bezstratna. Na DS (S1) dane są kompilowane przy wczytaniu do
+  postaci binarnej — bez JSON-a na DS.
+- **Narzędzia:** `tools/lsong.py` (parser, zapis Lua/JSON, walidator, renderer) i
+  `python tools/litelua.py song check|convert|render`. Renderer = **odsłuch przybliżony**
+  (synteza programowa pulse / 32-stopniowy trójkąt / LFSR szumu, parametry na klatkę,
+  filtr DC), nie emulacja DS ani NES. WAV gra w grach już teraz przez `music("x.wav")`.
+- **Testy:** `python -m unittest discover -s tests/tools` — 19 testów (zwrot Lua ↔ JSON,
+  17 złośliwych/zepsutych plików odrzuconych, zakresy, monofonia, profile, kit,
+  transpozycja, limity, wysokość renderu 440 Hz ±1%, ucinanie nut, obwiednia, pętla).
+- **Przykład:** `examples/songs/sky_hopper.lsong` (+ `.json`, generator
+  `make_sky_hopper.py`): C-dur, 150 BPM, 4 ścieżki, 368 nut, 54 s; render w teście
+  dźwięku jako `music/sky.wav` (poza gitem, robi go `make_assets.py`).
+- **Bezpieczeństwo wczytywania danych (sprawdzone na prośbę użytkownika):** `cart.lua` jest
+  dziś *wykonywany* jako kod Lua w osobnym stanie z pustym `_ENV` i limitem pamięci 64 KB —
+  pamięć jest ograniczona, **czas nie**: `while true do end` w manifeście zawiesza DS przy
+  otwieraniu kartridża (pętle i funkcje nie potrzebują globali). Dlatego `.lsong` **nie
+  jest wykonywany**: czyta go parser podzbioru danych Lua (tabele, napisy, liczby,
+  `true/false`, komentarze; bez pętli, funkcji, wyrażeń, `nil`) — w Pythonie już jest, w C
+  powstanie w S1 z tą samą gramatyką i limitami. **Propozycje (do decyzji):** (1) ten sam
+  parser dla `cart.lua` (manifest to i tak same dane); (2) do tego czasu szybka łatka:
+  hook licznika instrukcji przy wczytywaniu manifestu; (3) osobno: strażnik dla kodu gry —
+  hook co N instrukcji sprawdza L+R+B, żeby zawieszona pętla w `_update` dała się przerwać
+  (dziś nie da się z niej wyjść).

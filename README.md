@@ -347,6 +347,18 @@ end
 3. **Built-in sounds (planned):** a set of classic effects in the ROM (jump, coin, hit,
    explosion, …), ready without a PC: `sound("@coin")`.
 
+**Chiptune songs (`.lsong`).** A song can also be written as notes in a small text
+format (`docs/LSONG.md`): instruments (pulse, triangle, noise, drum kits), patterns of
+notes and a playlist — readable by people, tools and AI models. Today a song is turned
+into a WAV on the PC and played with `music`; a native player is planned (P18):
+
+```
+python tools/litelua.py song check  mysong.lsong
+python tools/litelua.py song render mysong.lsong music/mysong.wav
+```
+
+See `examples/songs/sky_hopper.lsong` for a complete song.
+
 - MP3 or OGG? Convert them on the PC, e.g. with ffmpeg:
   `ffmpeg -i song.mp3 -ac 1 -ar 22050 -c:a pcm_s16le music/song.wav` (music) or
   `ffmpeg -i jump.mp3 -ac 1 -ar 22050 -c:a pcm_u8 sfx/jump.wav` (a small 8-bit effect).

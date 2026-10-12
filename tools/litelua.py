@@ -4,16 +4,23 @@
 # LiteLua - PC tool for cartridges.
 #
 #   python tools/litelua.py pack <cart folder> [out.lcart] [--store]
+#   python tools/litelua.py song check|convert|render ...   (.lsong, D36)
 #
 # pack: folder -> .lcart (a ZIP with cart.lua at the top, D6). Files are
 # deflated, except already compressed ones (PNG, ...) and WAV, which are
 # stored: music is streamed straight from the archive (P7).
 # Hidden files (starting with '.') are skipped. More commands come in P9.
+#
+# song: .lsong music files (docs/LSONG.md): check validates, convert turns
+# Lua data into JSON and back (by the output extension), render writes an
+# approximate WAV preview.
 
 import argparse
 import pathlib
 import sys
 import zipfile
+
+import lsong
 
 STORED_EXT = {".png", ".mas", ".wav", ".lcart", ".zip"}
 
@@ -52,12 +59,65 @@ def main() -> int:
     p.add_argument("out", type=pathlib.Path, nargs="?",
                    help="output file (default: <folder name>.lcart)")
     p.add_argument("--store", action="store_true", help="do not compress")
+
+    p = sub.add_parser("song", help=".lsong music: check, convert, render")
+    ssub = p.add_subparsers(dest="song_cmd", required=True)
+    c = ssub.add_parser("check", help="validate a song")
+    c.add_argument("file", type=pathlib.Path)
+    c = ssub.add_parser("convert", help="Lua data <-> JSON (by the out extension)")
+    c.add_argument("file", type=pathlib.Path)
+    c.add_argument("out", type=pathlib.Path)
+    c = ssub.add_parser("render", help="approximate WAV preview")
+    c.add_argument("file", type=pathlib.Path)
+    c.add_argument("out", type=pathlib.Path)
+    c.add_argument("--rate", type=int, default=22050, help="Hz, default 22050")
+    c.add_argument("--bits", type=int, choices=(8, 16), default=16)
+    c.add_argument("--loops", type=int, default=1,
+                   help="1 = once through; 2 = then the loop part once more")
     args = ap.parse_args()
 
     if args.cmd == "pack":
         out = args.out or pathlib.Path(args.folder.resolve().name + ".lcart")
         return pack(args.folder, out, args.store)
+    if args.cmd == "song":
+        return song(args)
     return 1
+
+
+def song(args) -> int:
+    try:
+        data = lsong.load(args.file)
+    except (lsong.LsongError, OSError) as e:
+        print(f"{args.file}: {e}", file=sys.stderr)
+        return 1
+    report = lsong.validate(data)
+    for w in report.warnings:
+        print(f"warning: {w}", file=sys.stderr)
+    for e in report.errors:
+        print(f"error: {e}", file=sys.stderr)
+    if report.errors:
+        print(f"{args.file}: {len(report.errors)} errors", file=sys.stderr)
+        return 1
+
+    if args.song_cmd == "check":
+        notes = sum(len(v) for p in data["patterns"].values()
+                    for v in (p.get("notes") or {}).values())
+        print(f"{args.file}: ok, {len(data['tracks'])} tracks, "
+              f"{len(data['patterns'])} patterns, {notes} notes, "
+              f"{lsong.duration(data):.1f} s, {len(report.warnings)} warnings")
+    elif args.song_cmd == "convert":
+        is_json = args.out.name.lower().endswith(".json")
+        text = lsong.to_json(data) if is_json else lsong.to_lua(data)
+        args.out.write_text(text, encoding="utf-8", newline="\n")
+        print(f"{args.out}: {'JSON' if is_json else 'Lua data'}, {len(text)} bytes")
+    elif args.song_cmd == "render":
+        if args.rate < 4000 or args.rate > 48000:
+            print("error: --rate must be 4000 .. 48000", file=sys.stderr)
+            return 1
+        seconds = lsong.render(data, args.out, args.rate, args.bits, max(1, args.loops))
+        print(f"{args.out}: {seconds:.1f} s, {args.rate} Hz, {args.bits} bit "
+              "(approximate preview)")
+    return 0
 
 
 if __name__ == "__main__":
