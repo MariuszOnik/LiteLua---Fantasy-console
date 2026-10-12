@@ -519,4 +519,6 @@ i niesymetryczne (nieparzysta liczba boków, wierzchołki zaokrąglane do piksel
 - **Zoom:** linia 1 px zostaje 1 px (sprzętowa), grubsze i koła-paski skalują się z kamerą.
 - **Pomiar melonDS:** scena `tests/carts/gfx` 10,0 ms (v0.6.0) → 4,5 ms; `tests/carts/shapes`
   (nowy test D31): scena 4,2 ms, 200 × `circfill` + 200 × `circ` r = 6 — 24,7 ms
-  (z `sqrtf` było 44,3 ms). Na konsoli do zmierzenia.
+  (z `sqrtf` było 44,3 ms). **Konsola DSi:** `shapes` scena 2,3 ms, 400 kół r = 6 — 13,0 ms
+  (~32 µs na koło z pętlą Lua); `gfx` scena 2,8 ms, 500 × `rectfill` 6,5 ms. D30 na konsoli:
+  wpis `color() outside _draw has no effect` w logu.
