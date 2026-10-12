@@ -335,6 +335,18 @@ end
   the volume 0..1.
 - Sound memory counts in the cartridge's `memory` limit together with Lua
   (`sys.stats().mem` shows both). Everything stops and is freed when the game ends.
+**Getting sound effects into a game:**
+
+1. **From a PC (works now):** put WAV files into the game's `sfx/` folder on the SD card
+   (`litelua/carts/<game>/sfx/`), or pack the game into a `.lcart` and they travel inside.
+   Retro effect generators (jsfxr, ChipTone, Bfxr) export WAV directly. The `litelua`
+   tool will convert any audio file with one command (P9).
+2. **On the DS (planned):** a sound effect editor (a system cartridge, part of the music
+   studio): effects made from the same chiptune instruments as the music, loaded with the
+   same `sound("name")`. Recording with the DS/DSi microphone is planned too.
+3. **Built-in sounds (planned):** a set of classic effects in the ROM (jump, coin, hit,
+   explosion, …), ready without a PC: `sound("@coin")`.
+
 - MP3 or OGG? Convert them on the PC, e.g. with ffmpeg:
   `ffmpeg -i song.mp3 -ac 1 -ar 22050 -c:a pcm_s16le music/song.wav` (music) or
   `ffmpeg -i jump.mp3 -ac 1 -ar 22050 -c:a pcm_u8 sfx/jump.wav` (a small 8-bit effect).

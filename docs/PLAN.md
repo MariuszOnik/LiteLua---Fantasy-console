@@ -40,7 +40,10 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   konsoli jest build `v0.6.0`. Przykładowa gra: `examples/carts/starcatch`; instrukcja
   „Making a game on a PC” w README.
 - **Później (uzgodnione):** poradnik dobrych praktyk i biblioteka algorytmów dla gier
-  (P16, P17). Optymalizacja: lista wyświetlania w RAM (D28) — tylko po pomiarach
+  (P16, P17). Dźwięki (2026-10-12, README „Getting sound effects into a game”):
+  **wbudowany zestaw ~20 klasycznych efektów w ROM** (`sound("@coin")`, generowane przez
+  nas, prefiks `@` jak kartridże systemowe D27) i **nagrywanie efektów mikrofonem DS/DSi**
+  (nagraj → przytnij → `sfx/x.wav`, w edytorze efektów P18 S3) — pomysł użytkownika. Optymalizacja: lista wyświetlania w RAM (D28) — tylko po pomiarach
   na konsoli; wspólne 33 ms kosztuje +1 klatkę opóźnienia (D30).
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
   `gfx.lua`, `files.lua`, `sys.lua` (z `sys.stats`).
