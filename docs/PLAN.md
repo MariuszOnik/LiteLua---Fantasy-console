@@ -23,9 +23,13 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   melonDS ok (bez loadera → wyłączenie). Na konsoli: sprawdzić powrót do loadera.
 - **D33 wdrożone:** `_quit()` (zapis przy wyjściu, limit 1 s) i `sys.info()` (DS/DSi);
   starcatch zapisuje rekord w `_quit`. melonDS ok.
-- **Następny krok:** P7 — dźwięk (Maxmod, D7). Najpierw: wynik testu P6 na konsoli (log
-  przez FTP: oba ekrany bez migania, nakładki L+R+X/Y, ekran błędu, lista z dotykiem,
-  kartridże testowe, `starcatch`).
+- **P7 zrobione (D34):** dźwięk — `sound/sfx/sfx_stop/music/music_volume`, efekty WAV w
+  RAM, muzyka `.mas` albo WAV strumieniowany z karty (też z `.lcart`, wpis bez
+  kompresji), pamięć dźwięku w limicie `memory`. Test `tests/carts/sound` w melonDS: logika
+  i pamięć ok. **Do sprawdzenia:** odsłuch (melonDS i konsola), strumień WAV z `.lcart`
+  (automatyczny test przerwany — okno melonDS straciło fokus).
+- **Następny krok:** P8 — mapy kafelkowe. Wcześniej: odsłuch P7 na konsoli; log z konsoli
+  po D32/D33 (`sys.info` na DSi, powrót L+R+START do loadera).
 - **Wydania (D29):** repo na GitHubie, tag `v0.6.0` wypchnięty; pliki wydania w
   `builds/release-v0.6.0/` (`litelua.nds`, `starcatch.lcart`, `RELEASE_NOTES.md`) —
   wydanie na stronie GitHuba tworzy użytkownik (sprawdzić, czy opublikowane). Na
@@ -102,9 +106,10 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   Zrzut obrazu i zamiana banków C/D; `_draw(screen)` wołane dla ekranu rysowanego w klatce.
   Wg D27 / `docs/UX.md`: ekran błędu i tymczasowa lista rysowane w C fontem 6×8 na 3D,
   `print` → log + nakładka konsoli (L+R+X), dolny ekran przestaje być konsolą 2D.
-- [ ] **P7 — Dźwięk**
+- [x] **P7 — Dźwięk** (D34)
   Dźwięki/strumienie zatrzymywane i zwalniane przy zamknięciu stanu kartridża (D14).
-  Maxmod: efekty WAV, muzyka `.mas` z SD (`mmPlayMAS`), strumieniowanie WAV/ADPCM z SD.
+  Maxmod: efekty WAV, muzyka `.mas` z SD (`mmPlayMAS`), strumieniowanie WAV z SD
+  (ADPCM — ewentualnie P9).
 - [ ] **P8 — Mapy kafelkowe**
 - [ ] **P9 — Narzędzie `litelua` na PC (Python)**
   `pack` (folder → `.lcart`), `audio` (MP3/OGG/FLAC → WAV ADPCM), `music` (→ `.mas`), `gfx`.
@@ -174,3 +179,10 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   - `ui` — przyciski, listy, okna (wspólne z kartridżami systemowymi, D27).
   Kolejność i zakres ustalić na starcie punktu (część może wejść wcześniej, np. `ui` w
   P10, `anim` przy P12).
+- [ ] **P18 — Chiptune jak NES: kanały PSG, sekwencer, tracker** (pomysł użytkownika)
+  Sprzęt DS: kanały 8–13 generują falę prostokątną z wypełnieniem (jak „pulse” NES),
+  14–15 szum (jak „noise”); trójkąt — mała zapętlona próbka. Kanały rezerwowane w Maxmodzie
+  (`mmLockChannels`), więc grają razem z efektami i muzyką z P7. Sekwencer wzorców w C
+  (równe tempo niezależnie od 30 FPS Lua), API Lua do odtwarzania i do grania nut na żywo,
+  format pliku utworu w kartridżu; edytor-tracker jako kartridż systemowy (obok `sfx`/
+  `music` z D27). Zakres ustalić na starcie punktu.

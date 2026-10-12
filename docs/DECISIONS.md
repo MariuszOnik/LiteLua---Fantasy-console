@@ -547,3 +547,37 @@ i niesymetryczne (nieparzysta liczba boków, wierzchołki zaokrąglane do piksel
   woła `ll_sys_quit()` (D32). Na liście i ekranie błędu — od razu `ll_sys_quit()`.
 - Starcatch: `_quit` zapisuje rekord z nieskończonej gry. Test: `tests/carts/gfx` loguje
   `sys.info()` i `_quit`; zapętlony `_quit` sprawdzony w melonDS (przerwany po 1 s).
+
+## D34 (2026-10-12) — Dźwięk (P7): efekty WAV, muzyka `.mas` lub strumień WAV
+Rozwija D7.
+- **Maxmod bez soundbanku** (`mmInitNoSoundbank`, licencja ISC): każdy kartridż ładuje
+  własne pliki. Kod: `source/ll_sound.c`.
+- **API globalne** jak grafika (D22): `sound(name)` → `sfx/<name>.wav` (cache po nazwie,
+  słabe wartości, jak `image`), `sfx(snd, [vol], [pan], [pitch])` → uchwyt,
+  `sfx_stop([h])`, `music([name], [loop])`, `music_volume(v)`. Pola dźwięku: `length`,
+  `rate`.
+- **Efekty:** WAV PCM 8/16-bit, mono/stereo (stereo miksowane do mono przy wczytaniu),
+  1000–48000 Hz, w RAM jako zewnętrzne próbki Maxmoda (`mmEffectEx` z polem `sample`;
+  `mmEffectExt` z nagłówka nie istnieje w bibliotece). Nagłówek próbki (`mm_ds_sample`) i
+  dane w jednym bloku — czyta je ARM7, więc blok jest zwalniany dopiero po końcu
+  ostatniego odtworzenia (licznik VBlanków, lista „do zwolnienia”), nie w `__gc`.
+- **Muzyka, jedna naraz:** `music/<name>.mas` (moduł z `mmutil -d -m`, cały w RAM,
+  `mmPlayMAS`) albo `music/<name>.wav` strumieniowany z karty: bufor pierścieniowy na pół
+  sekundy, wywołanie Maxmoda w przerwaniu timera 2 (timery 0+1 = `micros()`) kopiuje z
+  bufora (cisza przy niedoborze), `ll_sound_update` w obu połówkach klatki dočytuje do
+  8 KB z pliku. Strumień: PCM 8/16-bit, mono/stereo, ≤ 32768 Hz. ADPCM w strumieniu —
+  nie (Maxmod nie strumieniuje ADPCM; dekodowanie na ARM9 ewentualnie w P9).
+- **`.lcart`:** strumień czyta nieskompresowany wpis wprost z archiwum (własny `FILE*`,
+  przesunięcie z lokalnego nagłówka ZIP, `ll_cart_open_stream`); skompresowany → błąd z
+  podpowiedzią. `tools/litelua.py pack` zapisuje `.wav` bez kompresji.
+- **Pamięć:** dane dźwięku liczą się do limitu `memory` kartridża razem z Lua
+  (`ll_mem_charge/release`, decyzja użytkownika: jeden limit). Przy braku miejsca — pełne
+  GC i ponowna próba, potem błąd. `sys.stats().mem` pokazuje całość.
+- **Koniec kartridża (D14):** `ll_sound_stop_all` (przed ekranem błędu i przed
+  `lua_close`) zatrzymuje muzykę i efekty; `ll_sound_end` po `lua_close` czeka (≤ 3
+  VBlanki), aż cała pamięć dźwięku zostanie zwolniona. Po panice — dane porzuconego stanu
+  zostają (jak pamięć Lua).
+- **Test:** `tests/carts/sound` (dźwięki generowane przez `make_assets.py`: pisk 8-bit,
+  wybuch 16-bit stereo, melodia WAV, mały moduł MOD → `.mas`). melonDS: wczytanie,
+  moduł, strumień z folderu i `.mas` z `.lcart`, zwolnienie (75 → 30 KB), po zamknięciu
+  0 bajtów. Odsłuch i strumień WAV z `.lcart` — do sprawdzenia.

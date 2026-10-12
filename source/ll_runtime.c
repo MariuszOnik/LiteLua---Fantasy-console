@@ -28,6 +28,7 @@
 #include "ll_mem.h"
 #include "ll_runtime.h"
 #include "ll_sandbox.h"
+#include "ll_sound.h"
 #include "ll_stats.h"
 #include "ll_sys.h"
 
@@ -86,6 +87,7 @@ static int panic_handler(lua_State *L)
     if (msg == NULL)
         msg = "unprotected error";
     failed = true;
+    ll_sound_stop_all();
     ll_log("PANIC: %s", msg);
     ll_log_flush();
     result = ll_error_show(msg, &lua_mem) ? LL_RUN_RESTART : LL_RUN_MENU;
@@ -99,6 +101,7 @@ static void show_error(lua_State *L)
     if (msg == NULL)
         msg = "(error object is not a string)";
     failed = true;
+    ll_sound_stop_all();
 
     ll_log("ERROR (Lua mem %u/%u KB, peak %u KB):",
            (unsigned)(lua_mem.used / 1024), (unsigned)(lua_mem.limit / 1024),
@@ -204,6 +207,7 @@ static void register_api(lua_State *L)
     ll_stats_register(L);
     ll_gfx_register(L);
     ll_image_register(L);
+    ll_sound_register(L);
 }
 
 // Loads and runs the entry file; the chunk is named after its path in the
@@ -314,6 +318,7 @@ static void frame_loop(lua_State *L)
         ll_gfx_counts(SCREEN_TOP, &fs.polys_top, &fs.verts_top);
         if (!ok)
             return;
+        ll_sound_update();
         swiWaitForVBlank();
 
         ok = draw_screen(L, SCREEN_BOTTOM, &fs.draw_bottom_us);
@@ -327,6 +332,7 @@ static void frame_loop(lua_State *L)
         if (!read_input() || !call_hook(L, "_update", -1))
             return;
         fs.update_us = elapsed_us(t0);
+        ll_sound_update();
         swiWaitForVBlank();
     }
 }
@@ -349,6 +355,7 @@ LLRunResult ll_run(const LLCart *cart)
     ll_stats_reset(&lua_mem);
     ll_image_reset(cart);
     ll_gfx_font_reset();
+    ll_sound_begin(cart, &lua_mem);
     lua_State *L = lua_newstate(ll_mem_alloc, &lua_mem);
     if (L == NULL)
     {
@@ -362,6 +369,7 @@ LLRunResult ll_run(const LLCart *cart)
         ll_log("Lua state abandoned after panic (%u KB leaked)",
                (unsigned)(lua_mem.used / 1024));
         ll_log_flush();
+        ll_sound_end(); // Sounds of the abandoned state stay allocated too
         return result;
     }
     lua_atpanic(L, panic_handler);
@@ -377,7 +385,9 @@ LLRunResult ll_run(const LLCart *cart)
     if (!failed)
         call_quit(L);
 
+    ll_sound_stop_all();
     lua_close(L);
+    ll_sound_end(); // Frees sounds collected by lua_close
     if (result != LL_RUN_NEXT)
         ll_sys_discard(); // sys.run followed by an error, or L+R+B
 

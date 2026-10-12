@@ -15,6 +15,7 @@
 #include "ll_log.h"
 #include "ll_menu.h"
 #include "ll_runtime.h"
+#include "ll_sound.h"
 #include "ll_sys.h"
 
 int main(int argc, char **argv)
@@ -26,6 +27,7 @@ int main(int argc, char **argv)
     ll_log_init(fat_ok); // Also installs the VBlank interrupt handler
     ll_gfx_init();       // 3D on both screens (dual30)
     ll_cart_init(fat_ok);
+    ll_sound_init();     // Maxmod without a soundbank (P7)
 
     // Built-in files (nitro:/), e.g. libraries in nitro:/lib for require
     bool nitro_ok = nitroFSInit(NULL);

@@ -125,7 +125,7 @@ litelua/carts/mygame/
   main.lua      the code that starts the game (required)
   src/          more of your code, loaded with require
   lib/          libraries used by the game
-  gfx/ font/ map/ sfx/ music/ data/   assets (graphics and sound come later)
+  gfx/ sfx/ music/ font/ map/ data/   assets (gfx/ images, sfx/ sound effects, music/)
 ```
 
 The folder names are fixed, so every cartridge looks the same. The manifest `cart.lua`
@@ -304,6 +304,41 @@ text("GAME OVER", (256 - w) // 2, 92, 2)   -- centered
 `print` does not draw on the game screens: it writes to the log and to the console
 overlay (hold **L+R** and press **X** to see the last lines). Use `text` to show text in
 the game.
+
+### Sound
+
+Put sound effects in the cartridge's `sfx/` folder as WAV files and music in `music/`:
+
+```lua
+local jump = sound("jump")       -- sfx/jump.wav, loaded once
+
+function _init()
+  music("theme")                 -- music/theme.mas, loops
+end
+
+function _update()
+  if btnp("a") then sfx(jump) end              -- play
+  if btnp("b") then sfx(jump, 0.5, -1, 2) end  -- volume, pan (-1..1), pitch (2 = octave up)
+end
+```
+
+- **Sound effects** are WAV files, PCM 8 or 16 bit, mono or stereo (stereo is mixed down
+  to mono), up to 48 kHz. They are loaded into memory, so keep them short: 0.3 s at
+  22 kHz is about 7 KB (8 bit). `sfx` returns a handle for `sfx_stop(h)`; `sfx_stop()`
+  stops all of them.
+- **Music**, one piece at a time: a **module** `music/<name>.mas` (made from MOD, XM, S3M
+  or IT tracker files: `mmutil -d -m song.xm -omusic/song.mas`, `mmutil` comes with
+  BlocksDS; the `litelua` tool will do it in P9) is loaded into memory, typically
+  50–300 KB. A **WAV** `music("name.wav")` is streamed from the SD card: it can be minutes
+  long and uses only half a second of memory. WAV music: PCM 8 or 16 bit, mono or stereo,
+  at most 32 kHz. `music()` stops, `music(name, false)` plays once, `music_volume(v)` sets
+  the volume 0..1.
+- Sound memory counts in the cartridge's `memory` limit together with Lua
+  (`sys.stats().mem` shows both). Everything stops and is freed when the game ends.
+- MP3 or OGG? Convert them on the PC, e.g. with ffmpeg:
+  `ffmpeg -i song.mp3 -ac 1 -ar 22050 -c:a pcm_s16le music/song.wav` (music) or
+  `ffmpeg -i jump.mp3 -ac 1 -ar 22050 -c:a pcm_u8 sfx/jump.wav` (a small 8-bit effect).
+  In Audacity: resample to 22050 Hz and export as WAV, 16-bit PCM.
 
 ### Speed
 

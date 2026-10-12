@@ -42,3 +42,18 @@ void *ll_mem_alloc(void *ud, void *ptr, size_t osize, size_t nsize)
         m->peak = m->used;
     return p;
 }
+
+bool ll_mem_charge(LLMem *m, size_t size)
+{
+    if (m->limit != 0 && m->used + size > m->limit)
+        return false;
+    m->used += size;
+    if (m->used > m->peak)
+        m->peak = m->used;
+    return true;
+}
+
+void ll_mem_release(LLMem *m, size_t size)
+{
+    m->used -= size;
+}

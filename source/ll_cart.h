@@ -86,4 +86,11 @@ char *ll_cart_read(const LLCart *cart, const char *rel, size_t *size);
 // Opens a cart file (clean relative path, not in the save area) for reading.
 FILE *ll_cart_fopen(const LLCart *cart, const char *rel);
 
+// Opens a cart file for streaming from the SD card (P7): a new FILE of its
+// own, positioned at the file data, which take 'size' bytes from there. In a
+// .lcart the file must be stored uncompressed. Returns NULL with a message in
+// 'err' on failure.
+FILE *ll_cart_open_stream(const LLCart *cart, const char *rel, long *size,
+                          char *err, size_t err_size);
+
 #endif // LL_CART_H__

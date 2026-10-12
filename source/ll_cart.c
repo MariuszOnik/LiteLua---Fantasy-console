@@ -298,6 +298,41 @@ static FILE *mem_fopen(char *buf, size_t size)
     return f;
 }
 
+// Data offset and size of a stored (uncompressed) file of the archive
+static bool zip_stored_file(LLZip *z, const char *rel, long *start, long *size,
+                            char *err, size_t err_size)
+{
+    char name[LL_PATH_MAX];
+    int n = snprintf(name, sizeof(name), "%s%s", z->prefix, rel);
+    int index = n < 0 || (size_t)n >= sizeof(name)
+        ? -1 : mz_zip_reader_locate_file(&z->za, name, NULL, 0);
+    mz_zip_archive_file_stat st;
+    if (index < 0 || !mz_zip_reader_file_stat(&z->za, index, &st))
+    {
+        snprintf(err, err_size, "cannot read %s", rel);
+        return false;
+    }
+    if (st.m_method != 0)
+    {
+        snprintf(err, err_size, "%s is compressed in the .lcart; streamed "
+                 "files must be stored (tools/litelua.py pack stores .wav)", rel);
+        return false;
+    }
+
+    // Local header: 30 bytes, then the name and the extra field
+    unsigned char hdr[30];
+    if (zip_read(z->file, st.m_local_header_ofs, hdr, sizeof(hdr)) != sizeof(hdr)
+        || hdr[0] != 'P' || hdr[1] != 'K' || hdr[2] != 3 || hdr[3] != 4)
+    {
+        snprintf(err, err_size, "%s: bad .lcart entry", rel);
+        return false;
+    }
+    unsigned name_len = hdr[26] | hdr[27] << 8, extra_len = hdr[28] | hdr[29] << 8;
+    *start = (long)st.m_local_header_ofs + 30 + name_len + extra_len;
+    *size = (long)st.m_uncomp_size;
+    return true;
+}
+
 // --- Reading cart files -----------------------------------------------------
 
 char *ll_cart_read(const LLCart *cart, const char *rel, size_t *size)
@@ -546,4 +581,50 @@ void ll_cart_close(LLCart *cart)
     if (cart->zip)
         zip_close(cart->zip);
     cart->zip = NULL;
+}
+
+FILE *ll_cart_open_stream(const LLCart *cart, const char *rel, long *size,
+                          char *err, size_t err_size)
+{
+    long start = 0;
+    char path[LL_PATH_MAX];
+    if (cart->zip)
+    {
+        if (!zip_stored_file(cart->zip, rel, &start, size, err, err_size))
+            return NULL;
+        snprintf(path, sizeof(path), "%s", cart->root);
+    }
+    else
+    {
+        int n = snprintf(path, sizeof(path), "%s/%s", cart->root, rel);
+        if (n < 0 || (size_t)n >= sizeof(path))
+        {
+            snprintf(err, err_size, "path too long: %s", rel);
+            return NULL;
+        }
+    }
+
+    // A FILE of its own: the archive reader seeks in the shared one
+    FILE *f = fopen(path, "rb");
+    if (f == NULL)
+    {
+        snprintf(err, err_size, "cannot read %s", rel);
+        return NULL;
+    }
+    if (!cart->zip)
+    {
+        if (fseek(f, 0, SEEK_END) != 0 || (*size = ftell(f)) < 0)
+        {
+            fclose(f);
+            snprintf(err, err_size, "cannot read %s", rel);
+            return NULL;
+        }
+    }
+    if (fseek(f, start, SEEK_SET) != 0)
+    {
+        fclose(f);
+        snprintf(err, err_size, "cannot read %s", rel);
+        return NULL;
+    }
+    return f;
 }

@@ -6,7 +6,8 @@
 #   python tools/litelua.py pack <cart folder> [out.lcart] [--store]
 #
 # pack: folder -> .lcart (a ZIP with cart.lua at the top, D6). Files are
-# deflated, except already compressed ones (PNG, ...), which are stored.
+# deflated, except already compressed ones (PNG, ...) and WAV, which are
+# stored: music is streamed straight from the archive (P7).
 # Hidden files (starting with '.') are skipped. More commands come in P9.
 
 import argparse
@@ -14,7 +15,7 @@ import pathlib
 import sys
 import zipfile
 
-STORED_EXT = {".png", ".mas", ".lcart", ".zip"}
+STORED_EXT = {".png", ".mas", ".wav", ".lcart", ".zip"}
 
 
 def pack(src: pathlib.Path, out: pathlib.Path, store: bool) -> int:

@@ -16,7 +16,7 @@ API_DIR = ROOT / "docs" / "api"
 OUT = ROOT / "docs" / "API.md"
 
 # Module order in the generated document; others follow alphabetically
-ORDER = ["core", "input", "gfx", "files", "sys"]
+ORDER = ["core", "input", "gfx", "sound", "files", "sys"]
 
 TOKEN_RE = re.compile(r"""
     (?P<ws>\s+)
