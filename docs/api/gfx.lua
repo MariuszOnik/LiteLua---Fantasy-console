@@ -4,7 +4,9 @@ return {
   module = "gfx",
   title = "Graphics",
   summary = "Drawing shapes and images. Call these in _draw; the screen is "
-         .. "redrawn every frame. Colors: 0-15 = palette, or 0xRRGGBB.",
+         .. "redrawn every frame. Colors: 0-15 = palette, or 0xRRGGBB. "
+         .. "The settings (cls, color, alpha, camera, clip, tint) are reset "
+         .. "at the start of every _draw and only work inside it.",
   since = "P4",
   entries = {
     {
@@ -14,7 +16,7 @@ return {
       desc = "Clears the screen with a color. Also covers everything drawn "
           .. "before it in this frame. Call it first in _draw.",
       example = [[
-function _draw(screen)
+function _draw(surface)
   cls(1)
 end]],
     },

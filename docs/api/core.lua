@@ -29,14 +29,18 @@ end]],
     },
     {
       name = "_draw", kind = "callback",
-      sig = "_draw(screen)",
-      args = { { "screen", "integer", "TOP (0) or BOTTOM (1)" } },
-      desc = "Called for each screen once per game frame: first with TOP, "
-          .. "then with BOTTOM. The screens are drawn in turns, one per "
-          .. "screen refresh, so each _draw has about 16 ms.",
+      sig = "_draw(surface)",
+      args = { { "surface", "integer", "TOP (0) or BOTTOM (1)" } },
+      desc = "Called for each drawing surface once per game frame: first "
+          .. "with TOP, then with BOTTOM. A surface is 256x192; on the DS "
+          .. "TOP is the top screen and BOTTOM the touch screen. The surfaces "
+          .. "are drawn in turns, one per screen refresh, so each _draw has "
+          .. "about 16 ms. Each _draw starts with the default color, alpha, "
+          .. "camera, clip, tint and background: nothing carries over from "
+          .. "the other surface or the last frame.",
       example = [[
-function _draw(screen)
-  if screen == TOP then
+function _draw(surface)
+  if surface == TOP then
     -- draw the game
   else
     -- draw the map or the HUD

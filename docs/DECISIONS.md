@@ -479,7 +479,7 @@ było we wspólnym stanie rysowania).
   działają (reset i tak by je nadpisał); pierwsze takie wywołanie = jeden wpis w logu.
   Funkcje rysujące poza `_draw` są ignorowane już dziś. Wspólna kamera dla obu powierzchni:
   własna zmienna gry i `camera(cx, cy)` na początku `_draw`.
-- **Implementacja:** `reset_draw_state()` (wartości domyślne w jednym miejscu) wołane z
+- **Implementacja (zrobione 2026-10-12):** `reset_draw_state()` (wartości domyślne w jednym miejscu) wołane z
   `ll_gfx_begin` i z `ll_gfx_reset` (która dokłada `active = false` i kolor tła obu ekranów).
   Ekran błędu i lista (`ll_gfx_frame`) dostają reset automatycznie; ich `ll_gfx_reset()`
   staje się zbędne. `draw_overlay` tylko ustawia swój stan, bez zapisywania i odtwarzania

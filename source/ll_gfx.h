@@ -19,12 +19,13 @@ void ll_gfx_init(void);
 // Called by the VBlank interrupt: shows the screen whose frame was flushed.
 void ll_gfx_vblank(void);
 
-// Resets the draw state (color, camera, clip, alpha) for a new cart and
-// shows an empty frame.
+// Resets the draw state (color, camera, clip, alpha, tint, backgrounds) for a
+// new cart.
 void ll_gfx_reset(void);
 
-// Starts a frame of the given screen (0 = top, 1 = bottom). Frames of the two
-// screens must alternate, one per VBlank.
+// Starts a frame of the given screen (0 = top, 1 = bottom) with the default
+// draw state and background (D30). Frames of the two screens must alternate,
+// one per VBlank.
 void ll_gfx_begin(int screen);
 
 // Ends the frame started by ll_gfx_begin and sends it to the 3D engine; the
@@ -52,8 +53,7 @@ void ll_gfx_text(int x, int y, const char *s, size_t len, u32 color);
 void ll_gfx_alpha(int alpha); // 0..31
 
 // Draws one game frame of both screens: draw(0, ud), then draw(1, ud), each
-// followed by its VBlank. Uses the current draw state (call ll_gfx_reset for
-// a clean one).
+// followed by its VBlank. Each screen starts with the default draw state.
 void ll_gfx_frame(void (*draw)(int screen, void *ud), void *ud);
 
 // Registers the drawing functions as globals.

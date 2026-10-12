@@ -1,12 +1,18 @@
 -- LiteLua P4a graphics test: every drawing function on the top screen.
 -- A: stress test on/off (Up/Down: more/fewer rectangles), B: back to the list.
 -- The bottom screen shows the draw time.
+-- D30: the top screen leaves its draw state dirty; the bottom screen must
+-- start clean (the "state reset ok" line is white, not shifted or clipped).
 
 local t = 0
 local stress, count = false, 500
 local draw_us, frames = 0, 0
 
 local status = { "", "", "" }
+
+function _init()
+  color(2) -- outside _draw: no effect, one line in the log (D30)
+end
 
 function _update()
   t = t + 1
@@ -93,6 +99,12 @@ function _draw(screen)
     if stress then stress_scene() else scene() end
     draw_us = draw_us + (micros() - t0)
     frames = frames + 1
+    -- Left dirty on purpose: the next _draw must not see it (D30)
+    camera(40, 40, 2)
+    clip(0, 0, 8, 8)
+    alpha(0.3)
+    tint(2)
+    color(2)
   else
     if frames >= 30 then
       status[1] = stress and ("stress: " .. count .. " rects") or "scene"
@@ -108,5 +120,7 @@ function _draw(screen)
     text("A: stress test  Up/Down: count", 0, 10, 13)
     text("B: back to the list", 0, 20, 13)
     for i, s in ipairs(status) do text(s, 0, 36 + i * 10, 4) end
+    text("D30: state reset ok", 0, 90)
+    rect(0, 100, 120, 10)
   end
 end

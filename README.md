@@ -67,8 +67,8 @@ function _update()
   if btn("down")  then y = y + 2 end
 end
 
-function _draw(screen)
-  if screen == TOP then
+function _draw(surface)
+  if surface == TOP then
     cls(1)
     circfill(x, y, 8, 10)
   else
@@ -170,8 +170,8 @@ function _update()          -- 30 times per second: game logic
   if btnp("a") then print("jump!") end
 end
 
-function _draw(screen)      -- once per screen per frame
-  if screen == TOP then
+function _draw(surface)      -- once per screen per frame
+  if surface == TOP then
     cls(1)                  -- clear with palette color 1
     circfill(x, y, 8, 10)   -- the player
   end
@@ -186,7 +186,8 @@ The game runs at **30 frames per second** and draws on **both screens**. Every f
 2. `_draw(TOP)` is called for the top screen,
 3. `_draw(BOTTOM)` is called for the bottom (touch) screen.
 
-`TOP` is `0` and `BOTTOM` is `1`. Keep game logic in `_update` and only drawing in `_draw`.
+`TOP` is `0` and `BOTTOM` is `1`. They name two drawing surfaces of 256×192 pixels; on
+the DS they are the two screens, and `touch()` gives positions on `BOTTOM`. Keep game logic in `_update` and only drawing in `_draw`.
 
 The DS has one 3D engine, so it draws the two screens in turns: a game frame is two
 screen refreshes (1/60 s each), one per screen. That gives each `_draw` about **16 ms**;
@@ -201,9 +202,12 @@ hardware, and the picture is built again in every frame: whatever `_draw` does n
 not on the screen, so start with `cls()` and draw everything. Things drawn later cover
 things drawn earlier.
 
-Both screens are drawn the same way. The drawing settings (`color`, `alpha`, `camera`,
-`clip`, `tint`) are shared, so set them in each `_draw` where you need them; `cls` sets the
-background of the screen being drawn.
+Both screens are drawn the same way. Every `_draw` starts with the default settings:
+color 12, opaque, no camera, no clip, no tint, background 0. Whatever one `_draw` sets
+(`color`, `alpha`, `camera`, `clip`, `tint`, `cls`) does not carry over to the other
+screen or the next frame, so you never have to reset it at the end. The settings only
+work inside `_draw`; to use the same camera on both screens, keep it in a variable and
+call `camera(cx, cy)` at the start of each `_draw`.
 
 ```lua
 cls(1)                          -- clear with a color
@@ -240,7 +244,7 @@ hero = image("hero")             -- gfx/hero.png
 walk = image("walk", 16, 16)     -- a sheet of 16×16 frames, numbered from 0
 door = sub(tiles, 32, 0, 16, 24) -- a part of another image (no copy)
 
-function _draw(screen)
+function _draw(surface)
   cls(1)
   spr(hero, x, y)                          -- top left corner at x, y
   spr(walk, x, y, t // 6 % walk.frames)    -- animation

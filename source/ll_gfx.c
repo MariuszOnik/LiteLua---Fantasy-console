@@ -13,7 +13,9 @@
 // so the drawing order is kept.
 //
 // The 3D image is rebuilt in every frame: what is not drawn in _draw is not
-// on the screen.
+// on the screen. The draw state is rebuilt too (D30): every _draw starts with
+// the default color, alpha, camera, clip, tint and background, whatever the
+// previous _draw (other screen, last frame) has set.
 //
 // Both screens use the 3D engine (dual30, D5, D28), like the BlocksDS example
 // video_capture/dual_screen_3d: the engine renders the top and the bottom
@@ -79,6 +81,7 @@ static struct {
     u16 tint[4];       // Sprite corner colors: top left, top right,
                        // bottom right, bottom left
     bool tint_corners; // The four tint colors differ
+    bool warned;       // Draw state set outside _draw was logged (once per cart)
 } gs;
 
 static u16 rgb15(u32 rgb)
@@ -334,9 +337,10 @@ void ll_gfx_init(void)
     ll_gfx_font_reset(); // Also for the cart list before any cart runs
 }
 
-void ll_gfx_reset(void)
+// The draw state every _draw starts with (D30); the background is reset
+// separately, it is read only when the frame ends
+static void reset_draw_state(void)
 {
-    gs.active = false;
     gs.color = palette[DEFAULT_COLOR];
     gs.alpha = 31;
     gs.cam_x = gs.cam_y = 0;
@@ -344,11 +348,18 @@ void ll_gfx_reset(void)
     gs.clip_x = gs.clip_y = 0;
     gs.clip_w = SCREEN_W;
     gs.clip_h = SCREEN_H;
-    gs.clear_color[0] = gs.clear_color[1] = palette[0];
-    gs.bound = -1;
     for (int i = 0; i < 4; i++)
         gs.tint[i] = WHITE;
     gs.tint_corners = false;
+}
+
+void ll_gfx_reset(void)
+{
+    gs.active = false;
+    reset_draw_state();
+    gs.clear_color[0] = gs.clear_color[1] = palette[0];
+    gs.bound = -1;
+    gs.warned = false;
 }
 
 void ll_gfx_begin(int screen)
@@ -362,23 +373,20 @@ void ll_gfx_begin(int screen)
     gs.active = true;
     gs.depth = 0;
     gs.bound = -1;
+    reset_draw_state();
+    gs.clear_color[gs.screen] = palette[0];
     apply_clip();
 }
 
 static void draw_text(const unsigned char *s, size_t len, int x0, int y, u16 color);
 
 // Statistics overlay: a translucent box in the top left corner, drawn in
-// screen space whatever the game's camera, zoom, clip and alpha are
+// screen space whatever the game's camera, zoom, clip and alpha are. Nothing
+// is drawn after it and the next _draw resets the state, so the game's state
+// is not restored.
 static void draw_overlay(const char *text)
 {
-    int cam_x = gs.cam_x, cam_y = gs.cam_y, zoom = gs.zoom, alpha = gs.alpha;
-    int clip_x = gs.clip_x, clip_y = gs.clip_y, clip_w = gs.clip_w, clip_h = gs.clip_h;
-
-    gs.cam_x = gs.cam_y = 0;
-    gs.zoom = ZOOM_ONE;
-    gs.clip_x = gs.clip_y = 0;
-    gs.clip_w = SCREEN_W;
-    gs.clip_h = SCREEN_H;
+    reset_draw_state();
     apply_clip();
 
     int cols = 0, max_cols = 0, lines = 1;
@@ -394,9 +402,6 @@ static void draw_overlay(const char *text)
     draw_box(0, 0, max_cols * FONT_W + 4, lines * FONT_H + 4, palette[0]);
     gs.alpha = 31;
     draw_text((const unsigned char *)text, strlen(text), 2, 2, palette[5]);
-
-    gs.cam_x = cam_x, gs.cam_y = cam_y, gs.zoom = zoom, gs.alpha = alpha;
-    gs.clip_x = clip_x, gs.clip_y = clip_y, gs.clip_w = clip_w, gs.clip_h = clip_h;
 }
 
 static int count_polys[2], count_verts[2];
@@ -436,10 +441,22 @@ void ll_gfx_end(const char *overlay)
 
 // --- Lua API ----------------------------------------------------------------
 
+// The draw state only lives inside _draw (D30): set in _init or _update it
+// would be reset before the next _draw. Logged once per cart.
+static void check_in_draw(const char *name)
+{
+    if (!gs.active && !gs.warned)
+    {
+        ll_log("%s() outside _draw has no effect", name);
+        gs.warned = true;
+    }
+}
+
 // cls([col]): clears the screen. Everything drawn before in this frame is
 // covered too.
 static int l_cls(lua_State *L)
 {
+    check_in_draw("cls");
     u16 color = lua_isnoneornil(L, 1) ? palette[0] : arg_color(L, 1);
     if (gs.active)
         gs.clear_color[gs.screen] = color;
@@ -466,6 +483,7 @@ static int l_cls(lua_State *L)
 // color([col]): sets the color used when a function gets none
 static int l_color(lua_State *L)
 {
+    check_in_draw("color");
     gs.color = lua_isnoneornil(L, 1) ? palette[DEFAULT_COLOR] : arg_color(L, 1);
     return 0;
 }
@@ -473,6 +491,7 @@ static int l_color(lua_State *L)
 // alpha([a]): opacity 0..1 of what is drawn next (1 = opaque)
 static int l_alpha(lua_State *L)
 {
+    check_in_draw("alpha");
     lua_Number a = luaL_optnumber(L, 1, 1);
     int v = (int)(a * 31 + 0.5f);
     gs.alpha = clamp(v, 0, 31);
@@ -482,6 +501,7 @@ static int l_alpha(lua_State *L)
 // camera([x, y [, zoom]]): screen = (world - camera) * zoom
 static int l_camera(lua_State *L)
 {
+    check_in_draw("camera");
     gs.cam_x = lua_isnoneornil(L, 1) ? 0 : arg_int(L, 1);
     gs.cam_y = lua_isnoneornil(L, 2) ? 0 : arg_int(L, 2);
     lua_Number zoom = luaL_optnumber(L, 3, 1);
@@ -493,6 +513,7 @@ static int l_camera(lua_State *L)
 // clip([x, y, w, h]): limits drawing to a screen rectangle (no camera)
 static int l_clip(lua_State *L)
 {
+    check_in_draw("clip");
     if (lua_isnoneornil(L, 1))
     {
         gs.clip_x = gs.clip_y = 0;
@@ -985,6 +1006,7 @@ static int l_textw(lua_State *L)
 // bottom left. tint() removes the tint.
 static int l_tint(lua_State *L)
 {
+    check_in_draw("tint");
     int n = lua_gettop(L);
     if (n == 0 || lua_isnil(L, 1))
     {
