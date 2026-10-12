@@ -16,6 +16,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   (`_draw(surface)`). Test: kartridż `gfx` celowo zostawia brudny stan na górze — dolny
   ekran ma pokazać białe „D30: state reset ok” z ramką, a log `color() outside _draw has
   no effect`. Do sprawdzenia w melonDS.
+- **D31 wdrożone:** koła piksel w piksel (r ≤ 16), `stroke(w)` dla `line/rect/circ/tri`,
+  test `tests/carts/shapes` (obraz sprawdzony w melonDS). Na konsoli: czasy `shapes`.
 - **Następny krok:** P7 — dźwięk (Maxmod, D7). Najpierw: wynik testu P6 na konsoli (log
   przez FTP: oba ekrany bez migania, nakładki L+R+X/Y, ekran błędu, lista z dotykiem,
   kartridże testowe, `starcatch`).

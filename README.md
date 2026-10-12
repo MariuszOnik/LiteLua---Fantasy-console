@@ -203,8 +203,8 @@ not on the screen, so start with `cls()` and draw everything. Things drawn later
 things drawn earlier.
 
 Both screens are drawn the same way. Every `_draw` starts with the default settings:
-color 12, opaque, no camera, no clip, no tint, background 0. Whatever one `_draw` sets
-(`color`, `alpha`, `camera`, `clip`, `tint`, `cls`) does not carry over to the other
+color 12, opaque, no camera, no clip, no tint, 1 pixel lines, background 0. Whatever one
+`_draw` sets (`color`, `alpha`, `camera`, `clip`, `tint`, `stroke`, `cls`) does not carry over to the other
 screen or the next frame, so you never have to reset it at the end. The settings only
 work inside `_draw`; to use the same camera on both screens, keep it in a variable and
 call `camera(cx, cy)` at the start of each `_draw`.
@@ -234,6 +234,13 @@ default).
 - `camera(x, y)` scrolls: everything drawn after it moves by `-x, -y`. `camera(x, y, 2)`
   also zooms in 2× (from 1/16 to 16). `camera()` resets it (draw the HUD after that).
 - `clip(x, y, w, h)` draws only inside that screen rectangle; `clip()` resets it.
+- `stroke(w)` makes lines and outlines (`line`, `rect`, `circ`, `tri`) `w` pixels thick,
+  `stroke()` goes back to 1. Outlines of `rect` and `circ` grow inward; thick lines get
+  square ends, so the corners of `tri` are closed.
+
+Circles up to radius 16 are drawn pixel by pixel, like in pixel art editors: they are
+symmetric and `circ` is exactly the edge of `circfill` with the same radius. Larger
+circles are smooth polygons.
 
 ### Images and sprites
 

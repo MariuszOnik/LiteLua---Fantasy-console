@@ -81,6 +81,7 @@ static struct {
     u16 tint[4];       // Sprite corner colors: top left, top right,
                        // bottom right, bottom left
     bool tint_corners; // The four tint colors differ
+    int stroke;        // Width of lines and outlines in pixels (D31)
     bool warned;       // Draw state set outside _draw was logged (once per cart)
 } gs;
 
@@ -187,14 +188,43 @@ static inline v16 to_vertex(int32_t world_q, int cam)
 #define VXQ(q) to_vertex(q, gs.cam_x)
 #define VYQ(q) to_vertex(q, gs.cam_y)
 
-static void emit_quad(int x1, int y1, int x2, int y2)
+// A quad of a GL_QUADS batch, corners in pixels
+static void quad_px(int x1, int y1, int x2, int y2)
 {
-    glBegin(GL_QUADS);
     glVertex3v16(VX(x1), VY(y1), gs.depth);
     glVertex2v16(VX(x1), VY(y2));
     glVertex2v16(VX(x2), VY(y2));
     glVertex2v16(VX(x2), VY(y1));
+}
+
+static void emit_quad(int x1, int y1, int x2, int y2)
+{
+    glBegin(GL_QUADS);
+    quad_px(x1, y1, x2, y2);
     glEnd();
+}
+
+// Thick line (stroke > 1, D31), a quad of a GL_QUADS batch: a rectangle
+// around the segment between the pixel centers, with square caps (extended
+// by half the width at both ends, which also closes the corners of
+// outlines). Even widths are shifted by half a pixel, so horizontal and
+// vertical lines cover whole pixels.
+static void quad_thick_line(int x1, int y1, int x2, int y2, int w)
+{
+    float o = (w & 1) ? 0.5f : 1.0f;
+    float ax = x1 + o, ay = y1 + o, bx = x2 + o, by = y2 + o;
+    float dx = bx - ax, dy = by - ay;
+    float len = sqrtf(dx * dx + dy * dy);
+    float h = w * 0.5f;
+    // u: half width along the line, n = (-uy, ux): half width across it
+    float ux = h, uy = 0; // A point is a w x w square
+    if (len > 0.001f)
+        ux = dx * h / len, uy = dy * h / len;
+    glVertex3v16(VXQ(lroundf((ax - ux - uy) * 4)), VYQ(lroundf((ay - uy + ux) * 4)),
+                 gs.depth);
+    glVertex2v16(VXQ(lroundf((ax - ux + uy) * 4)), VYQ(lroundf((ay - uy - ux) * 4)));
+    glVertex2v16(VXQ(lroundf((bx + ux + uy) * 4)), VYQ(lroundf((by + uy - ux) * 4)));
+    glVertex2v16(VXQ(lroundf((bx + ux - uy) * 4)), VYQ(lroundf((by + uy + ux) * 4)));
 }
 
 // A line is a degenerate triangle, which the DS draws as a line (like gl2d)
@@ -211,6 +241,14 @@ static void draw_line(int x1, int y1, int x2, int y2, u16 color)
 {
     if (!prim_begin(color))
         return;
+    if (gs.stroke > 1)
+    {
+        glBegin(GL_QUADS);
+        quad_thick_line(x1, y1, x2, y2, gs.stroke);
+        glEnd();
+        prim_end();
+        return;
+    }
     // Include the last pixel: extend the end point by one pixel along the
     // longer axis (extending both would tilt horizontal/vertical lines)
     int dx = x2 - x1, dy = y2 - y1;
@@ -230,11 +268,89 @@ static void draw_box(int x, int y, int w, int h, u16 color)
     prim_end();
 }
 
-// Number of segments for a circle of radius r
+// Circles up to this radius are drawn pixel by pixel from horizontal spans,
+// larger ones as polygons (D31)
+#define CIRCLE_SPAN_R 16
+
+// Number of segments of a polygon circle: a multiple of 8, so the polygon is
+// symmetric
 static int circle_segments(int r)
 {
-    int n = 8 + r / 2;
-    return n > 48 ? 48 : n;
+    int n = (8 + r / 2 + 7) & ~7;
+    return n > 64 ? 64 : n;
+}
+
+// Half widths of the rows of a filled circle of radius r <= CIRCLE_SPAN_R:
+// half[dy] is the largest dx with dx^2 + dy^2 <= r^2 + r (pixel centers
+// inside radius r + 0.5), -1 outside (dy > r). Integers only: the ARM9 has no
+// FPU, so a sqrtf per row would cost more than drawing the circle.
+static void disc_halves(int r, int half[CIRCLE_SPAN_R + 2])
+{
+    for (int dy = 0; dy <= CIRCLE_SPAN_R + 1; dy++)
+        half[dy] = -1;
+    int t = r * r + r, x = 0;
+    for (int dy = r; dy >= 0; dy--)
+    {
+        while ((x + 1) * (x + 1) + dy * dy <= t)
+            x++;
+        half[dy] = x;
+    }
+}
+
+// Rows y1..y2-1 of a span circle: the right half covers dx = lo..hi and the
+// left half mirrors it; lo = 0 is one span over the whole row
+static void quad_rows(int cx, int y1, int y2, int lo, int hi)
+{
+    if (lo == 0)
+    {
+        quad_px(cx - hi, y1, cx + hi + 1, y2);
+        return;
+    }
+    quad_px(cx + lo, y1, cx + hi + 1, y2);
+    quad_px(cx - hi, y1, cx - lo + 1, y2);
+}
+
+// Pixel exact circle (r <= CIRCLE_SPAN_R): w = 0 is filled, otherwise an
+// outline w pixels thick inside the radius. The thin outline (w = 1) is the
+// edge of the filled circle (its pixels with an outer neighbor outside), so
+// it matches circfill and stays 8-connected. Rows with the same spans are
+// merged into one quad.
+static void circle_spans(int cx, int cy, int r, int w, u16 color)
+{
+    if (!prim_begin(color))
+        return;
+    int outer[CIRCLE_SPAN_R + 2], inner[CIRCLE_SPAN_R + 2];
+    disc_halves(r, outer);
+    if (w > 1)
+        disc_halves(r - w, inner); // r - w < 0: all -1, the circle is filled
+    glBegin(GL_QUADS);
+    int run_lo = 0, run_hi = 0, run_y = -r;
+    for (int dy = -r; dy <= r + 1; dy++)
+    {
+        int lo = 0, hi = -2; // Past the last row: differs from every row
+        if (dy <= r)
+        {
+            int ady = dy < 0 ? -dy : dy;
+            hi = outer[ady];
+            if (w == 1)
+                lo = outer[ady + 1] + 1;
+            else if (w > 1)
+                lo = inner[ady] + 1;
+            if (lo > hi)
+                lo = hi;
+        }
+        if (dy == -r)
+        {
+            run_lo = lo, run_hi = hi;
+            continue;
+        }
+        if (lo == run_lo && hi == run_hi)
+            continue;
+        quad_rows(cx, cy + run_y, cy + dy, run_lo, run_hi);
+        run_lo = lo, run_hi = hi, run_y = dy;
+    }
+    glEnd();
+    prim_end();
 }
 
 // --- Frame ------------------------------------------------------------------
@@ -351,6 +467,7 @@ static void reset_draw_state(void)
     for (int i = 0; i < 4; i++)
         gs.tint[i] = WHITE;
     gs.tint_corners = false;
+    gs.stroke = 1;
 }
 
 void ll_gfx_reset(void)
@@ -539,6 +656,16 @@ static int l_clip(lua_State *L)
     return 0;
 }
 
+// stroke([w]): width in pixels of lines and outlines drawn next (D31)
+static int l_stroke(lua_State *L)
+{
+    check_in_draw("stroke");
+    lua_Number w = luaL_optnumber(L, 1, 1);
+    luaL_argcheck(L, w >= 1 && w <= 64, 1, "width must be 1 .. 64");
+    gs.stroke = (int)w;
+    return 0;
+}
+
 // pset(x, y, [col])
 static int l_pset(lua_State *L)
 {
@@ -577,22 +704,42 @@ static int l_rectfill(lua_State *L)
     return 0;
 }
 
-// rect(x, y, w, h, [col]): outline, 1 pixel wide, inside the rectangle
+// rect(x, y, w, h, [col]): outline, stroke() pixels wide, inside the
+// rectangle
 static int l_rect(lua_State *L)
 {
     int x, y, w, h;
     arg_rect(L, &x, &y, &w, &h);
     u16 color = arg_color(L, 5);
-    if (w <= 2 || h <= 2)
+    int t = gs.stroke;
+    if (2 * t >= w || 2 * t >= h)
     {
         draw_box(x, y, w, h, color);
         return 0;
     }
-    draw_box(x, y, w, 1, color);
-    draw_box(x, y + h - 1, w, 1, color);
-    draw_box(x, y + 1, 1, h - 2, color);
-    draw_box(x + w - 1, y + 1, 1, h - 2, color);
+    if (!prim_begin(color))
+        return 0;
+    glBegin(GL_QUADS);
+    quad_px(x, y, x + w, y + t);
+    quad_px(x, y + h - t, x + w, y + h);
+    quad_px(x, y + t, x + t, y + h - t);
+    quad_px(x + w - t, y + t, x + w, y + h - t);
+    glEnd();
+    prim_end();
     return 0;
+}
+
+// Vertex i of n of a polygon circle: center (qx, qy) and radius qr in
+// quarter pixels. Fixed point sine table (no FPU on the ARM9).
+static void circle_vertex(int qx, int qy, int qr, int i, int n, bool first)
+{
+    s16 a = (s16)((i % n) * DEGREES_IN_CIRCLE / n);
+    v16 x = VXQ(qx + (int)(((int64_t)qr * cosLerp(a) + 2048) >> 12));
+    v16 y = VYQ(qy + (int)(((int64_t)qr * sinLerp(a) + 2048) >> 12));
+    if (first)
+        glVertex3v16(x, y, gs.depth);
+    else
+        glVertex2v16(x, y);
 }
 
 // circfill(x, y, r, [col])
@@ -602,9 +749,9 @@ static int l_circfill(lua_State *L)
     u16 color = arg_color(L, 4);
     if (r < 0)
         return 0;
-    if (r == 0)
+    if (r <= CIRCLE_SPAN_R)
     {
-        draw_box(cx, cy, 1, 1, color);
+        circle_spans(cx, cy, r, 0, color);
         return 0;
     }
     if (!prim_begin(color))
@@ -613,52 +760,65 @@ static int l_circfill(lua_State *L)
     // Triangle strip over a convex polygon: v0, v1, vn-1, v2, vn-2, ...
     // Pixel centers: the circle covers cx-r .. cx+r inclusive.
     int n = circle_segments(r);
-    float fr = r + 0.5f, fx = cx + 0.5f, fy = cy + 0.5f;
+    int qx = cx * 4 + 2, qy = cy * 4 + 2, qr = r * 4 + 2;
     glBegin(GL_TRIANGLE_STRIP);
     for (int k = 0; k < n; k++)
     {
         int i = k == 0 ? 0 : (k & 1) ? (k + 1) / 2 : n - k / 2;
-        float a = i * (2 * (float)M_PI) / n;
-        int vx = (int)floorf(fx + fr * cosf(a));
-        int vy = (int)floorf(fy + fr * sinf(a));
-        if (k == 0)
-            glVertex3v16(VX(vx), VY(vy), gs.depth);
-        else
-            glVertex2v16(VX(vx), VY(vy));
+        circle_vertex(qx, qy, qr, i, n, k == 0);
     }
     glEnd();
     prim_end();
     return 0;
 }
 
-// circ(x, y, r, [col]): outline made of lines
+// circ(x, y, r, [col]): outline, stroke() pixels thick inside the radius
 static int l_circ(lua_State *L)
 {
     int cx = arg_int(L, 1), cy = arg_int(L, 2), r = arg_int(L, 3);
     u16 color = arg_color(L, 4);
+    int w = gs.stroke;
     if (r < 0)
         return 0;
-    if (r == 0)
+    if (r <= CIRCLE_SPAN_R)
     {
-        draw_box(cx, cy, 1, 1, color);
+        circle_spans(cx, cy, r, w, color);
         return 0;
     }
+    if (!prim_begin(color))
+        return 0;
 
     int n = circle_segments(r);
-    float fr = r + 0.5f, fx = cx + 0.5f, fy = cy + 0.5f;
-    int px = (int)floorf(fx + fr), py = (int)floorf(fy);
-    for (int i = 1; i <= n; i++)
+    int qx = cx * 4 + 2, qy = cy * 4 + 2;
+    if (w == 1)
     {
-        float a = i * (2 * (float)M_PI) / n;
-        int x = (int)floorf(fx + fr * cosf(a));
-        int y = (int)floorf(fy + fr * sinf(a));
-        if (!prim_begin(color))
-            return 0;
-        emit_line(px, py, x, y);
-        prim_end();
-        px = x;
-        py = y;
+        // Lines through the pixel centers at distance r, as degenerate
+        // triangles of one primitive
+        int qr = r * 4;
+        glBegin(GL_TRIANGLES);
+        for (int i = 0; i < n; i++)
+        {
+            circle_vertex(qx, qy, qr, i, n, true);
+            circle_vertex(qx, qy, qr, i + 1, n, false);
+            circle_vertex(qx, qy, qr, i + 1, n, false);
+        }
+        glEnd();
     }
+    else
+    {
+        // Ring: a strip between the outer edge and w pixels inside
+        int qr = r * 4 + 2, qi = qr - w * 4;
+        if (qi < 0)
+            qi = 0;
+        glBegin(GL_TRIANGLE_STRIP);
+        for (int i = 0; i <= n; i++)
+        {
+            circle_vertex(qx, qy, qr, i, n, i == 0);
+            circle_vertex(qx, qy, qi, i, n, false);
+        }
+        glEnd();
+    }
+    prim_end();
     return 0;
 }
 
@@ -684,6 +844,19 @@ static int l_tri(lua_State *L)
     int x1 = arg_int(L, 1), y1 = arg_int(L, 2), x2 = arg_int(L, 3);
     int y2 = arg_int(L, 4), x3 = arg_int(L, 5), y3 = arg_int(L, 6);
     u16 color = arg_color(L, 7);
+    if (gs.stroke > 1)
+    {
+        // One primitive: the overlapping corners are not blended twice
+        if (!prim_begin(color))
+            return 0;
+        glBegin(GL_QUADS);
+        quad_thick_line(x1, y1, x2, y2, gs.stroke);
+        quad_thick_line(x2, y2, x3, y3, gs.stroke);
+        quad_thick_line(x3, y3, x1, y1, gs.stroke);
+        glEnd();
+        prim_end();
+        return 0;
+    }
     draw_line(x1, y1, x2, y2, color);
     draw_line(x2, y2, x3, y3, color);
     draw_line(x3, y3, x1, y1, color);
@@ -1075,6 +1248,7 @@ void ll_gfx_register(lua_State *L)
         { "alpha", l_alpha },
         { "camera", l_camera },
         { "clip", l_clip },
+        { "stroke", l_stroke },
         { "pset", l_pset },
         { "line", l_line },
         { "rect", l_rect },

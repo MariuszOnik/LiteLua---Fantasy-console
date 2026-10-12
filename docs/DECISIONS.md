@@ -493,3 +493,30 @@ było we wspólnym stanie rysowania).
   nie daje wspólnych 33 ms za darmo. Geometria powierzchni musi trafić do silnika 3D przed
   jej VBlankiem, więc pełny wspólny budżet wymaga nagrywania klatki N podczas wysyłania
   N−1 (+1 klatka opóźnienia, ~33 ms). Tylko po pomiarach na konsoli (FIFO/DMA, VBlanki).
+
+## D31 (2026-10-12) — Koła piksel w piksel, grubość linii `stroke(w)`
+Zmienia D23 (koło = wielokąt 8 + r/2 segmentów, okrąg = linie). Powód: małe koła były krzywe
+i niesymetryczne (nieparzysta liczba boków, wierzchołki zaokrąglane do pikseli).
+- **Koła r ≤ 16 (`CIRCLE_SPAN_R`):** piksel w piksel z poziomych pasków (quady), piksel
+  należy do koła, gdy dx² + dy² ≤ r² + r (środek piksela w promieniu r + 0,5). Wiersze o tych
+  samych paskach łączone w jeden quad. Cienki `circ` = brzeg `circfill` (piksele z
+  zewnętrznym sąsiadem poza kołem) — 8-spójny i zgodny z `circfill`. Gruby `circ` = koło
+  minus koło o promieniu r − w. Szerokości wierszy liczone na liczbach całkowitych (ARM9
+  bez FPU — `sqrtf` na wiersz kosztował więcej niż rysowanie).
+- **Koła r > 16:** wielokąt o liczbie boków podzielnej przez 8 (16…64), wierzchołki w
+  ćwiartkach piksela, `sinLerp`/`cosLerp` z libnds zamiast `sinf`/`cosf`. Cienki okrąg =
+  zdegenerowane trójkąty w jednym prymitywie, gruby = pas trójkątów (pierścień).
+- **`stroke([w])`:** grubość 1…64 px linii i obrysów (`line`, `rect`, `circ`, `tri`), stan
+  rysowania z D30 (reset do 1 na początku `_draw`, poza `_draw` → wpis w logu). Parametr
+  przy każdej funkcji odrzucony (`line(x1, y1, x2, y2, nil, 3)` nieczytelne); tak jak
+  `setLineWidth` w LÖVE.
+- **Gruba linia:** jeden quad wokół odcinka między środkami pikseli, końce kwadratowe
+  (przedłużone o w/2 — domykają narożniki `tri`). Parzyste grubości przesunięte o pół
+  piksela, żeby linie poziome i pionowe pokrywały całe piksele. `rect` i `circ` rosną do
+  środka (jak dotychczasowy obrys 1 px); `rect` za mały na obrys → wypełniony.
+- **Jeden prymityw na kształt:** `rect`, gruby `tri`, koła — jeden `POLY_ID`, więc
+  zachodzące części przy `alpha` nie mieszają się podwójnie.
+- **Zoom:** linia 1 px zostaje 1 px (sprzętowa), grubsze i koła-paski skalują się z kamerą.
+- **Pomiar melonDS:** scena `tests/carts/gfx` 10,0 ms (v0.6.0) → 4,5 ms; `tests/carts/shapes`
+  (nowy test D31): scena 4,2 ms, 200 × `circfill` + 200 × `circ` r = 6 — 24,7 ms
+  (z `sqrtf` było 44,3 ms). Na konsoli do zmierzenia.

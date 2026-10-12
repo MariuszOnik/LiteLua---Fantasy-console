@@ -5,7 +5,7 @@ return {
   title = "Graphics",
   summary = "Drawing shapes and images. Call these in _draw; the screen is "
          .. "redrawn every frame. Colors: 0-15 = palette, or 0xRRGGBB. "
-         .. "The settings (cls, color, alpha, camera, clip, tint) are reset "
+         .. "The settings (cls, color, alpha, camera, clip, tint, stroke) are reset "
          .. "at the start of every _draw and only work inside it.",
   since = "P4",
   entries = {
@@ -75,6 +75,22 @@ draw_map()
 clip()]],
     },
     {
+      name = "stroke", kind = "function",
+      sig = "stroke([w])",
+      args = { { "w", "number", "width in pixels 1 .. 64, default 1" } },
+      desc = "Sets the width of lines and outlines drawn after it (line, rect, "
+          .. "circ, tri). Thick lines are centered on the line and get square "
+          .. "ends (half the width longer at both ends), so the corners of "
+          .. "tri close. rect and circ grow inward, inside the shape. A "
+          .. "1 pixel line stays 1 pixel when zoomed, thicker ones zoom with "
+          .. "the camera.",
+      example = [[
+stroke(3)
+rect(10, 10, 60, 40, 8)
+circ(120, 50, 20, 11)
+stroke()]],
+    },
+    {
       name = "pset", kind = "function",
       sig = "pset(x, y, [col])",
       args = {
@@ -93,7 +109,8 @@ pset(10, 20, 7)]],
         { "x2", "number", "end x" }, { "y2", "number", "end y" },
         { "col", "color", "color, default: color()" },
       },
-      desc = "Draws a line, both end points included.",
+      desc = "Draws a line, both end points included, stroke() pixels "
+          .. "wide.",
       example = [[
 line(0, 0, 255, 191, 8)]],
     },
@@ -105,8 +122,9 @@ line(0, 0, 255, 191, 8)]],
         { "w", "number", "width" }, { "h", "number", "height" },
         { "col", "color", "color, default: color()" },
       },
-      desc = "Draws the 1 pixel outline of a rectangle, inside x .. x+w-1, "
-          .. "y .. y+h-1. A negative width or height extends left or up.",
+      desc = "Draws the outline of a rectangle, stroke() pixels wide (1 by "
+          .. "default), inside x .. x+w-1, y .. y+h-1. A negative width or "
+          .. "height extends left or up.",
       example = [[
 rect(10, 10, 32, 16, 12)]],
     },
@@ -130,7 +148,9 @@ rectfill(0, 180, 256, 12, 0)]],
         { "r", "number", "radius" },
         { "col", "color", "color, default: color()" },
       },
-      desc = "Draws the outline of a circle (made of up to 48 lines).",
+      desc = "Draws the outline of a circle, stroke() pixels wide inside the "
+          .. "radius. Up to radius 16 it is pixel exact (the edge of "
+          .. "circfill), larger circles are polygons.",
       example = [[
 circ(128, 96, 40, 11)]],
     },
@@ -142,7 +162,8 @@ circ(128, 96, 40, 11)]],
         { "r", "number", "radius" },
         { "col", "color", "color, default: color()" },
       },
-      desc = "Draws a filled circle.",
+      desc = "Draws a filled circle covering x-r .. x+r. Up to radius 16 it "
+          .. "is pixel exact, larger circles are polygons.",
       example = [[
 circfill(x, y, 4, 8)]],
     },
@@ -155,7 +176,7 @@ circfill(x, y, 4, 8)]],
         { "x3", "number", "corner 3 x" }, { "y3", "number", "corner 3 y" },
         { "col", "color", "color, default: color()" },
       },
-      desc = "Draws the outline of a triangle.",
+      desc = "Draws the outline of a triangle, stroke() pixels wide.",
       example = [[
 tri(10, 10, 50, 10, 30, 40, 9)]],
     },
