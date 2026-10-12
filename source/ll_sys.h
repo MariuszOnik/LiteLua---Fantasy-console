@@ -5,6 +5,8 @@
 #ifndef LL_SYS_H__
 #define LL_SYS_H__
 
+#include <nds.h>
+
 #include "lua.h"
 
 #include "ll_cart.h"
@@ -27,5 +29,10 @@ LLCart ll_sys_take_next_cart(void);
 
 // Drops the request; a cart opened by sys.run is closed.
 void ll_sys_discard(void);
+
+// Quits LiteLua when L+R+START has been held for a second (D32): back to the
+// loader if it supports it, otherwise the console turns off. Call once per
+// frame with keysHeld(), in the game, the cart list and the error screen.
+void ll_sys_quit_poll(u32 held);
 
 #endif // LL_SYS_H__

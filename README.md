@@ -24,7 +24,10 @@ The first entry is a built-in demo that shows the frame rate, input and memory u
 you test the error screen (SELECT, Y) and the memory limit (X). Without an SD card the
 demo starts directly. (This simple list will be replaced by a proper cartridge browser.)
 
-To leave a running game and go back to the list, hold **L+R+B** together.
+To leave a running game and go back to the list, hold **L+R+B** together. To quit
+LiteLua completely, hold **L+R+START** for a second (in a game, in the list or on the
+error screen): you go back to the loader you started LiteLua from, or the console turns
+off if the loader cannot be returned to.
 
 A cartridge is either a folder or a single `.lcart` file (see below); both show up in the
 list.
@@ -488,11 +491,12 @@ any cart and create new carts.
 |---|---|
 | hold **START** for half a second | pause menu: Resume, Restart, Edit code, Quit (coming in P10) |
 | **L+R+B** | leave the game at once, back to the list |
+| hold **L+R+START** for a second | quit LiteLua: back to the loader (or power off) |
 | **L+R+Y** | statistics overlay on/off |
 | **L+R+X** | console overlay with the last `print` lines (on the bottom screen) |
 | hold **SELECT** at start | safe mode: built-in system carts only (coming in P10) |
 
-Games see these buttons too, so avoid using L+R together with B, X or Y in a game.
+Games see these buttons too, so avoid using L+R together with B, X, Y or START in a game.
 
 ## Building from source
 

@@ -19,6 +19,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 - **D31 wdrożone:** koła piksel w piksel (r ≤ 16), `stroke(w)` dla `line/rect/circ/tri`,
   test `tests/carts/shapes` (obraz sprawdzony w melonDS). Konsola DSi: `shapes` 2,3 ms,
   400 kół 13,0 ms, `gfx` 2,8 ms; D30 i D31 działają (log bez błędów).
+- **D32 wdrożone:** L+R+START przez 1 s = wyjście z LiteLua (do loadera / wyłączenie);
+  melonDS ok (bez loadera → wyłączenie). Na konsoli: sprawdzić powrót do loadera.
 - **Następny krok:** P7 — dźwięk (Maxmod, D7). Najpierw: wynik testu P6 na konsoli (log
   przez FTP: oba ekrany bez migania, nakładki L+R+X/Y, ekran błędu, lista z dotykiem,
   kartridże testowe, `starcatch`).

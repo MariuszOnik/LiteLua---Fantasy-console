@@ -522,3 +522,13 @@ i niesymetryczne (nieparzysta liczba boków, wierzchołki zaokrąglane do piksel
   (z `sqrtf` było 44,3 ms). **Konsola DSi:** `shapes` scena 2,3 ms, 400 kół r = 6 — 13,0 ms
   (~32 µs na koło z pętlą Lua); `gfx` scena 2,8 ms, 500 × `rectfill` 6,5 ms. D30 na konsoli:
   wpis `color() outside _draw has no effect` w logu.
+
+## D32 (2026-10-12) — Wyjście z LiteLua: L+R+START przez 1 s
+- **L+R+START trzymane 1 s** (60 VBlanków, `ll_vblanks`) — w grze, na liście kartridży i na
+  ekranie błędu (`ll_sys_quit_poll`). Sekunda chroni przed przypadkowym wyjściem (utrata
+  niezapisanego stanu); L+R+B (do listy) zostaje natychmiastowe.
+- Wyjście: wpis w logu, `ll_log_flush`, `exit(0)` — zamyka otwarte pliki (log, archiwum
+  kartridża); libnds wraca do loadera przez jego boot stub, a bez niego wyłącza konsolę.
+  melonDS bez loadera: wyłączenie (sprawdzone).
+- Ekran błędu: START przy trzymanych L+R nie restartuje gry (to początek L+R+START).
+- Gry nie powinny używać L+R razem ze START (jak z B/X/Y, UX.md §3).

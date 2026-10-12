@@ -6,10 +6,12 @@
 // state after the current callback returns and then starts the next cart in
 // a new state, so a cart never runs inside another one.
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "lauxlib.h"
 
+#include "ll_log.h"
 #include "ll_sys.h"
 
 static LLSysRequest request;
@@ -71,4 +73,33 @@ LLCart ll_sys_take_next_cart(void)
 {
     request = LL_SYS_NONE; // The caller owns the open cart now
     return next_cart;
+}
+
+#define KEYS_QUIT (KEY_L | KEY_R | KEY_START)
+#define QUIT_HOLD_VBLANKS 60 // One second
+
+void ll_sys_quit_poll(u32 held)
+{
+    static bool holding;
+    static unsigned long since;
+
+    if ((held & KEYS_QUIT) != KEYS_QUIT)
+    {
+        holding = false;
+        return;
+    }
+    if (!holding)
+    {
+        holding = true;
+        since = ll_vblanks();
+        return;
+    }
+    if (ll_vblanks() - since >= QUIT_HOLD_VBLANKS)
+    {
+        ll_log("L+R+START: quit LiteLua");
+        ll_log_flush();
+        // exit() closes the open files (log, cart archive) and returns to
+        // the loader through its boot stub, or turns the console off
+        exit(0);
+    }
 }

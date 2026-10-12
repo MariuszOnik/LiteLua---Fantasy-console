@@ -55,12 +55,13 @@ kartridże systemowe), P11 (edytor kodu).
 |---|---|---|
 | START przytrzymany 0,5 s | menu pauzy (krótkie START dostaje gra) | P10 |
 | L+R+B | awaryjne wyjście do launchera / listy (bez menu) | P3 |
+| L+R+START przytrzymane 1 s | wyjście z LiteLua: do loadera albo wyłączenie (D32) | D32 |
 | L+R+Y | nakładka statystyk (D26) | P5 |
 | L+R+X | nakładka konsoli: ostatnie linie `print` | P6 |
 | SELECT trzymany przy starcie | tryb awaryjny: kartridże systemowe tylko z ROM | P10 |
 
 Kombinacje z L+R gra też widzi w `btn`/`btnp` (nie da się ich ukryć bez opóźniania
-wejścia); gry nie powinny używać L+R razem z B/X/Y.
+wejścia); gry nie powinny używać L+R razem z B/X/Y/START.
 
 ## 4. Ekrany
 

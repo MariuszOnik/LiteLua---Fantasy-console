@@ -15,6 +15,7 @@
 #include "ll_cart.h"
 #include "ll_gfx.h"
 #include "ll_menu.h"
+#include "ll_sys.h"
 
 #define MAX_CARTS 64
 #define ROW_H 10
@@ -87,6 +88,7 @@ static void draw(int screen, void *ud)
         text(4, 40, label(l, cursor), 12);
         text(4, 52, cursor == 0 ? "built into LiteLua" : "litelua/carts", 14);
 
+        text(4, 140, "Hold L+R+START: quit LiteLua", 14);
         text(4, 150, "Up/Down or touch: choose", 13);
         text(4, 160, "A or touch again: run", 13);
         text(4, 170, "In a game: L+R+B back here", 14);
@@ -126,6 +128,7 @@ bool ll_menu_choose(char *name, size_t size)
 
         ll_gfx_frame(draw, &list);
         scanKeys();
+        ll_sys_quit_poll(keysHeld());
         u32 keys = keysDownRepeat();
         if ((keys & KEY_UP) && cursor > 0)
             cursor--;

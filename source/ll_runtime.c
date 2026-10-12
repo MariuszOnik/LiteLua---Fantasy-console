@@ -205,6 +205,7 @@ static bool read_input(void)
 {
     ll_input_update();
     u32 held = keysHeld(), down = keysDown();
+    ll_sys_quit_poll(held);
     if ((held & KEYS_LEAVE) == KEYS_LEAVE)
     {
         ll_log("L+R+B: back to the cart list");
