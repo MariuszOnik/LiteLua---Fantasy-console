@@ -30,7 +30,12 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 - **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
   `gfx.lua`, `files.lua`, `sys.lua` (z `sys.stats`).
 - **Manual:** `README.md` (D15) — opisuje stan po P6.
-- **Otwarte sprawy:** błąd jako struktura plik/linia (D13) — przy P11. Konsola tekstowa 2D
+- **Otwarte sprawy:** błąd jako struktura plik/linia (D13) — przy P11.
+  **Potencjalny bug — opóźnienie wejścia (2026-10-12):** pomiar w melonDS (kartridż
+  `tests/carts/latency`, A → biały ekran, 30 prób): górny ekran 76–105 ms (mediana 91),
+  dolny 89–125 ms (104); ~15–20 ms dokłada melonDS. Eksperyment: wejście + `_update` tuż
+  przed `_draw(TOP)` → mediana 69 / 90 ms (zmiana cofnięta, kolejność D28 bez zmian).
+  Starcatch: dotyk wygładzany 0.3/klatkę (~200 ms do palca). Wrócić przy P15 (single60). Konsola tekstowa 2D
   usunięta w P6 (D28).
 
 ## Punkty
