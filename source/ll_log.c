@@ -19,6 +19,7 @@
 
 #include "ll_console.h"
 #include "ll_gfx.h"
+#include "ll_runtime.h"
 #include "ll_log.h"
 
 #define LOG_MAX_SIZE (1024 * 1024)
@@ -32,6 +33,7 @@ static void vblank_handler(void)
 {
     vblank_count++;
     ll_gfx_vblank();
+    ll_runtime_vblank();
 }
 
 unsigned long ll_vblanks(void)

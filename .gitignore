@@ -10,3 +10,7 @@ builds/
 tests/carts/sound/music/sky.wav
 __pycache__/
 tests/carts/sound/music/rock.wav
+
+# Private test music (not ours, never in the repo)
+/*.mid
+/private/

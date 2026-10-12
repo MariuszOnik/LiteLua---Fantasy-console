@@ -23,6 +23,8 @@
 #include "lua.h"
 #include "miniz.h"
 
+#include "ll_data.h"
+
 #include "ll_cart.h"
 #include "ll_mem.h"
 
@@ -411,8 +413,9 @@ static bool valid_id(const char *id)
     return true;
 }
 
-// Evaluates the manifest in a small separate state with an empty
-// environment: it may only build and return a table of literals.
+// Reads the manifest with the data parser (D38) into a small separate state:
+// it is parsed, never run, so it can only fail to load, in bounded time and
+// memory (MANIFEST_MEM_LIMIT).
 static bool read_manifest(LLCart *cart, const char *src, size_t len,
                           char *err, size_t err_size)
 {
@@ -429,19 +432,9 @@ static bool read_manifest(LLCart *cart, const char *src, size_t len,
     lua_Integer api = 1, memory = LL_MEM_DEFAULT_LIMIT / 1024;
     char display[16] = "dual30";
 
-    src = ll_skip_bom(src, &len);
-    int status = luaL_loadbufferx(L, src, len, "@" MANIFEST, "t");
-    if (status == LUA_OK)
-    {
-        lua_newtable(L);
-        lua_setupvalue(L, -2, 1); // Empty _ENV
-        status = lua_pcall(L, 0, 1, 0);
-    }
-    if (status != LUA_OK)
-    {
-        snprintf(err, err_size, "%s", lua_tostring(L, -1));
+    static const LLDataLimits limits = { 16 * 1024, 16, 512 };
+    if (!ll_data_parse(L, src, len, MANIFEST, &limits, err, err_size))
         goto done;
-    }
     if (!lua_istable(L, -1))
     {
         snprintf(err, err_size, MANIFEST " must return a table");

@@ -202,6 +202,62 @@ class ValidatorTest(unittest.TestCase):
         self.assertTrue(any("at most 30" in x for x in errors(s)))
 
 
+class Version11Test(unittest.TestCase):
+    def song11(self):
+        s = minimal()
+        s["lsong"] = 1.1
+        s["patterns"]["b"] = {"length": 96, "notes": {"lead": [
+            {"t": 0, "d": 48, "p": 69, "tie": True}]}}
+        s["patterns"]["a"]["notes"]["lead"] = [{"t": 0, "d": 96, "p": 69}]
+        s["playlist"] = [{"pattern": "a"}, {"pattern": "b", "tempo": 60}]
+        s["loop"] = False
+        return s
+
+    def test_v1_files_still_valid(self):
+        self.assertEqual(errors(lsong.load(EXAMPLE)), [])
+        self.assertEqual(lsong.load(EXAMPLE)["lsong"], 1)
+
+    def test_new_fields_need_v11(self):
+        s = self.song11()
+        self.assertEqual(errors(s), [])
+        self.assertEqual(warnings(s), [])
+        s["lsong"] = 1
+        e = errors(s)
+        self.assertTrue(any(".tie: needs lsong = 1.1" in x for x in e))
+        self.assertTrue(any(".tempo: needs lsong = 1.1" in x for x in e))
+
+    def test_tie_rules(self):
+        s = self.song11()
+        s["patterns"]["b"]["notes"]["lead"][0]["t"] = 6
+        self.assertTrue(any("only a note at t = 0" in x for x in errors(s)))
+        s = self.song11()
+        s["patterns"]["b"]["notes"]["lead"][0]["p"] = 70   # nothing to continue
+        self.assertEqual(errors(s), [])
+        self.assertTrue(any("does not continue" in x for x in warnings(s)))
+        s = self.song11()
+        s["patterns"]["b"]["notes"]["lead"][0]["tie"] = False
+        self.assertTrue(any("must be true" in x for x in errors(s)))
+
+    def test_tempo_per_entry_and_loop(self):
+        s = self.song11()
+        self.assertAlmostEqual(lsong.duration(s), 2.0 + 4.0)   # 120 then 60 BPM
+        s["loop"] = 2   # the loop restores the tempo of entry 2 (60)
+        with tempfile.TemporaryDirectory() as d:
+            seconds = lsong.render(s, pathlib.Path(d) / "x.wav", loops=2)
+        self.assertAlmostEqual(seconds, 6.0 + 4.0 + 0.5, delta=0.01)
+
+    def test_tie_has_no_new_attack(self):
+        s = self.song11()
+        s["instruments"]["lead"]["env"] = [1, 0.8, 0.6, 0.4, 0.3]   # decays
+        s["playlist"] = [{"pattern": "a"}, {"pattern": "b"}]
+        tied, rate = render(s)
+        s["patterns"]["b"]["notes"]["lead"][0].pop("tie")
+        again, _ = render(s)
+        at = int(2.0 * rate)   # pattern border
+        window = slice(at + 50, at + 300)
+        self.assertLess(max(abs(x) for x in tied[window]), 0.5 * max(abs(x) for x in again[window]))
+
+
 def render(song, rate=22050):
     with tempfile.TemporaryDirectory() as d:
         path = pathlib.Path(d) / "x.wav"

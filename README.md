@@ -142,7 +142,8 @@ return {
 }
 ```
 
-The manifest may only contain data (no function calls).
+The manifest may only contain data: it is read, not run, so code (function calls, loops,
+`4 * 1024`) is an error. Comments are fine.
 
 #### Packing a cartridge: `.lcart`
 
@@ -571,7 +572,7 @@ any cart and create new carts.
 | buttons | what they do |
 |---|---|
 | hold **START** for half a second | pause menu: Resume, Restart, Edit code, Quit (coming in P10) |
-| **L+R+B** | leave the game at once, back to the list |
+| **L+R+B** | leave the game at once, back to the list (also stops a game stuck in an endless loop: hold it for a moment) |
 | hold **L+R+START** for a second | quit LiteLua: back to the loader (or power off) |
 | **L+R+Y** | statistics overlay on/off |
 | **L+R+X** | console overlay with the last `print` lines (on the bottom screen) |

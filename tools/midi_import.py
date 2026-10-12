@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Zlib
 #
-# LiteLua - MIDI -> .lsong v1 import (D37). The MIDI file stays the source:
+# LiteLua - MIDI -> .lsong import (D37, v1.1: D38). The MIDI file stays the source:
 # the import is a configurable arrangement for monophonic chiptune tracks,
 # and the settings are stored in the song (x_import) so it can be repeated.
 #
@@ -8,10 +8,12 @@
 # drums; automatic or chosen) -> polyphony reduction per role (top, bottom,
 # last, or arp = chords become NES arpeggios) -> GM drums to a kit ->
 # quantization to the .lsong grid (the timing error is measured, not assumed)
-# -> bars cut into patterns, repeated ones stored once.
+# -> bars cut into patterns, repeated ones stored once. With .lsong v1.1 the
+# tempo changes go into the playlist (patterns are also cut where the tempo
+# changes inside a bar) and notes crossing pattern borders are tied.
 
+import bisect
 import collections
-import math
 import pathlib
 
 import midi
@@ -220,13 +222,16 @@ def _vel(v):
 
 
 def import_midi(path, roles=None, modes=None, tempo_mode="auto", ppq=24, bars=None,
-                profile=None):
+                profile=None, version=1.1):
     """Returns (song, report lines). roles: {role: [source index]} or None for
-    automatic; modes: {role: mode}."""
+    automatic; modes: {role: mode}; version: .lsong 1 or 1.1 (tempo changes
+    in the playlist and tied notes)."""
     mf = midi.read(path)
     srcs = sources(mf)
     if not srcs:
         raise MidiImportError("the MIDI file has no notes")
+    if version not in (1, 1.1):
+        raise MidiImportError("--lsong must be 1 or 1.1")
     by_index = {s.index: s for s in srcs}
     report = [f"MIDI format {mf.format}, {mf.division} ticks per quarter, "
               f"{len(mf.notes)} notes in {len(srcs)} sources"]
@@ -256,38 +261,70 @@ def import_midi(path, roles=None, modes=None, tempo_mode="auto", ppq=24, bars=No
     if not 1 <= ppq <= 96:
         raise MidiImportError("--ppq must be 1 .. 96")
 
-    # Tempo: .lsong v1 has one tempo. Check what that costs.
+    # Tempo map of the file, in .lsong grid ticks
     sec = mf.seconds_of()
-    tm = mf.tempo_map()
     end_tick = max(n.end for n in mf.notes)
     total_s = sec(end_tick)
-    tempo = 60 * (end_tick / mf.division) / total_s if total_s > 0 else 120
-    bpms = [60e6 / us for _, us in tm if _ <= end_tick]
-    changes = sum(1 for a, b in zip(bpms, bpms[1:]) if abs(b - a) / a > 0.005)
-    if changes:
-        report.append(f"warning: {changes} tempo changes ({min(bpms):.1f} .. "
-                      f"{max(bpms):.1f} BPM); .lsong v1 has one tempo ({tempo:.2f} BPM)")
+    avg = 60 * (end_tick / mf.division) / total_s if total_s > 0 else 120
 
     def grid_tick(tick):
         return round(tick * ppq / mf.division)
 
-    def time_tick(tick):
-        return round(sec(tick) * tempo / 60 * ppq)
-
-    def max_error(to_tick):
-        starts = {n.start for n in mf.notes}
-        return max(abs(to_tick(t) * 60 / (tempo * ppq) - sec(t)) for t in starts)
+    changes = []  # [(grid tick, bpm)], first at 0
+    for t, us in mf.tempo_map():
+        if t > end_tick:
+            break
+        bpm = 60e6 / us
+        gt = grid_tick(t)
+        if changes and changes[-1][0] == gt:
+            changes[-1] = (gt, bpm)
+        elif not changes or abs(bpm - changes[-1][1]) / changes[-1][1] > 0.001:
+            changes.append((gt, bpm))
+    n_changes = len(changes) - 1
+    if n_changes:
+        bpms = [b for _, b in changes]
+        report.append(f"tempo: {n_changes} changes ({min(bpms):.1f} .. {max(bpms):.1f} BPM)")
 
     if tempo_mode == "auto":
-        tempo_mode = "grid" if max_error(grid_tick) <= TIME_MODE_ERROR else "time"
-        if changes:
+        if n_changes and version == 1.1:
+            tempo_mode = "entries"
+        else:
+            tempo_mode = "grid"
+            if n_changes:
+                err = max(abs(grid_tick(n.start) * 60 / (avg * ppq) - sec(n.start))
+                          for n in mf.notes)
+                tempo_mode = "grid" if err <= TIME_MODE_ERROR else "time"
+        if n_changes:
             report.append(f"tempo mode (automatic): {tempo_mode}")
-    if tempo_mode not in ("grid", "time"):
-        raise MidiImportError("--tempo-mode must be auto, grid or time")
-    to_tick = grid_tick if tempo_mode == "grid" else time_tick
-    if tempo_mode == "time" and changes:
-        report.append("warning: time mode keeps the timing; bar lines and repeated "
-                      "patterns follow the average tempo, not the music")
+    if tempo_mode not in ("entries", "grid", "time"):
+        raise MidiImportError("--tempo-mode must be auto, entries, grid or time")
+    if tempo_mode == "entries" and version != 1.1:
+        raise MidiImportError("tempo mode entries needs .lsong 1.1")
+    if tempo_mode != "entries":
+        changes = [(0, avg)]
+        if n_changes:
+            report.append(f"warning: .lsong {version} with tempo mode {tempo_mode} has one "
+                          f"tempo ({avg:.2f} BPM): "
+                          + ("bars are kept, the timing is not" if tempo_mode == "grid"
+                             else "the timing is kept, bars and repeated patterns follow "
+                                  "the average tempo, not the music"))
+
+    def time_tick(tick):
+        return round(sec(tick) * avg / 60 * ppq)
+
+    to_tick = time_tick if tempo_mode == "time" else grid_tick
+
+    # Seconds of a .lsong tick with the tempo of the song (one or per entry)
+    ch_ticks = [t for t, _ in changes]
+    ch_secs, acc = [], 0.0
+    for k, (t, b) in enumerate(changes):
+        if k:
+            acc += (t - changes[k - 1][0]) * 60 / (changes[k - 1][1] * ppq)
+        ch_secs.append(acc)
+
+    def song_seconds(t):
+        k = max(0, bisect.bisect_right(ch_ticks, t) - 1)
+        return ch_secs[k] + (t - ch_ticks[k]) * 60 / (changes[k][1] * ppq)
 
     # Meter (bars for patterns)
     sigs = sorted(mf.time_sigs)
@@ -320,7 +357,7 @@ def import_midi(path, roles=None, modes=None, tempo_mode="auto", ppq=24, bars=No
                           f"{' / one drum at a time' if r == 'drums' else ''})")
         if q:
             parts[r] = q
-            errors_s += [abs(n[0] * 60 / (tempo * ppq) - sec(n[5])) for n in q]
+            errors_s += [abs(song_seconds(n[0]) - sec(n[5])) for n in q]
     if not parts:
         raise MidiImportError("no notes left in the chosen roles")
     report.append(f"timing ({tempo_mode} mode, {ppq} ticks per quarter): note starts "
@@ -349,43 +386,54 @@ def import_midi(path, roles=None, modes=None, tempo_mode="auto", ppq=24, bars=No
             {"p": p, "i": DRUM_CLASS.get(p, "hat"),
              "to": TOM_TO.get(p, DRUM_TO.get(DRUM_CLASS.get(p, "hat"), 64))} for p in used_p]}
 
-    def note_dict(r, t, d, n):
+    def note_dict(r, t, d, n, tie):
         nd = {"t": t, "d": d, "p": n[2]}
         v = _vel(n[3])
         if v is not None:
             nd["v"] = v
         if r == "chords" and n[4] in arp_name:
             nd["i"] = arp_name[n[4]]
+        if tie:
+            nd["tie"] = True
         return nd
 
     total = max(n[1] for q in parts.values() for n in q)
+    cuts = [t for t, _ in changes[1:] if 0 < t < total]
     options = [bars] if bars else [b for b in (1, 2, 4, 8, 16) if b * bar <= ppq * 64]
     best = None
     for b in options:
         if b * bar > ppq * 64:
             raise MidiImportError(f"--bars {b} is longer than 64 quarter notes")
-        cand = _chunk(parts, total, b * bar, note_dict)
+        borders = sorted(set(range(0, total, b * bar)) | set(cuts)) + [total]
+        cand = _chunk(parts, borders, note_dict, version == 1.1, changes)
         cand["bars"] = b
         if cand["ok"] and (best is None or (cand["stored"], len(cand["playlist"]))
                            < (best["stored"], len(best["playlist"]))):
             best = cand
     if best is None:
-        raise MidiImportError("the song does not fit .lsong v1 limits (256 patterns, 256 "
-                           "playlist entries, 16384 notes); try fewer roles or --ppq 12")
+        raise MidiImportError("the song does not fit .lsong limits (256 patterns, 256 "
+                              "playlist entries, 16384 notes); try fewer roles or --ppq 12")
     if best["split"]:
-        report.append(f"warning: {best['split']} long notes cross pattern borders and "
-                      "are played again there (v1 has no tied notes)")
+        report.append(f"{best['split']} notes cross pattern borders: " + (
+            "tied (no new attack)" if version == 1.1
+            else "warning: played again there (.lsong 1 has no tied notes)"))
+    if tempo_mode == "entries" and n_changes:
+        mid = sum(1 for t in cuts if t % bar)
+        report.append(f"tempo changes kept in the playlist: {len(cuts)}"
+                      + (f", {mid} inside a bar (patterns cut there)" if mid else ""))
     report.append(f"patterns: {best['bars']} bars each, {len(best['patterns'])} different "
                   f"of {best['chunks']}, playlist {len(best['playlist'])} entries, "
                   f"{best['stored']} notes stored")
 
+    uses_11 = best["tied"] or any("tempo" in e for e in best["playlist"])
     name = pathlib.Path(path).stem
     title = (mf.track_names.get(0) or name)[:64]
+    first = changes[0][1]
     song = {
-        "lsong": 1,
+        "lsong": 1.1 if uses_11 else 1,
         "title": title,
         "comment": f"Imported from {pathlib.Path(path).name} by litelua song import.",
-        "tempo": round(min(400, max(20, tempo)), 3),
+        "tempo": round(min(400, max(20, first)), 3),
         "ppq": ppq,
         "meter": [num, den],
         "profile": profile,
@@ -399,47 +447,61 @@ def import_midi(path, roles=None, modes=None, tempo_mode="auto", ppq=24, bars=No
             "roles": {r: v for r, v in roles.items()},
             "modes": {r: modes[r] for r in parts if r != "drums"},
             "tempo_mode": tempo_mode, "ppq": ppq, "bars": best["bars"],
+            "lsong": version,
         },
     }
-    if not 20 <= tempo <= 400:
-        report.append(f"warning: average tempo {tempo:.1f} BPM is outside 20 .. 400")
+    if any(not 20 <= b <= 400 for _, b in changes):
+        report.append("warning: a tempo is outside 20 .. 400 BPM")
     return song, report
 
 
-def _chunk(parts, total, length, note_dict):
-    """Cuts the notes into patterns of 'length' ticks; equal patterns are
-    stored once, repeats become 'times' in the playlist."""
-    count = math.ceil(total / length)
+def _chunk(parts, borders, note_dict, tie_ok, changes):
+    """Cuts the notes into patterns between the borders (bars, and tempo
+    changes); equal patterns are stored once, repeats become 'times'. Notes
+    crossing a border continue as tied notes (v1.1) or are played again."""
+    count = len(borders) - 1
     chunks = [{r: [] for r in parts} for _ in range(count)]
-    split = 0
+    split = tied = 0
     for r, q in parts.items():
         for n in q:
             t, e = n[0], n[1]
             first = True
             while t < e:
-                c = t // length
-                ce = min(e, (c + 1) * length)
-                chunks[c][r].append(note_dict(r, t - c * length, ce - t, n))
+                c = bisect.bisect_right(borders, t) - 1
+                ce = min(e, borders[c + 1])
+                tie = not first and tie_ok
+                chunks[c][r].append(note_dict(r, t - borders[c], ce - t, n, tie))
                 if not first:
                     split += 1
+                    tied += tie
                 first = False
                 t = ce
+    ch_ticks = [t for t, _ in changes]
     patterns, sig_name, playlist = {}, {}, []
-    ok = True
-    for ch in chunks:
+    ok, prev_bpm = True, changes[0][1]
+    for k, ch in enumerate(chunks):
+        a, b = borders[k], borders[k + 1]
         if any(len(v) > 1024 for v in ch.values()):
             ok = False
-        sig = tuple((r, tuple(tuple(sorted(n.items())) for n in ch[r])) for r in parts)
+        sig = (b - a,) + tuple((r, tuple(tuple(sorted(n.items())) for n in ch[r]))
+                               for r in parts)
         if sig not in sig_name:
             sig_name[sig] = f"p{len(sig_name) + 1}"
-            patterns[sig_name[sig]] = {"length": length,
+            patterns[sig_name[sig]] = {"length": b - a,
                                        "notes": {r: v for r, v in ch.items() if v}}
         nm = sig_name[sig]
-        if playlist and playlist[-1]["pattern"] == nm and playlist[-1].get("times", 1) < 64:
+        bpm = changes[bisect.bisect_right(ch_ticks, a) - 1][1]
+        new_tempo = abs(bpm - prev_bpm) > 1e-9
+        prev_bpm = bpm
+        if (playlist and not new_tempo and playlist[-1]["pattern"] == nm
+                and playlist[-1].get("times", 1) < 64):
             playlist[-1]["times"] = playlist[-1].get("times", 1) + 1
         else:
-            playlist.append({"pattern": nm})
+            entry = {"pattern": nm}
+            if new_tempo:
+                entry["tempo"] = round(bpm, 3)
+            playlist.append(entry)
     stored = sum(len(v) for p in patterns.values() for v in p["notes"].values())
     ok = ok and len(patterns) <= 256 and len(playlist) <= 256 and stored <= 16384
     return {"ok": ok, "patterns": patterns, "playlist": playlist, "stored": stored,
-            "split": split, "chunks": count}
+            "split": split, "tied": tied, "chunks": count}

@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Zlib
 #
-# LiteLua - .lsong v1 songs (docs/LSONG.md, D36): a parser for the Lua data
+# LiteLua - .lsong v1 / v1.1 songs (docs/LSONG.md, D36, D38): a parser for the Lua data
 # subset (nothing is executed), Lua and JSON writers, the validator and an
 # approximate WAV renderer. Standard library only.
 
@@ -386,6 +386,7 @@ PROFILE_LIMITS = {
 MAX_NOTES = 16384
 MAX_TRACK_NOTES = 1024
 MAX_SECONDS = 30 * 60
+VERSIONS = (1, 1.1)  # v1.1 adds playlist 'tempo' and note 'tie' (D38)
 
 
 class Report:
@@ -484,8 +485,11 @@ def validate(song):
     for f in ("lsong", "tempo", "instruments", "tracks", "patterns", "playlist"):
         if f not in song:
             r.err("song", f"'{f}' is missing")
-    if "lsong" in song and song["lsong"] != 1:
-        r.err("lsong", f"version {song['lsong']!r}; this tool reads version 1")
+    version = song.get("lsong")
+    if "lsong" in song and (isinstance(version, bool) or version not in VERSIONS):
+        r.err("lsong", f"version {version!r}; this tool reads 1 and 1.1")
+        version = 1.1
+    v11 = version == 1.1
     for f, n in (("title", 64), ("author", 64), ("comment", 512)):
         if f in song and not (isinstance(song[f], str) and len(song[f]) <= n):
             r.err(f, f"must be a string of at most {n} characters")
@@ -628,7 +632,14 @@ def validate(song):
                 if not isinstance(n, dict):
                     r.err(np_, "a note must be {t =, d =, p =}")
                     continue
-                _unknown(r, np_, n, {"t", "d", "p", "v", "i", "s"})
+                _unknown(r, np_, n, {"t", "d", "p", "v", "i", "s", "tie"})
+                if "tie" in n:
+                    if not v11:
+                        r.err(np_ + ".tie", "needs lsong = 1.1")
+                    if n["tie"] is not True:
+                        r.err(np_ + ".tie", "must be true (or left out)")
+                    elif n.get("t") != 0:
+                        r.err(np_ + ".tie", "only a note at t = 0 can continue a note")
                 ok = all([
                     _int(r, np_ + ".t", n.get("t"), 0, (length or 1 << 30) - 1),
                     _int(r, np_ + ".d", n.get("d"), 1, 1 << 30),
@@ -675,13 +686,18 @@ def validate(song):
 
     # Playlist
     playlist = _list(r, "playlist", song.get("playlist", []), 1, 256) or []
-    used_pat, total_ticks = set(), 0
+    used_pat, total_ticks, total_s = set(), 0, 0.0
+    tempo_now = song.get("tempo") if _is_num(song.get("tempo")) and song.get("tempo") > 0 else 120
     for i, e in enumerate(playlist):
         p = f"playlist[{i + 1}]"
         if not isinstance(e, dict):
             r.err(p, "must be {pattern =, times =, transpose =}")
             continue
-        _unknown(r, p, e, {"pattern", "times", "transpose"})
+        _unknown(r, p, e, {"pattern", "times", "transpose", "tempo"})
+        if "tempo" in e:
+            if not v11:
+                r.err(p + ".tempo", "needs lsong = 1.1")
+            _numr(r, p + ".tempo", e["tempo"], 20, 400)
         pat = patterns.get(e.get("pattern"))
         if not isinstance(pat, dict):
             r.err(p + ".pattern", f"unknown pattern {e.get('pattern')!r}")
@@ -706,26 +722,81 @@ def validate(song):
                         break
         if _is_int(times) and _is_int(pat.get("length")):
             total_ticks += times * pat["length"]
+            if _is_num(e.get("tempo", 0)) and _is_num(song.get("tempo")):
+                tempo_now = e.get("tempo", tempo_now)
+                total_s += times * pat["length"] * 60 / (tempo_now * ppq)
     for name in patterns:
         if name not in used_pat:
             r.warn(f"patterns.{name}", "is not in the playlist")
     loop = song.get("loop", 1)
     if loop is not False:
         _int(r, "loop", loop, 1, max(1, len(playlist)))
-    tempo = song.get("tempo")
-    if _is_num(tempo) and tempo > 0 and total_ticks:
-        seconds = total_ticks * 60 / (tempo * ppq)
-        if seconds > MAX_SECONDS:
-            r.err("playlist", f"plays {seconds / 60:.0f} minutes; at most 30")
+    if total_s > MAX_SECONDS:
+        r.err("playlist", f"plays {total_s / 60:.0f} minutes; at most 30")
+    if not r.errors:
+        _check_ties(r, song)
     return r
+
+
+def _last_note(song, entry, track):
+    """(effective pitch, instrument name) of the note sounding at the end of a
+    playlist entry on a track, or None."""
+    pat = song["patterns"][entry["pattern"]]
+    notes = sorted((pat.get("notes") or {}).get(track["name"], []) or [], key=lambda n: n["t"])
+    if not notes or notes[-1]["t"] + notes[-1]["d"] < pat["length"]:
+        return None
+    n = notes[-1]
+    return _effective(song, entry, track, n)
+
+
+def _effective(song, entry, track, n):
+    ins = n.get("i", track["instrument"])
+    p = n["p"]
+    if song["instruments"][ins].get("type") != "kit":
+        p += entry.get("transpose", 0)
+    return p, ins
+
+
+def _check_ties(r, song):
+    """A tied note must find the same pitch and instrument still sounding at the
+    end of what plays before it (warning otherwise: it is played as a new note)."""
+    entries = song["playlist"]
+    order = []
+    for k, e in enumerate(entries):
+        order += [k] * e.get("times", 1)
+    loop = song.get("loop", 1)
+    pairs = list(zip(order, order[1:]))
+    if loop is not False:
+        pairs.append((order[-1], loop - 1))
+    warned = set()
+    for a, b in pairs:
+        pat_b = song["patterns"][entries[b]["pattern"]]
+        for tr in song["tracks"]:
+            for n in (pat_b.get("notes") or {}).get(tr["name"], []) or []:
+                if not n.get("tie") or (b, tr["name"]) in warned:
+                    continue
+                if _last_note(song, entries[a], tr) != _effective(song, entries[b], tr, n):
+                    warned.add((b, tr["name"]))
+                    r.warn(f"playlist[{b + 1}]", f"tied note of track '{tr['name']}' does "
+                           f"not continue the note before it (after playlist[{a + 1}]); "
+                           "it is played as a new note")
+
+
+def entry_tempos(song):
+    """Tempo of every playlist entry: its own 'tempo', else the one before it
+    (the first: the song tempo). A loop jump restores the entry's tempo."""
+    out, tempo = [], song["tempo"]
+    for e in song["playlist"]:
+        tempo = e.get("tempo", tempo)
+        out.append(tempo)
+    return out
 
 
 def duration(song):
     """Seconds of the playlist played once."""
     ppq = song.get("ppq", 24)
-    ticks = sum(e.get("times", 1) * song["patterns"][e["pattern"]]["length"]
-                for e in song["playlist"])
-    return ticks * 60 / (song["tempo"] * ppq)
+    return sum(e.get("times", 1) * song["patterns"][e["pattern"]]["length"] * 60 / (t * ppq)
+               for e, t in zip(song["playlist"], entry_tempos(song)))
 
 
 # --- Renderer -----------------------------------------------------------------
@@ -735,17 +806,21 @@ TRI_STEPS = [15 - i for i in range(16)] + list(range(16))  # NES-like 32 steps
 
 
 def _events(song, loops):
-    """Per track: notes in absolute ticks [(start, end, pitch, vel, ins, slide)],
-    and the total length in ticks."""
+    """Per track: notes in seconds [start, end, pitch, vel, ins, slide], and the
+    total length in seconds. Tied notes (v1.1) extend the note before them."""
     instruments = song["instruments"]
     tracks = song["tracks"]
-    entries = list(song["playlist"])
+    ppq = song.get("ppq", 24)
+    tempos = entry_tempos(song)
+    order = list(range(len(song["playlist"])))
     loop = song.get("loop", 1)
     if loop is not False and loops > 1:
-        entries += entries[loop - 1:] * (loops - 1)
+        order += order[loop - 1:] * (loops - 1)
     out = {tr["name"]: [] for tr in tracks}
-    pos = 0
-    for e in entries:
+    pos = 0.0
+    for k_e in order:
+        e = song["playlist"][k_e]
+        tick_s = 60 / (tempos[k_e] * ppq)
         pat = song["patterns"][e["pattern"]]
         length = pat["length"]
         for _ in range(e.get("times", 1)):
@@ -765,9 +840,14 @@ def _events(song, loops):
                         pitch = drum.get("to", drum["p"])
                     else:
                         pitch += e.get("transpose", 0)
-                    out[tr["name"]].append((pos + n["t"], pos + end, pitch,
-                                            n.get("v", 1), ins, n.get("s", 0)))
-            pos += length
+                    start_s, end_s = pos + n["t"] * tick_s, pos + end * tick_s
+                    lst = out[tr["name"]]
+                    if (n.get("tie") and n["t"] == 0 and lst and abs(lst[-1][1] - start_s) < 1e-9
+                            and lst[-1][2] == pitch and lst[-1][4] is ins):
+                        lst[-1][1] = end_s  # Continues: no new attack
+                    else:
+                        lst.append([start_s, end_s, pitch, n.get("v", 1), ins, n.get("s", 0)])
+            pos += length * tick_s
     return out, pos
 
 
@@ -775,18 +855,18 @@ def _freq(pitch):
     return 440.0 * 2 ** ((pitch - 69) / 12)
 
 
-def _render_track(notes, total, rate, tick_s):
+def _render_track(notes, total, rate):
     buf = [0.0] * total
     lfsr = 1
     phase = 0.0
     spf = rate / FRAME_RATE
     for k, (t0, t1, pitch, vel, ins, slide) in enumerate(notes):
-        start = int(t0 * tick_s * rate)
-        off = int(t1 * tick_s * rate)
+        start = int(t0 * rate)
+        off = int(t1 * rate)
         release = ins.get("release") or []
         stop = off + int(len(release) * spf)
         if k + 1 < len(notes):
-            stop = min(stop, int(notes[k + 1][0] * tick_s * rate))
+            stop = min(stop, int(notes[k + 1][0] * rate))
         stop = min(stop, total)
         kind = ins["type"]
         duty = ins.get("duty", 0.5)
@@ -838,12 +918,11 @@ def _render_track(notes, total, rate, tick_s):
 
 def render(song, path, rate=22050, bits=16, loops=1):
     """Approximate preview (not an emulation): writes a mono WAV. Returns seconds."""
-    tick_s = 60 / (song["tempo"] * song.get("ppq", 24))
-    events, ticks = _events(song, loops)
-    total = int(ticks * tick_s * rate) + rate // 2  # Room for the last release
+    events, seconds = _events(song, loops)
+    total = int(seconds * rate) + rate // 2  # Room for the last release
     mix = [0.0] * total
     for notes in events.values():
-        tb = _render_track(notes, total, rate, tick_s)
+        tb = _render_track(notes, total, rate)
         for i, v in enumerate(tb):
             mix[i] += v
     # DC blocker (like the output filter of a console), then clip

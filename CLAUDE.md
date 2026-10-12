@@ -33,6 +33,7 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 ## Struktura repo
 - `source/` — kod silnika (C)
 - `vendor/lua/` — Lua 5.4.8 (LUA_32BITS=1)
+- `source/ll_data.c` — parser plików danych w składni Lua (`cart.lua`, `.lsong`; D38) — nic nie jest wykonywane
 - `vendor/miniz/` — miniz 3.0.2 (MIT): ZIP (`.lcart`) i deflate, bez zmian (D21)
 - `nitrofs/` — pliki wbudowane w ROM (`nitro:/`), np. `nitrofs/lib/` dla `require`
 - `docs/` — plan, decyzje, `UX.md` (projekt aplikacji: ekrany, przepływ, przyciski,

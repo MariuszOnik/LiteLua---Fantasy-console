@@ -20,4 +20,8 @@ typedef enum {
 // when L+R+B is held. The state is closed before returning (D14).
 LLRunResult ll_run(const LLCart *cart);
 
+// Watchdog (D38), called by the VBlank interrupt: when a callback has been
+// running for over a second and L+R+B is held, stops the cart.
+void ll_runtime_vblank(void);
+
 #endif // LL_RUNTIME_H__

@@ -162,18 +162,53 @@ class ImportTest(unittest.TestCase):
         self.assertEqual(len(song["patterns"]), 1)
         self.assertEqual(song["playlist"], [{"pattern": "p1", "times": 8}])
 
-    def test_tempo_change_is_detected_and_measured(self):
+    def test_tempo_change_v1_single_tempo(self):
+        tracks = [[midi.tempo_event(0, 120), midi.tempo_event(4 * Q, 80)],
+                  notes_ev(0, [(k, 1, 60 + k % 5) for k in range(8)])]
+        path = write(self.tmp.name, "t.mid", tracks)
+        song, report, check = run_import(path, roles={"lead": [1]}, version=1)
+        self.assertEqual(check.errors, [])
+        self.assertEqual(song["lsong"], 1)
+        self.assertTrue(any("tempo: 1 changes" in x for x in report))
+        self.assertTrue(any("tempo mode (automatic): time" in x for x in report))
+        self.assertLess(timing_ms(report), 25)          # time mode keeps the timing
+        _, report_g, _ = run_import(path, roles={"lead": [1]}, tempo_mode="grid", version=1)
+        self.assertGreater(timing_ms(report_g), 300)     # one tempo cannot follow it
+        self.assertEqual(song["x_import"]["tempo_mode"], "time")
+
+    def test_tempo_change_v11_in_playlist(self):
         tracks = [[midi.tempo_event(0, 120), midi.tempo_event(4 * Q, 80)],
                   notes_ev(0, [(k, 1, 60 + k % 5) for k in range(8)])]
         path = write(self.tmp.name, "t.mid", tracks)
         song, report, check = run_import(path, roles={"lead": [1]})
         self.assertEqual(check.errors, [])
-        self.assertTrue(any("1 tempo changes" in x for x in report))
-        self.assertTrue(any("tempo mode (automatic): time" in x for x in report))
-        self.assertLess(timing_ms(report), 25)          # time mode keeps the timing
-        _, report_g, _ = run_import(path, roles={"lead": [1]}, tempo_mode="grid")
-        self.assertGreater(timing_ms(report_g), 300)     # one tempo cannot follow it
-        self.assertEqual(song["x_import"]["tempo_mode"], "time")
+        self.assertEqual(song["lsong"], 1.1)
+        self.assertEqual(song["x_import"]["tempo_mode"], "entries")
+        self.assertEqual(song["tempo"], 120)
+        self.assertEqual([e.get("tempo") for e in song["playlist"]], [None, 80])
+        self.assertLess(timing_ms(report), 1)            # exact, not just close
+        mf = midi.read(path)
+        self.assertAlmostEqual(lsong.duration(song), mf.seconds_of()(8 * Q), places=6)
+
+    def test_tempo_change_inside_a_bar(self):
+        # 120 -> 60 BPM at beat 2.5 of bar 1; a long note crosses that point
+        tracks = [[midi.tempo_event(0, 120), midi.tempo_event(int(2.5 * Q), 60)],
+                  notes_ev(0, [(0, 1, 60), (1, 3, 64), (4, 4, 67)])]
+        path = write(self.tmp.name, "m.mid", tracks)
+        song, report, check = run_import(path, roles={"lead": [1]})
+        self.assertEqual(check.errors, [])
+        self.assertEqual(check.warnings, [])
+        self.assertTrue(any("1 inside a bar" in x for x in report))
+        self.assertLess(timing_ms(report), 1)
+        first, second = (song["patterns"][e["pattern"]] for e in song["playlist"][:2])
+        self.assertEqual(first["length"], 60)            # cut at the change
+        tied = second["notes"]["lead"][0]
+        self.assertEqual((tied["t"], tied["p"], tied.get("tie")), (0, 64, True))
+        self.assertEqual(song["playlist"][1]["tempo"], 60)
+        # Every note start keeps its MIDI time
+        mf = midi.read(path)
+        sec = mf.seconds_of()
+        self.assertAlmostEqual(lsong.duration(song), sec(8 * Q), places=6)
 
     def test_one_tempo_keeps_grid(self):
         path = write(self.tmp.name, "g.mid", [[midi.tempo_event(0, 140)]

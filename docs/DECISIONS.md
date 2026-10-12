@@ -713,3 +713,39 @@ osobne polecenie.
   kontynuacja nuty z poprzedniego patternu bez ponownego ataku (długie nuty na granicach
   patternów); (3) ewentualnie `meter` we wpisie playlisty dla zmian metrum (tylko edytor).
   Wszystkie trzy są zgodne wstecz (pola opcjonalne).
+
+## D38 (2026-10-12) — `.lsong` v1.1, `cart.lua` przez parser danych, strażnik L+R+B
+- **`.lsong` v1.1** (zgodne wstecz: pliki v1 bez zmian, `lsong = 1`; nowe pola wymagają
+  `lsong = 1.1`): `tempo` we wpisie playlisty (obowiązuje od tego wpisu, pętla przywraca
+  tempo wpisu, do którego skacze) i `tie = true` na nucie z `t = 0` (ciąg dalszy nuty z
+  końca poprzedniego patternu, bez nowego ataku; walidator ostrzega, gdy nie ma czego
+  kontynuować — wtedy gra jak nowa nuta). Renderer liczy czas w sekundach (tempo na wpis),
+  nuty łączone przedłużają poprzednią. Zmiany metrum — później.
+- **Zmiana tempa w środku taktu bez przesuwania nut:** import (tryb `entries`, domyślny
+  przy zmianach tempa i v1.1) tnie pattern dokładnie w miejscu zmiany, a nuty przez nią
+  przechodzące łączy `tie`. „Pixel Riff”: błąd czasu maks. 9,6 ms (kwantyzacja `ppq` 24,
+  perkusja przesunięta w MIDI o 10/480 ćwierćnuty), 10 różnych patternów z 16 taktów —
+  dokładny czas *i* powtórzenia (v1: albo jedno, albo drugie). **Mapa zdarzeń tempa**
+  (globalna lista `{t, bpm}` niezależna od patternów) — na razie niepotrzebna; propozycja
+  na przyszłość, gdyby utwory z płynnymi zmianami tempa (accelerando: dziesiątki zmian)
+  przekraczały limit 256 wpisów playlisty przez cięcia.
+- **`cart.lua` przez parser danych** (`source/ll_data.c`, ta sama gramatyka i limity co
+  `tools/lsong.py`; użyje go też `.lsong` w S1): manifest jest parsowany, nie wykonywany —
+  pętla czy wywołanie to błąd składni, czas liniowy, pamięć z limitem stanu (64 KB),
+  rozmiar ≤ 16 KB, zagnieżdżenie ≤ 16, napis ≤ 512 B; BOM pomijany. **Zgodność:** 29/29
+  manifestów (konsola 9, karta emulatora 9, repo 9, przykłady README 2) bez zmian.
+  melonDS: `while true do end` w `cart.lua` → od razu błąd „must start with 'return'”
+  (wcześniej zawieszenie), `memory = 4 * 1024` → błąd; komentarz długi, BOM, `;`, hex,
+  `['klucz']`, `[[napis]]`, `\u{17C}`, `\x42`, `\067` — poprawnie.
+- **Strażnik L+R+B:** callback (`_init`, `_update`, `_draw`, kod główny) działający > 1 s
+  przy trzymanym L+R+B jest przerywany: powrót do listy bez ekranu błędu, wpis w logu, bez
+  `_quit` (stan gry niepewny). Sprawdzane w przerwaniu VBlank; dopiero wtedy
+  `lua_sethook(..., LUA_MASKCOUNT, 1)` (dozwolone asynchronicznie, jak Ctrl+C w `lua.c`;
+  pętle odświeżają `trap` na skokach) — błąd przy każdej instrukcji, więc `pcall` w grze
+  go nie zatrzyma. **Koszt:** w normalnej grze żadnego hooka (stały hook licznika
+  instrukcji odrzucony — w Lua 5.4 włącza `luaG_traceexec` przy *każdej* instrukcji);
+  zostaje kilka porównań na VBlank. Funkcje C (np. długie `string.rep`) nie dają się
+  przerwać. melonDS: pętla w `_update` → L+R+B → lista, pamięć 0 B.
+- **Testy narzędzi:** 40 (`python -m unittest discover -s tests/tools`): +7 dla v1.1
+  (stare pliki ważne, nowe pola wymagają 1.1, reguły `tie`, tempo na wpis i pętla, brak
+  ponownego ataku przy `tie`, zmiana tempa w playliście, zmiana tempa w środku taktu).

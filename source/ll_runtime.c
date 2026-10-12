@@ -57,6 +57,47 @@ static bool failed; // The cart stopped with an error: no _quit
 #define QUIT_TIME_US 1000000 // Time limit of _quit
 static u32 quit_start;
 
+// Watchdog (D38): a callback that runs for over a second while L+R+B is held
+// (an endless loop, for example) is stopped. The VBlank interrupt checks it
+// and only then sets a Lua hook (lua_sethook may be called asynchronously,
+// like lua.c does for Ctrl+C), so normal code runs without any hook cost: a
+// permanent count hook would slow down every Lua instruction.
+#define WATCHDOG_US 1000000
+static lua_State *volatile watch_L; // Running a callback, or NULL
+static volatile u32 watch_start;    // cpuGetTiming at the callback start
+static volatile bool watch_stopped;
+
+static void watchdog_hook(lua_State *L, lua_Debug *ar)
+{
+    (void)ar;
+    luaL_error(L, "stopped with L+R+B: the game did not return for over a second");
+}
+
+void ll_runtime_vblank(void)
+{
+    lua_State *L = watch_L;
+    if (L == NULL || watch_stopped
+        || timerTicks2usec(cpuGetTiming() - watch_start) < WATCHDOG_US)
+        return;
+    u32 keys = ~REG_KEYINPUT;
+    if ((keys & (KEY_L | KEY_R | KEY_B)) != (KEY_L | KEY_R | KEY_B))
+        return;
+    watch_stopped = true;
+    // Every instruction from now on raises the error, so a pcall in the game
+    // cannot keep it running
+    lua_sethook(L, watchdog_hook, LUA_MASKCOUNT, 1);
+}
+
+// Runs a protected call of the function below 'nargs' arguments, watched
+static int watched_pcall(lua_State *L, int nargs, int nresults)
+{
+    watch_start = cpuGetTiming();
+    watch_L = L;
+    int status = lua_pcall(L, nargs, nresults, MSGH_INDEX);
+    watch_L = NULL;
+    return status;
+}
+
 // Elapsed microseconds since boot (wraps after ~128 s)
 static int l_micros(lua_State *L)
 {
@@ -103,6 +144,15 @@ static void show_error(lua_State *L)
     failed = true;
     ll_sound_stop_all();
 
+    if (watch_stopped)
+    {
+        // Not an error of the game's logic: back to the list, no error screen
+        ll_log("watchdog: %s", msg);
+        ll_log_flush();
+        result = LL_RUN_MENU;
+        return;
+    }
+
     ll_log("ERROR (Lua mem %u/%u KB, peak %u KB):",
            (unsigned)(lua_mem.used / 1024), (unsigned)(lua_mem.limit / 1024),
            (unsigned)(lua_mem.peak / 1024));
@@ -144,7 +194,7 @@ static bool call_hook(lua_State *L, const char *name, int screen)
         nargs = 1;
     }
 
-    if (lua_pcall(L, nargs, 0, MSGH_INDEX) != LUA_OK)
+    if (watched_pcall(L, nargs, 0) != LUA_OK)
     {
         show_error(L);
         return false;
@@ -239,7 +289,7 @@ static bool load_main(lua_State *L, const LLCart *cart)
     }
 
     if (status == LUA_OK)
-        status = lua_pcall(L, 0, 0, MSGH_INDEX);
+        status = watched_pcall(L, 0, 0);
 
     if (status != LUA_OK)
     {
@@ -350,6 +400,7 @@ LLRunResult ll_run(const LLCart *cart)
 
     result = LL_RUN_RESTART;
     failed = false;
+    watch_stopped = false;
     ll_gfx_reset();
     ll_console_clear();
     ll_stats_reset(&lua_mem);

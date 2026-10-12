@@ -1,4 +1,4 @@
-# `.lsong` v1 — LiteLua song format
+# `.lsong` v1.1 — LiteLua song format
 
 A `.lsong` file describes a piece of chiptune music: notes, instruments and the
 order of patterns. It describes **music, not hardware**: no DS registers, no
@@ -64,7 +64,7 @@ return {
 
 | field | type | required | rules |
 |---|---|---|---|
-| `lsong` | integer | yes | format version, `1` |
+| `lsong` | number | yes | format version: `1`, or `1.1` when the file uses `tempo` in the playlist or `tie` (a v1.1 reader reads both) |
 | `title` | string | no | at most 64 characters |
 | `author` | string | no | at most 64 characters |
 | `comment` | string | no | at most 512 characters |
@@ -163,6 +163,7 @@ A note:
 | `v` | number | no | velocity (volume) 0 .. 1, default 1 |
 | `i` | instrument name | no | instrument for this note instead of the track's |
 | `s` | integer | no | slide: the pitch moves this many semitones (-24 .. 24) evenly over the note |
+| `tie` | `true` | no | v1.1, only at `t = 0`: the note continues the note that sounds at the end of what plays before it on this track (same pitch after transposition, same instrument) without a new attack; if there is none, it is played as a new note (the validator warns) |
 
 **Collision rule (monophony).** Notes of a track are sorted by `t`. A note
 that starts while the previous one still sounds **cuts** the previous one at
@@ -179,10 +180,16 @@ The playlist is the song: pattern entries played one after another.
 | `pattern` | pattern name | — | required |
 | `times` | integer | 1 | 1 .. 64, the pattern is played this many times in a row |
 | `transpose` | integer | 0 | -24 .. 24 semitones, for all notes except drum notes |
+| `tempo` | number | — | v1.1: 20 .. 400 BPM from this entry on, until another entry sets it |
 
 (`times`, not `repeat`: `repeat` is a reserved word in Lua.)
 
-At the end of the playlist the song jumps to entry `loop` (default 1 — the
+The tempo of an entry is its own `tempo`, or the tempo of the entry before it
+(the first entry: the song `tempo`). A tempo change inside a bar is written by
+ending a pattern at that tick and continuing the notes with `tie` in the next
+one, so no note moves.
+
+At the end of the playlist the song jumps to entry `loop` (with that entry's tempo) (default 1 — the
 whole song repeats; e.g. `loop = 2` skips an intro); `loop = false` plays the
 song once. A transposed note must stay in 0 .. 127 (error otherwise).
 
@@ -235,10 +242,13 @@ the file, chords are reduced to one note (`--lead-mode top|bottom|last|arp`
 etc.; `arp` turns chords into arpeggio instruments), General MIDI drums become
 a `kit`, and repeated bars are stored once. It reports what it had to change:
 notes not heard, drums dropped, and the measured timing error. A MIDI file with
-tempo changes cannot be followed exactly by one `tempo`: `--tempo-mode time`
+tempo changes cannot be followed exactly by one `tempo` (v1): `--tempo-mode time`
 keeps the timing, `grid` keeps the bars (`auto` picks `time` when `grid` would
 be more than 30 ms off). The settings are stored in the song (`x_import`); the
-MIDI file stays the source.
+MIDI file stays the source. With v1.1 (the default; `--lsong 1` for v1) tempo
+changes are kept in the playlist (`--tempo-mode entries`), patterns are cut
+where the tempo changes inside a bar, and notes crossing pattern borders are
+tied.
 
 `render` is an **approximate preview** (pulse, NES-like triangle and noise
 synthesized in software, envelopes per frame). The WAV can be played in a game
