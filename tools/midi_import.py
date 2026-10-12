@@ -18,9 +18,15 @@ import pathlib
 
 import midi
 
-ROLES = ("lead", "lead2", "chords", "bass", "drums")
-MODES = ("top", "bottom", "last", "arp")
-DEFAULT_MODE = {"lead": "top", "lead2": "top", "chords": "arp", "bass": "bottom"}
+ROLES = ("lead", "lead2", "chords", "chords2", "bass", "drums", "cymbals")
+MELODIC = ("lead", "lead2", "chords", "chords2", "bass")
+DRUM_ROLES = ("drums", "cymbals")
+ROLE_KIND = {"lead": "pulse", "lead2": "pulse", "chords": "pulse", "chords2": "pulse",
+             "bass": "triangle", "drums": "noise", "cymbals": "noise"}
+KIT_NAME = {"drums": "kit", "cymbals": "kit2"}
+MODES = ("top", "second", "bottom", "last", "arp")
+DEFAULT_MODE = {"lead": "top", "lead2": "top", "chords": "arp", "chords2": "arp",
+                "bass": "bottom"}
 DRUM_CHANNEL = 9
 
 # General MIDI percussion (channel 10) -> drum of the kit
@@ -29,6 +35,7 @@ DRUM_CLASS = {35: "kick", 36: "kick", 37: "snare", 38: "snare", 39: "snare",
               50: "tom", 42: "hat", 44: "hat", 46: "hat_open", 49: "crash",
               52: "crash", 55: "crash", 57: "crash", 51: "ride", 53: "ride", 59: "ride"}
 DRUM_PRIORITY = ["kick", "snare", "tom", "crash", "hat_open", "hat", "ride"]
+METAL = {"crash", "hat_open", "hat", "ride"}  # --split-drums: these go to "cymbals"
 DRUM_TO = {"kick": 32, "snare": 64, "hat": 104, "hat_open": 100, "crash": 96, "ride": 108}
 TOM_TO = {41: 44, 43: 48, 45: 52, 47: 55, 48: 58, 50: 62}
 DRUM_INSTR = {
@@ -48,6 +55,7 @@ MELODIC_INSTR = {
     "lead2": {"type": "pulse", "duty": 0.5, "volume": 0.55,
               "env": [1, 0.9, 0.85, 0.8, 0.75, 0.7], "release": [0.4, 0.2]},
     "chords": {"type": "pulse", "duty": 0.125, "volume": 0.4, "env": [1, 0.85, 0.7, 0.6]},
+    "chords2": {"type": "pulse", "duty": 0.25, "volume": 0.35, "env": [1, 0.85, 0.7, 0.6]},
     "bass": {"type": "triangle", "volume": 0.9},
 }
 TIME_MODE_ERROR = 0.030  # Auto tempo mode: grid timing error above this -> time mode
@@ -165,6 +173,13 @@ def _select(active, mode):
         chord = tuple(p - root for p in pitches if p - root <= 24)[:4]
         vel = max(n.vel for n in active.values())
         return ("c", frozenset(active)), [0, 0, root, vel, chord]
+    if mode == "second":  # A second voice: the next note below the top one
+        order = sorted(active, key=lambda k: (active[k].pitch, active[k].start), reverse=True)
+        below = [k for k in order if active[k].pitch < active[order[0]].pitch]
+        if not below:
+            return None, None
+        n = active[below[0]]
+        return ("n", below[0]), [0, 0, n.pitch, n.vel, None]
     if mode == "bottom":
         i = min(active, key=lambda k: (active[k].pitch, -active[k].start))
     elif mode == "last":
@@ -216,16 +231,20 @@ def _drums(notes, to_tick, ppq):
     return out, dropped, unmapped
 
 
-def _vel(v):
-    v = round(v / 127, 2)
+def _vel(v, loudest):
+    """Velocity relative to the loudest note of the role: the loudest notes
+    need no 'v' (the instrument volume sets the level), quieter ones keep
+    their difference (accents, dynamics)."""
+    v = round(v / loudest, 2)
     return None if v >= 1 else v
 
 
 def import_midi(path, roles=None, modes=None, tempo_mode="auto", ppq=24, bars=None,
-                profile=None, version=1.1):
+                profile=None, version=1.1, split_drums=False):
     """Returns (song, report lines). roles: {role: [source index]} or None for
     automatic; modes: {role: mode}; version: .lsong 1 or 1.1 (tempo changes
-    in the playlist and tied notes)."""
+    in the playlist and tied notes); split_drums: cymbals and hi-hats of the
+    drums go to a second noise track "cymbals" (profile extended)."""
     mf = midi.read(path)
     srcs = sources(mf)
     if not srcs:
@@ -253,11 +272,17 @@ def import_midi(path, roles=None, modes=None, tempo_mode="auto", ppq=24, bars=No
         report.append(f"not used: sources {', '.join(map(str, unused))}")
     modes = {**DEFAULT_MODE, **(modes or {})}
     for r, m in modes.items():
-        if r in ("lead", "lead2", "chords", "bass") and m not in MODES:
+        if r in MELODIC and m not in MODES:
             raise MidiImportError(f"mode of {r} must be one of {', '.join(MODES)}")
-    profile = profile or ("extended" if "lead2" in roles else "nes")
-    if "lead2" in roles and profile != "extended":
-        raise MidiImportError("lead2 needs --profile extended (more than 2 pulse tracks)")
+    kinds = collections.Counter(ROLE_KIND[r] for r in roles)
+    if split_drums and "drums" in roles and "cymbals" not in roles:
+        kinds["noise"] += 1
+    nes_ok = kinds["pulse"] <= 2 and kinds["triangle"] <= 1 and kinds["noise"] <= 1
+    if profile is None:
+        profile = "nes" if nes_ok else "extended"
+    elif profile == "nes" and not nes_ok:
+        raise MidiImportError("these roles need --profile extended (NES Classic has "
+                              "2 pulse, 1 triangle and 1 noise track)")
     if not 1 <= ppq <= 96:
         raise MidiImportError("--ppq must be 1 .. 96")
 
@@ -339,24 +364,36 @@ def import_midi(path, roles=None, modes=None, tempo_mode="auto", ppq=24, bars=No
     bar_lines = _bar_lines(mf, sigs, end_tick, to_tick)
 
     # Roles -> monophonic notes in .lsong ticks
+    drum_notes = {r: [n for i in roles.get(r, []) for n in by_index[i].notes]
+                  for r in DRUM_ROLES}
+    if split_drums:
+        metal = [n for n in drum_notes["drums"] if DRUM_CLASS.get(n.pitch, "hat") in METAL]
+        ids = {id(n) for n in metal}
+        drum_notes["drums"] = [n for n in drum_notes["drums"] if id(n) not in ids]
+        drum_notes["cymbals"] += metal
     parts, errors_s = {}, []
     for r in ROLES:
-        if r not in roles:
-            continue
-        notes = [n for i in roles[r] for n in by_index[i].notes]
-        if r == "drums":
+        if r in DRUM_ROLES:
+            notes = drum_notes[r]
+            if not notes:
+                continue
             q, dropped, unmapped = _drums(notes, to_tick, ppq)
             if unmapped:
-                report.append(f"drums: {unmapped} notes are not GM kit drums (played as hat)")
+                report.append(f"{r}: {unmapped} notes are not GM kit drums (played as hat)")
         else:
+            if r not in roles:
+                continue
+            notes = [n for i in roles[r] for n in by_index[i].notes]
             mono, unheard = reduce(notes, modes[r])
             q, dropped = _quantize_mono(mono, to_tick)
-            if unheard:
+            if unheard and modes[r] != "second":
                 report.append(f"{r}: {unheard} of {len(notes)} notes not heard "
                               f"(one note at a time, mode {modes[r]})")
+            if modes[r] == "second":
+                report.append(f"{r}: {len(q)} notes of a second voice (mode second)")
         if dropped:
             report.append(f"{r}: {dropped} notes dropped (same tick after reduction"
-                          f"{' / one drum at a time' if r == 'drums' else ''})")
+                          f"{' / one drum at a time' if r in DRUM_ROLES else ''})")
         if q:
             parts[r] = q
             errors_s += [abs(song_seconds(n[0]) - sec(n[5])) for n in q]
@@ -367,33 +404,36 @@ def import_midi(path, roles=None, modes=None, tempo_mode="auto", ppq=24, bars=No
                   f"{sum(errors_s) / len(errors_s) * 1000:.1f} ms")
 
     # Arpeggio shapes -> instruments (at most 32 instruments in all)
-    shapes = collections.Counter(n[4] for n in parts.get("chords", []) if n[4])
-    drum_classes = sorted({DRUM_CLASS.get(n[2], "hat") for n in parts.get("drums", [])},
-                          key=DRUM_PRIORITY.index)
-    room = 32 - len([r for r in parts if r != "drums"]) - (1 + len(drum_classes)
-                                                           if "drums" in parts else 0)
+    shapes = collections.Counter(n[4] for r in ("chords", "chords2")
+                                 for n in parts.get(r, []) if n[4])
+    drum_classes = sorted({DRUM_CLASS.get(n[2], "hat") for r in DRUM_ROLES
+                           for n in parts.get(r, [])}, key=DRUM_PRIORITY.index)
+    kits = [r for r in DRUM_ROLES if r in parts]
+    room = 32 - len([r for r in parts if r in MELODIC]) - len(drum_classes) - len(kits)
     arp_name = {s: f"arp{k + 1}" for k, (s, _) in enumerate(shapes.most_common(max(0, room)))}
     lost = sum(c for s, c in shapes.items() if s not in arp_name)
     if lost:
         report.append(f"chords: {lost} chords of rare shapes played as single notes")
 
-    instruments = {r: dict(MELODIC_INSTR[r]) for r in parts if r != "drums"}
+    instruments = {r: dict(MELODIC_INSTR[r]) for r in parts if r in MELODIC}
     for s, name in arp_name.items():
         instruments[name] = {**MELODIC_INSTR["chords"], "arp": list(s)}
-    if "drums" in parts:
-        for c in drum_classes:
-            instruments[c] = dict(DRUM_INSTR[c])
-        used_p = sorted({n[2] for n in parts["drums"]})
-        instruments["kit"] = {"type": "kit", "drums": [
+    for c in drum_classes:
+        instruments[c] = dict(DRUM_INSTR[c])
+    for r in kits:
+        used_p = sorted({n[2] for n in parts[r]})
+        instruments[KIT_NAME[r]] = {"type": "kit", "drums": [
             {"p": p, "i": DRUM_CLASS.get(p, "hat"),
              "to": TOM_TO.get(p, DRUM_TO.get(DRUM_CLASS.get(p, "hat"), 64))} for p in used_p]}
 
+    loudest = {r: max(n[3] for n in q) or 127 for r, q in parts.items()}
+
     def note_dict(r, t, d, n, tie):
         nd = {"t": t, "d": d, "p": n[2]}
-        v = _vel(n[3])
+        v = _vel(n[3], loudest[r])
         if v is not None:
             nd["v"] = v
-        if r == "chords" and n[4] in arp_name:
+        if r in ("chords", "chords2") and n[4] in arp_name:
             nd["i"] = arp_name[n[4]]
         if tie:
             nd["tie"] = True
@@ -443,14 +483,15 @@ def import_midi(path, roles=None, modes=None, tempo_mode="auto", ppq=24, bars=No
         "meter": [num, den],
         "profile": profile,
         "instruments": instruments,
-        "tracks": [{"name": r, "instrument": "kit" if r == "drums" else r}
+        "tracks": [{"name": r, "instrument": KIT_NAME.get(r, r)}
                    for r in ROLES if r in parts],
         "patterns": best["patterns"],
         "playlist": best["playlist"],
         "x_import": {
             "source": pathlib.Path(path).name,
             "roles": {r: v for r, v in roles.items()},
-            "modes": {r: modes[r] for r in parts if r != "drums"},
+            "modes": {r: modes[r] for r in parts if r in MELODIC},
+            "split_drums": split_drums,
             "tempo_mode": tempo_mode, "ppq": ppq, "bars": best["bars"],
             "lsong": version,
         },

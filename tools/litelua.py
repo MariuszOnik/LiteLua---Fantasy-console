@@ -88,7 +88,7 @@ def main() -> int:
     for role in midi_import.ROLES:
         c.add_argument(f"--{role}", metavar="N[,N]",
                        help=f"sources for the {role} track (default: automatic)")
-    for role in ("lead", "lead2", "chords", "bass"):
+    for role in midi_import.MELODIC:
         c.add_argument(f"--{role}-mode", choices=midi_import.MODES,
                        help=f"chords -> one note: default {midi_import.DEFAULT_MODE[role]}")
     c.add_argument("--tempo-mode", choices=("auto", "entries", "grid", "time"),
@@ -98,7 +98,10 @@ def main() -> int:
                    help="format version to write, default 1.1")
     c.add_argument("--ppq", type=int, default=24, help="ticks per quarter, default 24")
     c.add_argument("--bars", type=int, help="bars per pattern (default: best fit)")
-    c.add_argument("--profile", choices=("nes", "extended"))
+    c.add_argument("--profile", choices=("nes", "extended"),
+                   help="default: nes if the roles fit (2 pulse, triangle, noise)")
+    c.add_argument("--split-drums", action="store_true",
+                   help="hi-hats and cymbals on a second noise track (extended)")
     args = ap.parse_args()
 
     if args.cmd == "pack":
@@ -127,11 +130,11 @@ def song_import(args) -> int:
             v = getattr(args, role)
             if v:
                 roles[role] = [int(x) for x in v.split(",")]
-        modes = {r: getattr(args, f"{r}_mode") for r in ("lead", "lead2", "chords", "bass")
+        modes = {r: getattr(args, f"{r}_mode") for r in midi_import.MELODIC
                  if getattr(args, f"{r}_mode")}
         data, report = midi_import.import_midi(
             args.file, roles or None, modes, args.tempo_mode, args.ppq, args.bars,
-            args.profile, 1.1 if args.lsong == 1.1 else 1)
+            args.profile, 1.1 if args.lsong == 1.1 else 1, args.split_drums)
     except (midi.MidiError, midi_import.MidiImportError, OSError, ValueError) as e:
         print(f"{args.file}: {e}", file=sys.stderr)
         return 1

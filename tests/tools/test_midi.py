@@ -251,13 +251,41 @@ class ImportTest(unittest.TestCase):
         seconds = lsong.render(lsong.parse_lua(lsong.to_lua(song)), out)
         self.assertAlmostEqual(seconds, 8 * 60 / 150 + 0.5, delta=0.2)
 
-    def test_lead2_needs_extended(self):
-        path = write(self.tmp.name, "x.mid", [notes_ev(0, [(0, 1, 60)]), notes_ev(1, [(0, 1, 64)])])
-        with self.assertRaises(midi_import.MidiImportError):
-            midi_import.import_midi(path, roles={"lead": [1], "lead2": [2]}, profile="nes")
+    def test_profile_follows_the_tracks(self):
+        path = write(self.tmp.name, "x.mid", [notes_ev(0, [(0, 1, 60)]),
+                                              notes_ev(1, [(0, 1, 64)]),
+                                              notes_ev(2, [(0, 1, 67)])])
         song, _, check = run_import(path, roles={"lead": [1], "lead2": [2]})
-        self.assertEqual(song["profile"], "extended")
+        self.assertEqual((song["profile"], check.errors), ("nes", []))  # 2 pulse fit
+        roles3 = {"lead": [1], "lead2": [2], "chords": [3]}
+        with self.assertRaises(midi_import.MidiImportError):
+            midi_import.import_midi(path, roles=roles3, profile="nes")
+        song, _, check = run_import(path, roles=roles3)
+        self.assertEqual((song["profile"], check.errors), ("extended", []))
+
+    def test_second_voice(self):
+        # Double stops: the second voice takes the lower note
+        path = write(self.tmp.name, "s.mid", [notes_ev(0, [(0, 1, 72), (0, 1, 67),
+                                                           (1, 1, 74)])])
+        song, _, check = run_import(path, roles={"lead": [1], "lead2": [1]},
+                                    modes={"lead2": "second"})
         self.assertEqual(check.errors, [])
+        notes = song["patterns"]["p1"]["notes"]
+        self.assertEqual([n["p"] for n in notes["lead"]], [72, 74])
+        self.assertEqual([n["p"] for n in notes["lead2"]], [67])
+
+    def test_split_drums(self):
+        drums = notes_ev(9, [(0, 0.25, 36), (0, 0.25, 42), (1, 0.25, 38), (1, 0.25, 49)])
+        path = write(self.tmp.name, "d.mid", [drums])
+        song, report, check = run_import(path, split_drums=True)
+        self.assertEqual(check.errors, [])
+        self.assertEqual(song["profile"], "extended")
+        notes = song["patterns"]["p1"]["notes"]
+        self.assertEqual([n["p"] for n in notes["drums"]], [36, 38])
+        self.assertEqual([n["p"] for n in notes["cymbals"]], [42, 49])
+        self.assertFalse(any("dropped" in x for x in report))   # nothing lost
+        self.assertEqual({t["name"]: t["instrument"] for t in song["tracks"]},
+                         {"drums": "kit", "cymbals": "kit2"})
 
 
 if __name__ == "__main__":
