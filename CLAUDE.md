@@ -37,7 +37,10 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - `vendor/miniz/` — miniz 3.0.2 (MIT): ZIP (`.lcart`) i deflate, bez zmian (D21)
 - `nitrofs/` — pliki wbudowane w ROM (`nitro:/`), np. `nitrofs/lib/` dla `require`
 - `docs/` — plan, decyzje, `UX.md` (projekt aplikacji: ekrany, przepływ, przyciski,
-  kartridże systemowe), `newCzatWorkflow.md` (jak zaczynać nowy czat)
+  kartridże systemowe), `newCzatWorkflow.md` (jak zaczynać nowy czat), `LSONG.md`
+  (specyfikacja formatu muzyki), `COMPOSING.md` (manual kompozytora)
+- Testy dźwięku potwierdzamy nagraniem wyjścia audio melonDS (WASAPI loopback, D41) —
+  same liczniki wysłanych poleceń nie dowodzą, że coś gra (lekcja z S0)
 - `docs/api/*.lua` — dokumentacja API Lua (źródło dla edytora na DS i `docs/API.md`, D12);
   aktualizuj w każdym punkcie zmieniającym API, potem `python tools/apidoc.py`
 - `assets/` — zasoby generowane do podglądu/edycji (np. `font6x8.png` z `tools/make_font.py`)

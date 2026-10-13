@@ -46,7 +46,15 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   **S1 zaimplementowane (D41):** `music("x")` gra `music/x.lsong` na żywo (ładowarka →
   segmenty → sekwencer timera 3); test `tests/carts/song` — **do potwierdzenia odsłuchem
   na DSi** (Marsz Imperatora jako `private.lsong`, Metallica Extended `private2.lsong`).
-- **Następny krok:** P8 — mapy kafelkowe. (P7, D32/D33 sprawdzone na DSi: dźwięk, efekty,
+- **Stan na 2026-10-13 (koniec sesji):** P18 S1 — `.lsong` grane na żywo; w melonDS
+  potwierdzone nagraniem wyjścia audio (Sky Hopper, Pixel Riff, Marsz Imperatora). Na DSi
+  jest jeszcze **stary ROM** (z błędem ciszy): FTP na konsoli nie łączy się z Wi‑Fi —
+  wgrać `litelua.nds` i `private/marsz_imperatora.lsong` jako
+  `litelua/carts/song/music/private.lsong`, posłuchać „Live songs (S1)”, zamknąć S1.
+  Manual kompozytora: `docs/COMPOSING.md`. Prywatne pliki (Metallica, Marsz) tylko w
+  `private/` i w katalogu głównym — ignorowane przez git.
+- **Następny krok:** odsłuch S1 na DSi, potem P8 — mapy kafelkowe. Później w P18: S2
+  (prototyp piano rolla), `.lsong` v1.2 (sceny i klipy, D39), panorama na żywo. (P7, D32/D33 sprawdzone na DSi: dźwięk, efekty,
   L+R+START, `_quit`.)
 - **Wydania (D29):** repo na GitHubie, tag `v0.6.0` wypchnięty; pliki wydania w
   `builds/release-v0.6.0/` (`litelua.nds`, `starcatch.lcart`, `RELEASE_NOTES.md`) —

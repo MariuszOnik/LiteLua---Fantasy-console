@@ -365,7 +365,10 @@ python tools/litelua.py song import mysong.mid mysong.lsong     # from a MIDI fi
 bass, drums); `--list` shows the parts of the file so you can choose them. Only use music
 you may use: your own, licensed, or for your private play.
 
-See `examples/songs/sky_hopper.lsong` for a complete song.
+See `examples/songs/sky_hopper.lsong` for a complete song, and
+**[docs/COMPOSING.md](docs/COMPOSING.md)** for how to compose: ticks and note numbers,
+instrument recipes (NES melody, arpeggio chords, triangle bass, drum kits), arranging
+with the playlist, MIDI import and asking an AI model to write a song.
 
 - MP3 or OGG? Convert them on the PC, e.g. with ffmpeg:
   `ffmpeg -i song.mp3 -ac 1 -ar 22050 -c:a pcm_s16le music/song.wav` (music) or

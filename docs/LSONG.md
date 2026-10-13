@@ -7,6 +7,8 @@ written by people, by tools (MIDI converters, generators) and by language
 models, edited in the LiteLua Music Studio on the DS, rendered to WAV on a PC,
 and played by the LiteLua sequencer (D35, D36).
 
+How to compose in this format, with recipes: [COMPOSING.md](COMPOSING.md).
+
 The sound is **inspired by the NES** (pulse, triangle and noise channels). It is
 not an emulation of the NES or of the DS sound hardware; a renderer only has to
 sound close.
