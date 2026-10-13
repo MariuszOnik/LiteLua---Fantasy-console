@@ -825,6 +825,11 @@ osobne polecenie.
   `music()` i koniec kartridża zatrzymują (D14). Eksperymentalna tabela `chiptest` z S0
   usunięta (D40), w jej miejsce `tests/carts/song` („Sky Hopper”, „Pixel Riff” i prywatne
   `music/private*.lsong`, jeśli są na karcie — nie w repo).
-- **Stan:** zbudowane bez ostrzeżeń, wysłane na DSi; test w melonDS przerwany (okno
-  straciło fokus). **Do potwierdzenia odsłuchem na DSi** — pierwszy test: „Marsz
+- **Poprawka (po teście):** konsola zawieszała się przy drugim utworze, a dźwięku nie było.
+  Przyczyna: tablice w bloku utworu leżały jedna za drugą bez wyrównania (nuta ma 10 B), a
+  ARM9 przy niewyrównanym dostępie do słowa nie zgłasza błędu, tylko czyta/zapisuje złe
+  bajty — segmenty miały śmieciowe tempo (np. 4 224 712 705), klipy złe nuty. Teraz każda
+  tablica jest wyrównana do 8 B. melonDS: sky, rock i Marsz kolejno, bez zawieszeń, 0 B
+  po zamknięciu.
+- **Stan:** zbudowane bez ostrzeżeń, wysłane na DSi. **Do potwierdzenia odsłuchem na DSi** — pierwszy test: „Marsz
   Imperatora” (plik użytkownika, `private.lsong`).

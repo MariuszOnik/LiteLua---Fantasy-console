@@ -210,12 +210,15 @@ static int compile(lua_State *L)
         return luaL_error(L, "song.playlist must have 1 .. 256 entries");
 
     // One block for everything
-    size_t sz_song = (sizeof(LLSong) + 7) & ~7u;
-    size_t sz_instr = sizeof(LLInstr) * (size_t)instr_count;
-    size_t sz_kit = (sizeof(LLKitDrum) * (size_t)kit_count + 7) & ~7u;
-    size_t sz_notes = sizeof(LLNote) * note_count;
-    size_t sz_clips = sizeof(LLClip) * (size_t)pattern_count * LL_SONG_TRACKS;
-    size_t sz_seg = sizeof(LLSegment) * (size_t)segment_count;
+    // Every array starts 8-byte aligned: the ARM9 does not fault on an
+    // unaligned word access, it silently reads and writes the wrong bytes
+#define ALIGN8(n) (((n) + 7) & ~(size_t)7)
+    size_t sz_song = ALIGN8(sizeof(LLSong));
+    size_t sz_instr = ALIGN8(sizeof(LLInstr) * (size_t)instr_count);
+    size_t sz_kit = ALIGN8(sizeof(LLKitDrum) * (size_t)kit_count);
+    size_t sz_notes = ALIGN8(sizeof(LLNote) * note_count);
+    size_t sz_clips = ALIGN8(sizeof(LLClip) * (size_t)pattern_count * LL_SONG_TRACKS);
+    size_t sz_seg = ALIGN8(sizeof(LLSegment) * (size_t)segment_count);
     size_t bytes = sz_song + sz_instr + sz_kit + sz_notes + sz_clips + sz_seg;
     u8 *block = calloc(1, bytes);
     if (block == NULL)
