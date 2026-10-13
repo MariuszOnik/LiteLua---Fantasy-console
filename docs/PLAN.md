@@ -218,8 +218,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
     parametrów w trakcie nuty (wypełnienie, głośność, częstotliwość — trzaski, restart
     fazy), koszt CPU. Wynik decyduje: libnds przez FIFO czy własny kod ARM7.
   - [~] **S1 — rdzeń** (D41): ładowarka `.lsong` → segmenty → sekwencer w przerwaniu,
-    `music("x")` gra `.lsong` na żywo; zbudowane, czeka na odsłuch na DSi
-    (`tests/carts/song`, Marsz Imperatora).
+    `music("x")` gra `.lsong` na żywo; melonDS potwierdzone nagraniem wyjścia audio,
+    czeka na odsłuch na DSi (`tests/carts/song`, Marsz Imperatora).
   - **S2 — prototyp edytora (przed P10):** piano roll rysikiem, 4 kanały, patterny, wybór
     instrumentu, odtwarzanie, zapis do `save/` własnego kartridża (eksport do gry ręcznie
     lub później przez P10).

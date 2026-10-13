@@ -170,7 +170,8 @@ static void update(Voice *v)
         u32 phase = (u32)in->vib_rate * (u32)(frame - in->vib_delay) * 64 / 6000;
         cents += in->vib_depth * sine64[phase & 63] / 127;
     }
-    int vol = in->volume * v->vel / 255 * level / 127 * sq.volume / 1024;
+    // 5/8: four loud voices plus sound effects must not clip the mixer
+    int vol = in->volume * v->vel / 255 * level / 127 * sq.volume / 1024 * 5 / 8;
     send(v, rate_of(v->kind, cents), vol);
     if (v->releasing)
         v->rel_age++;
@@ -364,6 +365,12 @@ void ll_seq_play(const LLSong *song, bool loop, int volume)
     int channels[LL_SONG_TRACKS];
     locked = channel_mask(song, channels);
     mmLockChannels(locked);
+    // Maxmod handles its commands in its own frame on the ARM7, later than
+    // libnds handles sound commands, and locking a channel switches it off
+    // (REG_SOUNDXCNT = 0). Set the channels up only after the lock is done,
+    // or the lock silences them again.
+    for (int i = 0; i < 3; i++)
+        swiWaitForVBlank();
     soundEnable();
     DC_FlushRange(triangle, sizeof(triangle));
     for (int t = 0; t < song->tracks; t++)

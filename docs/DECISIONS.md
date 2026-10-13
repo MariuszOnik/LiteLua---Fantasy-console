@@ -792,6 +792,11 @@ osobne polecenie.
   (wzorzec 16 667, ±0,2%), 0 spóźnionych. Efekty Maxmoda dostawały poprawne uchwyty, moduł
   grał razem z syntezą, brak zawieszeń; po L+R+B synteza zatrzymana, pamięć 0 B. Odsłuch
   użytkownika: trzaski akceptowalne.
+- **Korekta (2026-10-13, przy S1):** synteza z S0 najpewniej **nie grała** — ten sam błąd
+  kolejności `mmLockChannels` (D41, poprawka 2) wyłączał kanały; build S0 nagrany w melonDS
+  daje ciszę. Pomiary czasu przerwania, tempa i FIFO są prawdziwe, ale „odsłuch” w S0 musiał
+  dotyczyć efektów i modułu Maxmoda. Wniosek: testy dźwięku potwierdzamy nagraniem wyjścia
+  audio (melonDS + loopback), nie tylko licznikami.
 - **Wnioski dla S1:** libnds przez FIFO wystarcza — własny kod ARM7 niepotrzebny.
   Sekwencer w przerwaniu timera z samymi komendami „set”; **tryb 0** (zmiany w miejscu) —
   tańszy i z mniejszą liczbą komunikatów; restart kanału tylko tam, gdzie słychać potrzebę
@@ -831,5 +836,15 @@ osobne polecenie.
   bajty — segmenty miały śmieciowe tempo (np. 4 224 712 705), klipy złe nuty. Teraz każda
   tablica jest wyrównana do 8 B. melonDS: sky, rock i Marsz kolejno, bez zawieszeń, 0 B
   po zamknięciu.
-- **Stan:** zbudowane bez ostrzeżeń, wysłane na DSi. **Do potwierdzenia odsłuchem na DSi** — pierwszy test: „Marsz
+- **Poprawka 2 (cisza):** utwory grały „po cichu” — sekwencer wysyłał polecenia, ale nic nie
+  było słychać (nagranie wyjścia audio melonDS przez WASAPI loopback: RMS 0,0000; muzyka WAV
+  dla porównania 0,20). Przyczyna: Maxmod nie wykonuje poleceń od razu, tylko w swojej
+  klatce na ARM7, a `mmLockChannels` wyłącza blokowany kanał (`REG_SOUNDXCNT = 0`, kod
+  `ref/maxmod/source/ds/arm7/main_ds7.c`). Polecenia libnds wykonują się natychmiast, więc
+  kanały były najpierw włączane, a chwilę potem wyłączał je Maxmod; późniejsze „set” zmieniały
+  już wyłączony kanał. Teraz po `mmLockChannels` czekamy 3 VBlanki (~50 ms przy starcie
+  utworu), dopiero potem konfiguracja kanałów. Po poprawce nagranie z melonDS: Sky Hopper
+  RMS 0,35, najsilniejsze 196/262 Hz (bas G3/C4 intro), Pixel Riff 0,21 (494 Hz), Marsz 0,27
+  (196 Hz). Miks sekwencera ściszony do 5/8 (szczyty dotykały granicy).
+- **Stan:** melonDS — gra (potwierdzone nagraniem). Do potwierdzenia uchem na DSi. **Do potwierdzenia odsłuchem na DSi** — pierwszy test: „Marsz
   Imperatora” (plik użytkownika, `private.lsong`).
