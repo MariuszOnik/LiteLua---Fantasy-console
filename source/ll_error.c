@@ -26,6 +26,7 @@ typedef struct {
     Line msg[MAX_LINES], trace[MAX_LINES];
     int msg_lines, trace_lines;
     char mem[64];
+    bool can_edit;
 } Screen;
 
 // Splits text into lines at '\n' and at COLS characters (UTF-8 aware; a tab
@@ -81,12 +82,13 @@ static void draw(int screen, void *ud)
         for (int i = 0; i < sc->trace_lines && i < ROWS - 3; i++)
             ll_gfx_text(0, i * 8, sc->trace[i].s, sc->trace[i].len, 13);
         ll_gfx_rectfill(0, 176, 256, 16, 15);
-        static const char help[] = "START: restart    SELECT: cart list";
-        ll_gfx_text(2, 180, help, sizeof(help) - 1, 4);
+        const char *help = sc->can_edit ? "START: restart  Y: edit  SELECT: back"
+                                        : "START: restart    SELECT: back";
+        ll_gfx_text(2, 180, help, strlen(help), 4);
     }
 }
 
-bool ll_error_show(const char *err, const LLMem *mem)
+LLErrorChoice ll_error_show(const char *err, const LLMem *mem, bool can_edit)
 {
     static const char trace_tag[] = "\nstack traceback:";
     static Screen sc;
@@ -96,6 +98,7 @@ bool ll_error_show(const char *err, const LLMem *mem)
     sc.msg_lines = wrap(err, msg_len, sc.msg, MAX_LINES);
     sc.trace_lines = trace ? wrap(trace + 1, strlen(trace + 1), sc.trace, MAX_LINES) : 0;
 
+    sc.can_edit = can_edit;
     sc.mem[0] = '\0';
     if (mem)
     {
@@ -105,7 +108,7 @@ bool ll_error_show(const char *err, const LLMem *mem)
     }
 
     ll_gfx_reset(); // Draw state of the cart (camera, clip...) is not wanted
-    u32 keys;
+    u32 keys, wanted = KEY_START | KEY_SELECT | (can_edit ? KEY_Y : 0);
     do
     {
         ll_gfx_frame(draw, &sc);
@@ -116,7 +119,9 @@ bool ll_error_show(const char *err, const LLMem *mem)
         // START with L+R held is the start of L+R+START (quit), not a restart
         if ((keysHeld() & (KEY_L | KEY_R)) == (KEY_L | KEY_R))
             keys &= ~KEY_START;
-    } while (!(keys & (KEY_START | KEY_SELECT)));
+    } while (!(keys & wanted));
 
-    return (keys & KEY_START) != 0;
+    if (keys & KEY_START)
+        return LL_ERROR_RESTART;
+    return keys & KEY_Y ? LL_ERROR_EDIT : LL_ERROR_BACK;
 }

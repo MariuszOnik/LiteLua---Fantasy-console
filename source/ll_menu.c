@@ -24,42 +24,6 @@
 
 static int cursor; // Kept between calls (return to the same position, D14)
 
-static int compare_names(const void *a, const void *b)
-{
-    return strcasecmp(*(const char *const *)a, *(const char *const *)b);
-}
-
-// Fills 'names' with the cart folders, sorted. Returns their number.
-static int list_carts(char *names[], int max)
-{
-    int n = 0;
-    char path[LL_PATH_MAX];
-    snprintf(path, sizeof(path), "%s/carts", ll_base);
-
-    DIR *dir = ll_base[0] ? opendir(path) : NULL;
-    if (dir == NULL)
-        return 0;
-
-    struct dirent *e;
-    while (n < max && (e = readdir(dir)) != NULL)
-    {
-        if (e->d_name[0] == '.')
-            continue;
-        if (e->d_type != DT_DIR
-            && !(e->d_type == DT_REG && ll_cart_is_file_name(e->d_name)))
-            continue;
-        if (strlen(e->d_name) >= LL_NAME_MAX)
-            continue;
-        names[n] = strdup(e->d_name);
-        if (names[n])
-            n++;
-    }
-    closedir(dir);
-
-    qsort(names, n, sizeof(names[0]), compare_names);
-    return n;
-}
-
 typedef struct {
     char **names;
     int count, top;
@@ -88,9 +52,10 @@ static void draw(int screen, void *ud)
         text(4, 40, label(l, cursor), 12);
         text(4, 52, cursor == 0 ? "built into LiteLua" : "litelua/carts", 14);
 
-        text(4, 140, "Hold L+R+START: quit LiteLua", 14);
-        text(4, 150, "Up/Down or touch: choose", 13);
-        text(4, 160, "A or touch again: run", 13);
+        text(4, 130, "Hold L+R+START: quit LiteLua", 14);
+        text(4, 140, "Up/Down or touch: choose", 13);
+        text(4, 150, "A or touch again: run", 13);
+        text(4, 160, "Y: edit the code", 13);
         text(4, 170, "In a game: L+R+B back here", 14);
         text(4, 180, "L+R+Y stats, L+R+X console", 14);
         if (ll_base[0] == '\0')
@@ -108,16 +73,17 @@ static void draw(int screen, void *ud)
     }
 }
 
-bool ll_menu_choose(char *name, size_t size)
+LLMenuChoice ll_menu_choose(char *name, size_t size)
 {
     char *names[MAX_CARTS];
-    int count = list_carts(names, MAX_CARTS);
+    int count = ll_cart_list_names(names, MAX_CARTS);
     int items = count + 1; // Demo first
 
     if (cursor >= items)
         cursor = items - 1;
 
     List list = { names, count, -1 };
+    LLMenuChoice choice = LL_MENU_RUN;
     ll_gfx_reset();
     while (1)
     {
@@ -137,6 +103,11 @@ bool ll_menu_choose(char *name, size_t size)
             cursor++;
         if (keysDown() & KEY_A)
             break;
+        if ((keysDown() & KEY_Y) && cursor > 0) // The demo has no files
+        {
+            choice = LL_MENU_EDIT;
+            break;
+        }
 
         // Touch a row to choose it, touch the chosen row again to run it
         if (keysDown() & KEY_TOUCH)
@@ -154,11 +125,12 @@ bool ll_menu_choose(char *name, size_t size)
         }
     }
 
-    bool is_cart = cursor > 0;
-    if (is_cart)
+    if (cursor > 0)
         snprintf(name, size, "%s", names[cursor - 1]);
+    else
+        choice = LL_MENU_DEMO;
 
     for (int i = 0; i < count; i++)
         free(names[i]);
-    return is_cart;
+    return choice;
 }

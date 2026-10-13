@@ -53,6 +53,33 @@ static LLMem lua_mem;
 static jmp_buf panic_jmp;
 static LLRunResult result;
 static bool failed; // The cart stopped with an error: no _quit
+static const LLCart *run_cart; // NULL for the demo
+static char last_error[2048];
+
+const char *ll_run_error(void)
+{
+    return last_error;
+}
+
+// Shows the error screen and sets 'result' from the choice. Errors of the
+// demo and of system carts (the editor itself) cannot be edited.
+static void error_screen(const char *msg)
+{
+    snprintf(last_error, sizeof(last_error), "%s", msg);
+    bool can_edit = run_cart != NULL && !run_cart->system;
+    switch (ll_error_show(msg, &lua_mem, can_edit))
+    {
+        case LL_ERROR_RESTART:
+            result = LL_RUN_RESTART;
+            break;
+        case LL_ERROR_BACK:
+            result = LL_RUN_MENU;
+            break;
+        case LL_ERROR_EDIT:
+            result = LL_RUN_EDIT;
+            break;
+    }
+}
 
 #define QUIT_TIME_US 1000000 // Time limit of _quit
 static u32 quit_start;
@@ -131,7 +158,7 @@ static int panic_handler(lua_State *L)
     ll_sound_stop_all();
     ll_log("PANIC: %s", msg);
     ll_log_flush();
-    result = ll_error_show(msg, &lua_mem) ? LL_RUN_RESTART : LL_RUN_MENU;
+    error_screen(msg);
     longjmp(panic_jmp, 1);
     return 0;
 }
@@ -159,7 +186,7 @@ static void show_error(lua_State *L)
     ll_log_text(msg, strlen(msg));
     ll_log_flush();
 
-    result = ll_error_show(msg, &lua_mem) ? LL_RUN_RESTART : LL_RUN_MENU;
+    error_screen(msg);
 }
 
 // True if the cart asked to stop (sys.run, sys.exit); sets 'result'.
@@ -242,7 +269,7 @@ static void call_quit(lua_State *L)
     lua_sethook(L, NULL, 0, 0);
 }
 
-static void register_api(lua_State *L)
+static void register_api(lua_State *L, const LLCart *cart)
 {
     lua_register(L, "micros", l_micros);
 
@@ -253,7 +280,7 @@ static void register_api(lua_State *L)
 
     ll_input_register(L);
     ll_log_register(L);
-    ll_sys_register(L);
+    ll_sys_register(L, cart);
     ll_stats_register(L);
     ll_gfx_register(L);
     ll_image_register(L);
@@ -399,6 +426,8 @@ LLRunResult ll_run(const LLCart *cart)
                (unsigned)(lua_mem.limit / 1024));
 
     result = LL_RUN_RESTART;
+    run_cart = cart;
+    last_error[0] = '\0';
     failed = false;
     watch_stopped = false;
     ll_gfx_reset();
@@ -411,8 +440,8 @@ LLRunResult ll_run(const LLCart *cart)
     if (L == NULL)
     {
         ll_log("cannot create Lua state");
-        return ll_error_show("cannot create Lua state", &lua_mem)
-            ? LL_RUN_RESTART : LL_RUN_MENU;
+        error_screen("cannot create Lua state");
+        return result;
     }
 
     if (setjmp(panic_jmp) != 0)
@@ -429,7 +458,7 @@ LLRunResult ll_run(const LLCart *cart)
     luaL_openlibs(L);
     ll_sandbox_install(L, cart);
     ll_console_register(L);
-    register_api(L);
+    register_api(L, cart);
 
     if (load_main(L, cart) && call_hook(L, "_init", -1))
         frame_loop(L);

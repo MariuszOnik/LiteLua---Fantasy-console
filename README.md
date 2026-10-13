@@ -19,7 +19,8 @@ litelua/saves/<id>/   save files, one folder per cartridge
 litelua/log.txt       the log (see below)
 ```
 
-LiteLua starts with a list of the cartridges in `litelua/carts` (Up/Down, **A** to run).
+LiteLua starts with a list of the cartridges in `litelua/carts` (Up/Down, **A** to run,
+**Y** to open its code in the [code editor](#code-editor-on-the-ds)).
 The first entry is a built-in demo that shows the frame rate, input and memory use and lets
 you test the error screen (SELECT, Y) and the memory limit (X). Without an SD card the
 demo starts directly. (This simple list will be replaced by a proper cartridge browser.)
@@ -476,8 +477,10 @@ When your code fails — a syntax error or an error while running — the game s
 error screen shows the message with the file and line (`main.lua:12: ...`) and the
 memory use on the top screen, and the stack traceback (which functions were called) on
 the bottom screen. Press **START** to restart the
-game from the beginning (with fresh memory) or **SELECT** to go back to the cartridge list.
-File names are relative to the cartridge (`src/enemy.lua:7: ...`).
+game from the beginning (with fresh memory), **Y** to open the code editor at the line of
+the error, or **SELECT** to go back to the cartridge list (or to the code editor, if the
+game was started from it). File names are relative to the cartridge
+(`src/enemy.lua:7: ...`).
 
 You can raise your own errors with `error("message")`.
 
@@ -549,9 +552,45 @@ variables.
 The repository has a VM benchmark cartridge in `tests/carts/bench`: copy the folder to
 `litelua/carts/` to run it.
 
-## System carts: launcher and editors (coming in P10)
+## Code editor on the DS
 
-*This describes how it will work; today a simple built-in list starts the games.*
+You can write and fix your game on the console itself. Choose a cartridge in the list and
+press **Y**, or press **Y** on the error screen to jump straight to the line of the error.
+
+- **Top screen:** the code with line numbers and colors, the file name (`*` = not saved)
+  and the cursor position.
+- **Bottom screen:** buttons — **Files**, **Save**, **Run**, **Check** (syntax check
+  without running), **Undo**, **Cut**, **Copy**, **Paste** — then a message line and the
+  keyboard. **sym** switches to Lua symbols (`+ - * / ~= == .. [[` …), **shf** is
+  Shift (tap twice for Caps Lock).
+
+| buttons | in the editor |
+|---|---|
+| d-pad | move the cursor (hold to repeat) |
+| **L** + d-pad | select text |
+| **R** + up/down | page up/down |
+| **R** + left/right | start/end of the line (start: first the indentation) |
+| **A** | new line (keeps the indentation) |
+| **B** | backspace |
+| **Y** / **R+Y** | undo / redo |
+| **X** | letters / symbols keyboard |
+| **SELECT** | files of the cartridge |
+
+**Run** saves all changed files and starts the game. When you leave the game (**L+R+B**,
+`sys.exit()`) or press **SELECT** on its error screen, you are back in the editor at the
+same file and line. After an error the editor opens the file of the error, marks the line
+and shows the stack traceback — touch a line of it to go there.
+
+**Files** shows the folders and files of the cartridge (touch twice or **A** to open,
+**B** goes up a folder); **File+** and **Dir+** create a new file or folder, **Carts**
+switches to another cartridge. Several files can be open at once; **Run** saves them all.
+Files are saved safely: a failed write never leaves half a file. Cartridges packed as
+`.lcart` can be read but not changed. The clipboard is kept between runs.
+
+## System carts: launcher and editors
+
+*The code editor is the first system cart (P11); the launcher comes in P10. Until then a
+simple built-in list starts the games, and system carts always come from the ROM.*
 
 The cart browser (launcher) and the editors are carts too, written in Lua. They come
 **built into** `litelua.nds`, so they always work and always match the engine version.
@@ -570,7 +609,8 @@ You can still change them:
   version is used again.
 
 System carts can do a few things games cannot: list all carts, read and write the files of
-any cart and create new carts.
+any cart and run a game that comes back to them when it ends (`sys.system`, see
+[docs/API.md](docs/API.md)). `sys.run("@code")` starts the built-in code editor.
 
 ### System buttons
 

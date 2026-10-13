@@ -859,3 +859,46 @@ osobne polecenie.
   (plik/linia, D14 wariant A). Gry nadal piszą tylko do `save/` (D20). Pełny launcher w
   Lua, menu pauzy, tryb awaryjny i nadpisywanie systemowych z karty — reszta P10, później.
 - Szczegóły zakresu: `docs/PLAN.md`, „Gdzie skończyliśmy”.
+
+## D43 (2026-10-13) — P10-min i edytor kodu (P11): `@code`, `sys.system`, powrót z gry
+- **Kartridże systemowe:** `sys.run("@x")` → folder `nitro:/system/x/` w ROM (tylko do
+  odczytu; `LLCart.system`). Zapisy w `litelua/saves/@x` (id wymuszone na `@x`, więc bez
+  kolizji z grami). Nadpisanie z karty i tryb awaryjny — dalej w P10.
+- **`sys.system`** (tylko kartridże systemowe): `start`, `carts()`, `cart(name)`,
+  `files(cart, [dir])`, `read`, `write`, `mkdir`, `run(cart, [data])` — opis w
+  `docs/api/system.lua`. Pliki dowolnego kartridża otwierane **bez manifestu**
+  (`ll_cart_open_files`), żeby dało się naprawić zepsuty `cart.lua`. Zapis tylko do
+  folderów na SD (`.lcart` i systemowe — tylko odczyt). **Bezpieczny zapis:** `<plik>.new`
+  → stary na `<plik>.bak` → `.new` na miejsce → usunięcie `.bak` (FAT nie nadpisuje przy
+  `rename`; przy błędzie stary plik wraca).
+- **Powrót z gry (D14 wariant A):** `sys.system.run(game, data)` zapamiętuje wywołującego i
+  dane (≤ 64 KB, w C poza stanem Lua). Gdy gra kończy się do listy (L+R+B, `sys.exit`,
+  SELECT na ekranie błędu), startuje wywołujący z `start = {reason="exit", cart, data}`.
+  Ekran błędu ma **Y = Edytuj** (dla gier, nie dla demo i kartridży systemowych): zawsze
+  `@code` z `reason="error"`, `error` (komunikat ze śladem stosu) i danymi edytora, jeśli to
+  on uruchomił grę. Lista w C: **Y = edytuj** zaznaczony kartridż (`reason="edit"`).
+  Decyzje użytkownika: przyciski i klawiatura jak niżej, wejście przez Y.
+- **Edytor `@code` (Lua, `nitrofs/system/code`):** `buffer.lua` (linie, kursor po znakach
+  UTF-8, zaznaczenie, cofanie z łączeniem pisania i backspace, 300 kroków), `lexer.lua`
+  (kolory; stan długich komentarzy/stringów na początku linii, szybka ścieżka bez `[`/`]`),
+  `keyboard.lua` (QWERTY + warstwa symboli Lua, Shift jednorazowy / Caps Lock, powtarzanie
+  backspace). Przyciski: krzyżak kursor (autopowtarzanie), L+krzyżak zaznaczanie, R+góra/dół
+  strona, R+lewo/prawo początek/koniec linii, A Enter (z wcięciem), B backspace, Y cofnij,
+  R+Y ponów, X litery/symbole, SELECT pliki; L+R razem ignorowane (kombinacje systemowe).
+  Pasek dotykowy: Files, Save, Run, Check, Undo, Cut, Copy, Paste. Run zapisuje wszystkie
+  zmienione bufory i uruchamia grę z danymi (plik, kursor, przewinięcie każdego bufora).
+  Check: `load` bez uruchamiania. Schowek w `save/clipboard.txt` edytora (`_quit`).
+- **Rysowanie kodu warstwami:** `text()` nie wysyła quadów dla spacji, więc dla każdego koloru
+  jeden napis na cały ekran (inne znaki zastąpione spacjami) — ~7 wywołań `text` na klatkę
+  zamiast setek; cache do zmiany bufora/przewinięcia. melonDS (tryb DS): 29 FPS, CPU 38%,
+  rysowanie 12,5 ms przy przewijaniu `bench/main.lua`. Pomiar na konsoli — do zrobienia.
+- **Dotyk:** pierwsza próbka po przyłożeniu rysika bywa przesunięta o kilka pikseli, więc
+  naciśnięcie liczy się od drugiej klatki dotyku (krótkie stuknięcie — przy puszczeniu, z
+  jego pozycją). Przycisk, który zmienił tryb edytora, milknie do puszczenia.
+- **Testy:** `tests/carts/edit` (błąd w `src/util.lua` na A, `sys.exit` na B);
+  `tests/tools/test_editor.py` uruchamia bufor, lekser i cały `main.lua` z atrapami API na PC
+  (Lua 5.4 z pakietu `lupa`; bez niego test jest pomijany). melonDS sterowany skryptem
+  (klawisze + kliknięcia na dolnym ekranie): pełny przepływ lista → Y → Run → błąd → Y →
+  `src/util.lua:5` → Run → B → powrót sprawdzony.
+- Później: polskie litery na klawiaturze, podpowiedzi (P11a), wyszukiwanie, przewijanie
+  kodu rysikiem, usuwanie/zmiana nazw plików, nowy kartridż (P10).

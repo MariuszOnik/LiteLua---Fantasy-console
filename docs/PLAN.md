@@ -6,32 +6,22 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
-- **Następny krok: P11 — edytor kodu na DS, razem z minimalnym wycinkiem P10** (D42;
-  P8 mapy odłożone). Dwa etapy w kolejności:
-  1. **P10-min (fundament):** kartridże systemowe w ROM (`nitro:/system/<nazwa>/`,
-     uruchamiane `sys.run("@code")`), API `sys.system` widoczne **tylko** dla nich:
-     lista kartridży (z manifestami), odczyt / zapis / lista plików w kartridżu-folderze
-     (`.lcart` tylko do odczytu), tworzenie pliku i folderu, bezpieczny zapis (plik
-     tymczasowy → zamiana), uruchomienie gry z powrotem do kartridża wywołującego
-     z przekazaniem danych (plik, linia, kursor — D14 wariant A). Pełny launcher w Lua,
-     menu pauzy, tryb awaryjny i nadpisywanie systemowych z karty zostają w P10.
-  2. **P11 (edytor, kartridż systemowy w Lua `@code`):** wybór kartridża i pliku; kod na
-     górnym ekranie (font 6×8: 42 kolumny × 24 wiersze, przewijanie, numery linii,
-     kolorowanie składni), **klawiatura ekranowa na dolnym** (rysik, Shift, symbole Lua),
-     krzyżak i L/R do kursora; wstawianie/usuwanie, zaznaczanie, kopiuj/wklej, cofnij;
-     sprawdzanie składni przez `load` bez uruchamiania; zapis; „Uruchom” → gra → powrót
-     do pliku/linii; po błędzie gry przycisk „Edytuj” na ekranie błędu (D13: błąd jako
-     plik + linia). Podpowiedzi API — P11a, później.
-  Przed startem przeczytać: `docs/UX.md` (ekrany, przyciski, kartridże systemowe), D8,
-  D13, D14, D20 (piaskownica), D27. Prawdopodobnie potrzebne: powtarzanie klawiszy
-  (`btnp` z autorepeat) — sprawdzić `docs/api/input.lua`.
-- **Ostatnio (2026-10-13):** P18 S1 — utwory `.lsong` grane **na żywo** przez DS
+- **Następny krok:** do ustalenia z użytkownikiem — test edytora na konsoli (wydajność,
+  dotyk), potem P11a (podpowiedzi), reszta P10 (launcher w Lua, menu pauzy, tryb awaryjny,
+  nadpisywanie systemowych z karty, nowy kartridż) albo P8 (mapy).
+- **Ostatnio (2026-10-13):** P11 + P10-min (D43) — edytor kodu na DS jako kartridż
+  systemowy `@code` (`nitrofs/system/code`): kod z kolorami i numerami linii, klawiatura
+  ekranowa, zaznaczanie, schowek, cofnij/ponów, Check, Save, Run z powrotem do pliku/linii,
+  Y na ekranie błędu → linia błędu + ślad stosu do dotknięcia; Y na liście → edytor.
+  `sys.system` (pliki dowolnego kartridża, bezpieczny zapis, `run` z powrotem). Sprawdzone
+  w melonDS skryptem; **na konsoli jeszcze nie**.
+- **Wcześniej:** P18 S1 — utwory `.lsong` grane **na żywo** przez DS
   (`music("x")`, D41), potwierdzone nagraniem w melonDS i odsłuchem na DSi; import MIDI
   (D37), `.lsong` v1.1 (D38), projekt v1.2 (D39), manual `docs/COMPOSING.md`. Wcześniej
   w tej serii: D30–D33 (stan rysowania, koła i `stroke`, wyjście L+R+START, `_quit`,
   `sys.info`), P7 dźwięk (D34), `cart.lua` przez parser danych i strażnik L+R+B (D38).
-- **Testowanie:** melonDS sterowany skryptem (klawisze tylko gdy okno melonDS jest na
-  pierwszym planie); **dźwięk potwierdzać nagraniem wyjścia audio** (WASAPI loopback,
+- **Testowanie:** melonDS sterowany skryptem `tools/melon.py` (klawisze, stuknięcia w dolny
+  ekran, zrzuty; okno melonDS musi być na pierwszym planie); **dźwięk potwierdzać nagraniem wyjścia audio** (WASAPI loopback,
   Python `soundcard` w osobnym venv) — liczniki nie wystarczą (lekcja z S0, D40). Konsola:
   FTP pod adresem z DHCP (192.168.1.86 albo .89), port 5000.
 - **Prywatne pliki** (Metallica, Marsz Imperatora — MIDI, `.lsong`, WAV) tylko w `private/`
@@ -113,9 +103,10 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   Wyjście z gry (menu pauzy) → powrót do listy na zapamiętaną pozycję (D14).
   Wg D27 / `docs/UX.md`: menu pauzy (START 0,5 s), kartridże systemowe w ROM z
   nadpisaniem z `sd:/litelua/system/`, tryb awaryjny (SELECT przy starcie), kopiowanie
-  systemowych na kartę, `sys.run("@nazwa")`, API `sys.system`, biblioteka `ui.lua`.
-  README ma już opis (sekcja „System carts”) — uaktualnić, gdy będzie działać.
-- [ ] **P11 — Edytor kodu na DS** z klawiaturą ekranową — **następny** (D42), razem z
+  systemowych na kartę, biblioteka `ui.lua`. Już zrobione w P11 (D43): `sys.run("@nazwa")`
+  z ROM, `sys.system`, powrót z gry do wywołującego, Y na liście i ekranie błędu.
+  README ma opis (sekcja „System carts”) — uaktualnić, gdy będzie działać.
+- [x] **P11 — Edytor kodu na DS** z klawiaturą ekranową (D42, D43), razem z
   minimalnym wycinkiem P10 (kartridże systemowe w ROM, `sys.system`, powrót z gry)
   Kod na górnym ekranie, klawiatura na dolnym; kolorowanie składni; przycisk „Edytuj” na
   ekranie błędu → plik i linia, dotknięcie ramki stosu (D13); sprawdzanie składni w tle

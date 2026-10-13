@@ -11,6 +11,7 @@
 #define _GNU_SOURCE // fopencookie
 
 #include <ctype.h>
+#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -500,15 +501,47 @@ bool ll_cart_is_file_name(const char *name)
     return has_lcart_ext(name);
 }
 
-bool ll_cart_open(LLCart *cart, const char *name, char *err, size_t err_size)
+// A name of a cart folder or file: no path separators, drives or dot names
+static bool valid_cart_name(const char *name)
+{
+    return *name && strchr(name, '/') == NULL && strchr(name, '\\') == NULL
+        && strchr(name, ':') == NULL && strcmp(name, ".") != 0
+        && strcmp(name, "..") != 0;
+}
+
+bool ll_cart_open_files(LLCart *cart, const char *name, char *err,
+                        size_t err_size)
 {
     memset(cart, 0, sizeof(*cart));
     snprintf(cart->name, sizeof(cart->name), "%s", name);
-    snprintf(cart->root, sizeof(cart->root), "%s/carts/%s", ll_base, name);
+    strcpy(cart->entry, "main.lua");
+    cart->mem_limit = LL_MEM_DEFAULT_LIMIT;
 
+    // System cart "@code": the folder nitro:/system/code built into the ROM.
+    // Its saves go to litelua/saves/@code, apart from any game's id.
+    if (name[0] == LL_SYSTEM_PREFIX)
+    {
+        struct stat st;
+        cart->system = true;
+        snprintf(cart->root, sizeof(cart->root), "nitro:/system/%s", name + 1);
+        snprintf(cart->id, sizeof(cart->id), "%s", name);
+        if (!valid_cart_name(name + 1) || stat(cart->root, &st) != 0)
+        {
+            snprintf(err, err_size, "no system cart '%s'", name);
+            return false;
+        }
+        return true;
+    }
+
+    snprintf(cart->root, sizeof(cart->root), "%s/carts/%s", ll_base, name);
     if (ll_base[0] == '\0')
     {
         snprintf(err, err_size, "no SD card");
+        return false;
+    }
+    if (!valid_cart_name(name))
+    {
+        snprintf(err, err_size, "bad cart name '%s'", name);
         return false;
     }
 
@@ -547,8 +580,13 @@ bool ll_cart_open(LLCart *cart, const char *name, char *err, size_t err_size)
         char c = (char)tolower((unsigned char)name[i]);
         cart->id[i] = valid_id((char[]){ c, '\0' }) ? c : '_';
     }
-    strcpy(cart->entry, "main.lua");
-    cart->mem_limit = LL_MEM_DEFAULT_LIMIT;
+    return true;
+}
+
+bool ll_cart_open(LLCart *cart, const char *name, char *err, size_t err_size)
+{
+    if (!ll_cart_open_files(cart, name, err, err_size))
+        return false;
 
     size_t len;
     bool ok = false;
@@ -564,6 +602,8 @@ bool ll_cart_open(LLCart *cart, const char *name, char *err, size_t err_size)
         ll_cart_close(cart);
         return false;
     }
+    if (cart->system)
+        snprintf(cart->id, sizeof(cart->id), "%s", name);
     if (cart->title[0] == '\0')
         snprintf(cart->title, sizeof(cart->title), "%s", cart->id);
     return true;
@@ -620,4 +660,225 @@ FILE *ll_cart_open_stream(const LLCart *cart, const char *rel, long *size,
         return NULL;
     }
     return f;
+}
+
+// --- Files of any cart (system carts, D42) ----------------------------------
+
+bool ll_cart_writable(const LLCart *cart)
+{
+    return cart->zip == NULL && !cart->system;
+}
+
+static int compare_names(const void *a, const void *b)
+{
+    return strcasecmp(*(const char *const *)a, *(const char *const *)b);
+}
+
+int ll_cart_list_names(char *names[], int max)
+{
+    int n = 0;
+    char path[LL_PATH_MAX];
+    snprintf(path, sizeof(path), "%s/carts", ll_base);
+
+    DIR *dir = ll_base[0] ? opendir(path) : NULL;
+    if (dir == NULL)
+        return 0;
+
+    struct dirent *e;
+    while (n < max && (e = readdir(dir)) != NULL)
+    {
+        if (e->d_name[0] == '.')
+            continue;
+        if (e->d_type != DT_DIR
+            && !(e->d_type == DT_REG && has_lcart_ext(e->d_name)))
+            continue;
+        if (strlen(e->d_name) >= LL_NAME_MAX)
+            continue;
+        names[n] = strdup(e->d_name);
+        if (names[n])
+            n++;
+    }
+    closedir(dir);
+
+    qsort(names, n, sizeof(names[0]), compare_names);
+    return n;
+}
+
+// Adds an entry to the list table at -2 unless the set at -1 has it
+static void add_entry(lua_State *L, const char *name, size_t len, bool is_dir)
+{
+    lua_pushlstring(L, name, len);
+    if (lua_rawget(L, -2) != LUA_TNIL)
+    {
+        lua_pop(L, 1);
+        return;
+    }
+    lua_pop(L, 1);
+    lua_pushlstring(L, name, len);
+    lua_pushboolean(L, 1);
+    lua_rawset(L, -3);
+
+    lua_createtable(L, 0, 2);
+    lua_pushlstring(L, name, len);
+    lua_setfield(L, -2, "name");
+    if (is_dir)
+    {
+        lua_pushboolean(L, 1);
+        lua_setfield(L, -2, "dir");
+    }
+    lua_rawseti(L, -3, (lua_Integer)lua_rawlen(L, -3) + 1);
+}
+
+// Sorts the list at the top of the stack: folders first, then by name
+static const char sort_list[] =
+    "local t = ...\n"
+    "table.sort(t, function(a, b)\n"
+    "  if (a.dir or false) ~= (b.dir or false) then return a.dir ~= nil end\n"
+    "  return a.name:lower() < b.name:lower()\n"
+    "end)\n";
+
+bool ll_cart_push_list(lua_State *L, const LLCart *cart, const char *dir)
+{
+    lua_newtable(L); // The list
+    lua_newtable(L); // Names already added (a .lcart has many files per folder)
+
+    if (cart->zip)
+    {
+        LLZip *z = cart->zip;
+        char want[LL_PATH_MAX];
+        snprintf(want, sizeof(want), "%s%s%s", z->prefix, dir, *dir ? "/" : "");
+        size_t want_len = strlen(want);
+        mz_uint count = mz_zip_reader_get_num_files(&z->za);
+        for (mz_uint i = 0; i < count; i++)
+        {
+            char name[LL_PATH_MAX];
+            mz_zip_reader_get_filename(&z->za, i, name, sizeof(name));
+            if (strncasecmp(name, want, want_len) != 0)
+                continue;
+            const char *rest = name + want_len;
+            const char *slash = strchr(rest, '/');
+            size_t len = slash ? (size_t)(slash - rest) : strlen(rest);
+            if (len > 0 && rest[0] != '.')
+                add_entry(L, rest, len, slash != NULL);
+        }
+    }
+    else
+    {
+        char path[LL_PATH_MAX];
+        int n = snprintf(path, sizeof(path), "%s%s%s", cart->root, *dir ? "/" : "",
+                         dir);
+        DIR *d = n > 0 && (size_t)n < sizeof(path) ? opendir(path) : NULL;
+        if (d == NULL)
+        {
+            lua_pop(L, 2);
+            return false;
+        }
+        struct dirent *e;
+        while ((e = readdir(d)) != NULL)
+        {
+            if (e->d_name[0] == '.')
+                continue;
+            bool is_dir = e->d_type == DT_DIR;
+            if (e->d_type == DT_UNKNOWN)
+            {
+                char full[LL_PATH_MAX];
+                struct stat st;
+                int m = snprintf(full, sizeof(full), "%s/%s", path, e->d_name);
+                is_dir = m > 0 && (size_t)m < sizeof(full) && stat(full, &st) == 0
+                      && S_ISDIR(st.st_mode);
+            }
+            add_entry(L, e->d_name, strlen(e->d_name), is_dir);
+        }
+        closedir(d);
+    }
+
+    lua_pop(L, 1);
+    if (luaL_loadbuffer(L, sort_list, sizeof(sort_list) - 1, "=sort") == LUA_OK)
+    {
+        lua_pushvalue(L, -2);
+        lua_call(L, 1, 0);
+    }
+    return true;
+}
+
+// Absolute path of a file of a writable cart
+static bool writable_path(const LLCart *cart, const char *rel, char *out,
+                          size_t size, char *err, size_t err_size)
+{
+    if (!ll_cart_writable(cart))
+    {
+        snprintf(err, err_size, "%s is read only (%s)", cart->name,
+                 cart->system ? "built in" : ".lcart");
+        return false;
+    }
+    int n = snprintf(out, size, "%s/%s", cart->root, rel);
+    if (n < 0 || (size_t)n + 5 >= size) // Room for ".new"/".bak"
+    {
+        snprintf(err, err_size, "path too long: %s", rel);
+        return false;
+    }
+    return true;
+}
+
+bool ll_cart_write(const LLCart *cart, const char *rel, const char *data,
+                   size_t len, char *err, size_t err_size)
+{
+    char path[LL_PATH_MAX], tmp[LL_PATH_MAX + 8], bak[LL_PATH_MAX + 8];
+    if (!writable_path(cart, rel, path, sizeof(path), err, err_size))
+        return false;
+    snprintf(tmp, sizeof(tmp), "%s.new", path);
+    snprintf(bak, sizeof(bak), "%s.bak", path);
+
+    FILE *f = fopen(tmp, "wb");
+    bool ok = f != NULL;
+    if (ok)
+    {
+        ok = fwrite(data, 1, len, f) == len;
+        ok = fclose(f) == 0 && ok;
+    }
+    if (!ok)
+    {
+        remove(tmp);
+        snprintf(err, err_size, "cannot write %s (card full or folder missing?)",
+                 rel);
+        return false;
+    }
+
+    // FAT cannot rename onto an existing file: the old file is moved away
+    // first and put back if the new one cannot take its place
+    struct stat st;
+    bool had_old = stat(path, &st) == 0;
+    remove(bak);
+    if (had_old && rename(path, bak) != 0)
+    {
+        remove(tmp);
+        snprintf(err, err_size, "cannot replace %s", rel);
+        return false;
+    }
+    if (rename(tmp, path) != 0)
+    {
+        if (had_old)
+            rename(bak, path);
+        remove(tmp);
+        snprintf(err, err_size, "cannot replace %s", rel);
+        return false;
+    }
+    if (had_old)
+        remove(bak);
+    return true;
+}
+
+bool ll_cart_mkdir(const LLCart *cart, const char *rel, char *err,
+                   size_t err_size)
+{
+    char path[LL_PATH_MAX];
+    if (!writable_path(cart, rel, path, sizeof(path), err, err_size))
+        return false;
+    struct stat st;
+    if (mkdir(path, 0777) != 0 && !(stat(path, &st) == 0 && S_ISDIR(st.st_mode)))
+    {
+        snprintf(err, err_size, "cannot create folder %s", rel);
+        return false;
+    }
+    return true;
 }

@@ -9,6 +9,8 @@
 #include <stddef.h>
 #include <stdio.h>
 
+#include "lua.h"
+
 #define LL_PATH_MAX 256
 #define LL_NAME_MAX 64
 #define LL_BASE_MAX 32
@@ -26,7 +28,11 @@ typedef struct {
     char entry[LL_NAME_MAX];  // Manifest 'entry' (default: main.lua)
     size_t mem_limit;         // Manifest 'memory' in KB, stored in bytes
     void *zip;                // Open archive of a .lcart, NULL for a folder
+    bool system;              // System cart "@name" from nitro:/system (D27)
 } LLCart;
+
+// Prefix of system cart names: sys.run("@code") runs nitro:/system/code
+#define LL_SYSTEM_PREFIX '@'
 
 // Base folder "<drive>litelua" (no trailing '/'); empty without a FAT drive.
 extern char ll_base[LL_BASE_MAX];
@@ -39,6 +45,35 @@ void ll_cart_init(bool fat_ok);
 // manifest (cart.lua). On failure returns false with a message in 'err'.
 // An opened cart must be closed with ll_cart_close.
 bool ll_cart_open(LLCart *cart, const char *name, char *err, size_t err_size);
+
+// Opens cart 'name' like ll_cart_open, but only to reach its files: the
+// manifest is not read (an editor must open a cart with a broken cart.lua).
+// Fields from the manifest keep their defaults.
+bool ll_cart_open_files(LLCart *cart, const char *name, char *err,
+                        size_t err_size);
+
+// True if the files of the cart can be changed: a folder on the SD card
+// (not a .lcart and not a built-in system cart).
+bool ll_cart_writable(const LLCart *cart);
+
+// Fills 'names' with the carts in litelua/carts (folders and .lcart files,
+// strdup'ed, sorted). Returns their number.
+int ll_cart_list_names(char *names[], int max);
+
+// Pushes the list of folder 'dir' of the cart ("" for the top) as an array
+// of { name = "x", dir = true|nil }, sorted, folders first. Returns false
+// (nothing pushed) if the folder cannot be read.
+bool ll_cart_push_list(lua_State *L, const LLCart *cart, const char *dir);
+
+// Writes a file of a writable cart safely: the data goes to "<file>.new"
+// first, which then replaces the file, so a failed write never leaves a
+// half-written file. Returns false with a message in 'err'.
+bool ll_cart_write(const LLCart *cart, const char *rel, const char *data,
+                   size_t len, char *err, size_t err_size);
+
+// Creates a folder in a writable cart (succeeds if it exists).
+bool ll_cart_mkdir(const LLCart *cart, const char *rel, char *err,
+                   size_t err_size);
 
 // Closes the archive of a .lcart; does nothing for folders. Safe to repeat.
 void ll_cart_close(LLCart *cart);

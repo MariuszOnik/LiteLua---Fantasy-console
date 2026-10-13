@@ -13,7 +13,9 @@ return {
       desc = "Starts another cartridge when the current callback returns. "
           .. "\"game\" finds the folder game or the file game.lcart. "
           .. "The current game is closed and all its memory is freed first. "
-          .. "An error if the cartridge does not exist or its cart.lua is wrong.",
+          .. "An error if the cartridge does not exist or its cart.lua is wrong. "
+          .. "A name starting with @ runs a built-in system cartridge: "
+          .. "sys.run(\"@code\") opens the code editor.",
       example = [[
 if btnp("start") then sys.run("mygame2") end]],
     },
