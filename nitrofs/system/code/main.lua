@@ -2,11 +2,12 @@
 -- Top screen: the code. Bottom screen: toolbar, messages and the keyboard.
 -- Buttons: d-pad moves the cursor (L held: select, R: page / line start and
 -- end), A new line, B backspace, Y undo (R+Y redo), X letters/symbols,
--- SELECT files.
+-- SELECT files, START help.
 
 local Buffer = require("buffer")
 local lexer = require("lexer")
 local kb = require("keyboard")
+local help = require("help")
 
 local S = sys.system
 local COLS, ROWS = 42, 23     -- Code rows below the status bar
@@ -17,7 +18,8 @@ local TOOL_H = 14
 local cart, info              -- Cart being edited and its description
 local buffers, order = {}, {} -- Open files by path, in the order opened
 local buf                     -- Current buffer
-local mode = "carts"          -- code | files | carts | prompt | error
+local mode = "carts"          -- code | files | carts | prompt | error | help
+local help_from               -- Mode to go back to from the help
 local msg, msg_col = "", 13
 local frame = 0
 local clipboard = ""
@@ -145,23 +147,74 @@ end
 
 local prompt = { text = "", what = "file" }
 
+local function item_path(item)
+  return list.dir == "" and item.name or list.dir .. "/" .. item.name
+end
+
 local function start_prompt(what)
   if not info.writable then
     say("read only cart", 3)
     return
   end
-  prompt.text = list.dir == "" and "" or list.dir .. "/"
   prompt.what = what
-  if what == "file" then prompt.text = prompt.text .. ".lua" end
-  prompt.pos = #prompt.text - (what == "file" and 4 or 0)
+  if what == "rename" then
+    local item = list.items[list.cursor]
+    if not item or item.up then say("choose a file or folder first", 3); return end
+    prompt.from = item_path(item)
+    prompt.text = prompt.from
+    -- Cursor before the extension
+    prompt.pos = #prompt.text - #(prompt.text:match("%.[^./]*$") or "")
+  else
+    prompt.text = list.dir == "" and "" or list.dir .. "/"
+    if what == "file" then prompt.text = prompt.text .. ".lua" end
+    prompt.pos = #prompt.text - (what == "file" and 4 or 0)
+  end
   mode = "prompt"
+end
+
+-- Open buffers follow a renamed file or folder
+local function rename_buffers(from, to)
+  for i, p in ipairs(order) do
+    local np
+    if p == from then np = to
+    elseif p:sub(1, #from + 1) == from .. "/" then np = to .. p:sub(#from + 1) end
+    if np then
+      local b = buffers[p]
+      buffers[p], buffers[np], order[i], b.path = nil, b, np, np
+    end
+  end
+end
+
+-- Open buffers of a deleted file are dropped (unsaved changes too)
+local function drop_buffer(path)
+  for i, p in ipairs(order) do
+    if p == path then
+      if buffers[p] == buf then buf = nil end
+      buffers[p] = nil
+      table.remove(order, i)
+      break
+    end
+  end
+  if not buf and order[1] then buf = buffers[order[1]] end
 end
 
 local function finish_prompt()
   local path = prompt.text
   if path == "" then mode = "files"; return end
   local ok, e
-  if prompt.what == "dir" then
+  if prompt.what == "rename" then
+    if path == prompt.from then mode = "files"; return end
+    ok, e = S.rename(cart, prompt.from, path)
+    if ok then
+      rename_buffers(prompt.from, path)
+      say("renamed to " .. path, 6)
+      open_dir(path:match("^(.*)/[^/]*$") or "")
+    else
+      say(e, 2)
+      mode = "files"
+    end
+    return
+  elseif prompt.what == "dir" then
     ok, e = S.mkdir(cart, path)
   elseif S.read(cart, path) then
     ok, e = false, path .. " exists"
@@ -261,9 +314,11 @@ local function tool_list()
   if mode == "code" then
     return { "Files", "Save", "Run", "Check", "Undo", "Cut", "Copy", "Paste" }
   elseif mode == "files" then
-    return { "Code", "File+", "Dir+", "Carts", "Run" }
+    return { "Code", "File+", "Dir+", "Ren", "Del", "Carts", "Run", "Help" }
   elseif mode == "carts" then
-    return { "Code" }
+    return { "Code", "Help" }
+  elseif mode == "help" then
+    return help.toolbar()
   elseif mode == "prompt" then
     return { "OK", "Cancel" }
   else
@@ -309,6 +364,47 @@ end
 actions["File+"] = function() start_prompt("file") end
 actions["Dir+"] = function() start_prompt("dir") end
 actions.Carts = show_carts
+actions.Ren = function() start_prompt("rename") end
+
+-- Del asks first: the second touch within 3 seconds deletes
+local del_path, del_frame
+function actions.Del()
+  if not info.writable then say("read only cart", 3); return end
+  local item = list.items[list.cursor]
+  if not item or item.up then say("choose a file or folder first", 3); return end
+  local path = item_path(item)
+  if del_path ~= path or frame - del_frame > 90 then
+    del_path, del_frame = path, frame
+    say("touch Del again to delete " .. path, 3)
+    return
+  end
+  del_path = nil
+  local ok, e = S.remove(cart, path)
+  if not ok then say(e, 2); return end
+  drop_buffer(path)
+  say("deleted " .. path, 6)
+  local cur = list.cursor
+  open_dir(list.dir)
+  list.cursor = math.max(1, math.min(cur, #list.items))
+end
+
+-- Word under the cursor ("sys.run", "rectfill") for the help
+local function word_at_cursor()
+  if mode ~= "code" or not buf then return nil end
+  local line, x = buf.lines[buf.cy], buf.cx
+  local s, e = x + 1, x
+  while s > 1 and line:sub(s - 1, s - 1):match("[%w_.]") do s = s - 1 end
+  while e < #line and line:sub(e + 1, e + 1):match("[%w_.]") do e = e + 1 end
+  local w = line:sub(s, e):gsub("^%.+", ""):gsub("%.+$", "")
+  return w
+end
+
+function actions.Help()
+  local from = mode
+  if mode == "help" then return end
+  help.open(S, word_at_cursor())
+  help_from, mode = from, "help"
+end
 actions.OK = finish_prompt
 function actions.Cancel() mode = "files" end
 function actions.Close() mode = buf and "code" or "files" end
@@ -407,13 +503,33 @@ function _update()
   local entered = mode
   local tx, ty, pressed = read_touch()
 
+  local help_result, help_text
   if pressed and ty < TOOL_H then
     local name = tool_at(tx)
-    if actions[name] then actions[name]() end
+    if mode == "help" then
+      help_result, help_text = help.tool(name)
+    elseif actions[name] then
+      actions[name]()
+      return
+    end
+  elseif mode == "help" then
+    help_result, help_text = help.update(repeated, pressed and tx, pressed and ty)
+  elseif btnp("start") then
+    actions.Help()
     return
   end
+  if help_result == "close" then
+    mode = help_from or (buf and "code" or "carts")
+  elseif help_result == "copy" then
+    clipboard = help_text
+    say("example copied: Paste puts it in the code", 6)
+  elseif help_result == "none" then
+    say("no example here", 3)
+  end
 
-  if mode == "code" or mode == "prompt" then
+  if mode == "help" then
+    -- Handled above
+  elseif mode == "code" or mode == "prompt" then
     local a = kb.update(tx, ty, pressed)
     if a then key_action(a) end
     if mode == "code" then update_code() end
@@ -586,21 +702,25 @@ local function draw_list_top()
     text("Open a file: touch it twice or A", 4, 24, 13)
     text("B: up a folder / back to the code", 4, 34, 13)
     text("File+ / Dir+: new file or folder", 4, 44, 13)
+    text("Ren / Del: rename / delete the chosen", 4, 54, 13)
+    text("START or Help: how to use, the API", 4, 64, 13)
   end
   text("In the code: d-pad cursor, L+d-pad select", 4, 120, 14)
   text("R+up/down page, R+left/right line ends", 4, 130, 14)
   text("A new line, B backspace, X symbols", 4, 140, 14)
-  text("Y undo, R+Y redo, SELECT files", 4, 150, 14)
+  text("Y undo, R+Y redo, SELECT files, START help", 4, 150, 14)
   text("Run saves all files and starts the game;", 4, 164, 14)
   text("leaving it comes back here.", 4, 174, 14)
 end
 
 local function draw_prompt_top()
   rectfill(0, 0, 256, 10, 8)
-  text(prompt.what == "dir" and "New folder" or "New file", 2, 1, 12)
+  text(prompt.what == "dir" and "New folder" or prompt.what == "rename"
+       and "Rename " .. prompt.from or "New file", 2, 1, 12)
   text(prompt.text, 4, 30, 12)
   if frame % 30 < 20 then rectfill(4 + prompt.pos * 6, 30, 1, 8, 4) end
-  text("Enter or OK: create, Cancel: back", 4, 50, 13)
+  text("Enter or OK: " .. (prompt.what == "rename" and "rename" or "create")
+       .. ", Cancel: back", 4, 50, 13)
 end
 
 local function draw_toolbar()
@@ -615,7 +735,10 @@ end
 
 local function draw_bottom()
   draw_toolbar()
-  if mode == "code" or mode == "prompt" then
+  if mode == "help" then
+    help.draw_bottom()
+    text(msg:sub(1, COLS), 1, 184, msg_col)
+  elseif mode == "code" or mode == "prompt" then
     text(msg:sub(1, COLS), 1, 18, msg_col)
     kb.draw()
   elseif mode == "files" or mode == "carts" then
@@ -649,6 +772,7 @@ function _draw(screen)
   cls(0)
   if screen == TOP then
     if mode == "code" then draw_code()
+    elseif mode == "help" then help.draw_top()
     elseif mode == "prompt" then draw_prompt_top()
     elseif mode == "error" then
       if buf then draw_code() else draw_list_top() end

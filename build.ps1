@@ -43,6 +43,13 @@ try {
     }
     $name = if ($point) { $point.Matches[0].Groups[1].Value } else { '' }
 
+    # API documentation for the help of the code editor (D12, D44): the same
+    # files as docs/API.md, copied into the ROM (generated, not in git)
+    $apiDir = 'nitrofs\system\code\api'
+    New-Item -ItemType Directory -Force $apiDir | Out-Null
+    Remove-Item "$apiDir\*.lua" -ErrorAction SilentlyContinue
+    Copy-Item docs\api\*.lua $apiDir
+
     $make = "make -j8 $($makeArgs -join ' ')"
     if ($makeArgs.Count -eq 0) {
         # Banner subtitle (shown by loader menus): plan point, optional tag from

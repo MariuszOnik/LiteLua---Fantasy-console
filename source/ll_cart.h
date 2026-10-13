@@ -75,6 +75,15 @@ bool ll_cart_write(const LLCart *cart, const char *rel, const char *data,
 bool ll_cart_mkdir(const LLCart *cart, const char *rel, char *err,
                    size_t err_size);
 
+// Removes a file or an empty folder of a writable cart.
+bool ll_cart_remove(const LLCart *cart, const char *rel, char *err,
+                    size_t err_size);
+
+// Renames (or moves) a file or folder of a writable cart; the new name must
+// not exist yet.
+bool ll_cart_rename(const LLCart *cart, const char *from, const char *to,
+                    char *err, size_t err_size);
+
 // Closes the archive of a .lcart; does nothing for folders. Safe to repeat.
 void ll_cart_close(LLCart *cart);
 

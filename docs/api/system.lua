@@ -91,6 +91,27 @@ if not ok then print(err) end]],
 sys.system.mkdir("mygame", "src")]],
     },
     {
+      name = "sys.system.remove", kind = "function",
+      sig = "sys.system.remove(cart, path) -> true | nil, err",
+      args = { { "cart", "string", "cart name" }, { "path", "string", "file or folder" } },
+      desc = "Deletes a file, or a folder if it is empty, in a cart folder on "
+          .. "the SD card. There is no undo.",
+      example = [[
+local ok, err = sys.system.remove("mygame", "src/old.lua")]],
+    },
+    {
+      name = "sys.system.rename", kind = "function",
+      sig = "sys.system.rename(cart, from, to) -> true | nil, err",
+      args = {
+        { "cart", "string", "cart name" }, { "from", "string", "file or folder" },
+        { "to", "string", "new path (may be in another folder)" },
+      },
+      desc = "Renames or moves a file or folder in a cart folder on the SD "
+          .. "card. An error if 'to' exists.",
+      example = [[
+sys.system.rename("mygame", "src/a.lua", "src/enemy.lua")]],
+    },
+    {
       name = "sys.system.run", kind = "function",
       sig = "sys.system.run(cart, [data])",
       args = {

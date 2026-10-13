@@ -8,7 +8,11 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 ## Gdzie skończyliśmy
 - **Następny krok:** do ustalenia z użytkownikiem — P11a (podpowiedzi), reszta P10 (launcher w Lua, menu pauzy, tryb awaryjny,
   nadpisywanie systemowych z karty, nowy kartridż) albo P8 (mapy).
-- **Ostatnio (2026-10-13):** P11 + P10-min (D43) — edytor kodu na DS jako kartridż
+- **Ostatnio (2026-10-14):** P11b (D44) — w edytorze Ren/Del w widoku plików
+  (`sys.system.remove/rename`), pomoc pod START: manual edytora i całe API z `docs/api`
+  (kopiowane przez `build.ps1` do `nitrofs/system/code/api`), pomoc kontekstowa dla nazwy
+  pod kursorem, „Copy ex”. Sprawdzone w melonDS; na konsoli jeszcze nie.
+- **Wcześniej (2026-10-13):** P11 + P10-min (D43) — edytor kodu na DS jako kartridż
   systemowy `@code` (`nitrofs/system/code`): kod z kolorami i numerami linii, klawiatura
   ekranowa, zaznaczanie, schowek, cofnij/ponów, Check, Save, Run z powrotem do pliku/linii,
   Y na ekranie błędu → linia błędu + ślad stosu do dotknięcia; Y na liście → edytor.
@@ -112,6 +116,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   ekranie błędu → plik i linia, dotknięcie ramki stosu (D13); sprawdzanie składni w tle
   (`load` bez uruchamiania); uruchomienie gry wg D14 wariant A (zapis buforów, powrót do
   pliku/linii/kursora).
+- [x] **P11b — Pliki i pomoc w edytorze** (D44): usuwanie i zmiana nazw plików/folderów,
+  pomoc (START): manual edytora i API z `docs/api` w ROM, pomoc kontekstowa.
 - [ ] **P11a — Podpowiedzi i pomoc w edytorze**
   - Źródła: API z `docs/api/*.lua` (D12, w ROM przez NitroFS), słowa kluczowe Lua, wybrane
     funkcje biblioteki standardowej (osobny plik `docs/api/lua.lua`), nazwy z kodu gracza

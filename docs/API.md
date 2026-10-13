@@ -1190,6 +1190,45 @@ Example:
 sys.system.mkdir("mygame", "src")
 ```
 
+### `sys.system.remove`
+
+```lua
+sys.system.remove(cart, path) -> true | nil, err
+```
+
+Deletes a file, or a folder if it is empty, in a cart folder on the SD card. There is no undo.
+
+| Argument | Type | Description |
+|---|---|---|
+| `cart` | string | cart name |
+| `path` | string | file or folder |
+
+Example:
+
+```lua
+local ok, err = sys.system.remove("mygame", "src/old.lua")
+```
+
+### `sys.system.rename`
+
+```lua
+sys.system.rename(cart, from, to) -> true | nil, err
+```
+
+Renames or moves a file or folder in a cart folder on the SD card. An error if 'to' exists.
+
+| Argument | Type | Description |
+|---|---|---|
+| `cart` | string | cart name |
+| `from` | string | file or folder |
+| `to` | string | new path (may be in another folder) |
+
+Example:
+
+```lua
+sys.system.rename("mygame", "src/a.lua", "src/enemy.lua")
+```
+
 ### `sys.system.run`
 
 ```lua

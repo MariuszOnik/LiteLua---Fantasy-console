@@ -49,10 +49,11 @@ local files = {
   ["game/main.lua"] = "function _draw()\n  cls(1)\nend\n",
   ["game/src/x.lua"] = "return 1\n",
 }
+local removed, renamed
 local frame_keys, touch_xy = {}, nil
 local drawn = 0
 local env = _G
-env.log = function() end
+env.log = function(s) if DEBUG then print(s) end end
 env.btn = function(n) return frame_keys[n] == true end
 env.btnp = function(n) return frame_keys[n] == true end
 env.touch = function() if touch_xy then return touch_xy[1], touch_xy[2] end end
@@ -60,19 +61,34 @@ for _, n in ipairs({ "cls", "rectfill", "clip" }) do env[n] = function() end end
 env.text = function(s) drawn = drawn + #s end
 env.textw = function(s) return #s * 6, 8 end
 env.TOP, env.BOTTOM = 0, 1
+local real_io = io
 env.io = { open = function() return nil end }
+-- The API docs as the help reads them from the ROM (api/*.lua)
+local API = { "core", "gfx", "input", "sound", "files", "sys", "system" }
+for _, m in ipairs(API) do
+  local f = assert(real_io.open(ROOT .. "/docs/api/" .. m .. ".lua", "rb"))
+  files["@code/api/" .. m .. ".lua"] = f:read("a")
+  f:close()
+end
 local ran
 env.sys = { system = {
   start = { reason = "edit", cart = "game" },
   cart = function(n) return { name = n, title = n, entry = "main.lua", writable = true } end,
   carts = function() return { { name = "game", title = "game", entry = "main.lua" } } end,
   files = function(c, d)
+    if c == "@code" and d == "api" then
+      local t = {}
+      for _, m in ipairs(API) do t[#t + 1] = { name = m .. ".lua" } end
+      return t
+    end
     if d == "" then return { { name = "src", dir = true }, { name = "main.lua" } } end
     return { { name = "x.lua" } }
   end,
   read = function(c, p) return files[c .. "/" .. p] end,
   write = function(c, p, d) files[c .. "/" .. p] = d; return true end,
   mkdir = function() return true end,
+  remove = function(c, p) removed = p; return true end,
+  rename = function(c, a, b) renamed = a .. ">" .. b; return true end,
   run = function(c, d) ran = d end,
 } }
 env.require = require
@@ -106,4 +122,28 @@ frame({ a = true }); frame()
 frame({ select = true }); frame()
 frame({}, 60, 5); frame() -- File+
 frame({}, 5, 70); frame(); frame({}, 230, 225 - 60); frame()
+-- Help: START on "cls" in the code opens its page
+frame({}, 140, 5); frame() -- Cancel the prompt
+frame({ select = true }); frame() -- back to the code
+frame({ start = true }); frame()
+local shown = {}
+env.text = function(s) shown[#shown + 1] = s end
+frame()
+local all = table.concat(shown, "\n")
+assert(all:find("Help", 1, true), "help list drawn")
+frame({}, 230, 5); frame() -- Close (3rd of 3 buttons)
+env.text = function(s) drawn = drawn + #s end
+
+-- Files view (the help was opened from it): Ren and Del (Del needs a
+-- second touch)
+frame({ down = true }); frame() -- cart.lua... choose an entry
+frame({}, 100, 5); frame()      -- Ren (4th of 8 = x 96..127)
+frame({}, 5, 70); frame()       -- type "q"
+frame({}, 230, 165); frame()    -- ent
+assert(renamed, "renamed")
+frame({}, 140, 5); frame()      -- Del: asks
+assert(not removed, "Del asks first")
+frame({}, 140, 5); frame()      -- Del again
+assert(removed, "removed")
+
 print("all editor tests passed, drawn chars " .. drawn)

@@ -904,3 +904,24 @@ osobne polecenie.
   dokładnego pomiaru czasu rysowania na konsoli nie robiliśmy.
 - Później: polskie litery na klawiaturze, podpowiedzi (P11a), wyszukiwanie, przewijanie
   kodu rysikiem, usuwanie/zmiana nazw plików, nowy kartridż (P10).
+
+## D44 (2026-10-14) — P11b: usuwanie i zmiana nazw plików, pomoc w edytorze
+- Na prośbę użytkownika mały punkt przed P11a.
+- **`sys.system.remove(cart, path)`** (plik albo pusty folder) i
+  **`sys.system.rename(cart, from, to)`** (też przeniesienie; błąd, gdy `to` istnieje,
+  poza zmianą wielkości liter) — tylko foldery na SD, wpis w logu.
+- **Widok plików:** pasek Code, File+, Dir+, Ren, Del, Carts, Run, Help. Del pyta: drugie
+  dotknięcie w ciągu 3 s usuwa (bez cofania). Ren otwiera okno z obecną ścieżką (kursor
+  przed rozszerzeniem). Otwarte bufory idą za zmianą nazwy (też folderu); bufor usuniętego
+  pliku jest zamykany razem z niezapisanymi zmianami.
+- **Pomoc (START w edytorze, przycisk Help w widokach plików/kartridży):** temat „Editor”
+  (manual w `src/help.lua`) i moduły API. Źródło API to te same pliki co `docs/API.md`:
+  `build.ps1` kopiuje `docs/api/*.lua` do `nitrofs/system/code/api/` (poza gitem), edytor
+  wczytuje je przez `load(..., "t", {})` (dane, puste środowisko — D12). Strona hasła:
+  sygnatura, argumenty, wyniki, opis (zawijany do 42 kolumn), przykład; lewo/prawo
+  przewija długą stronę. „Copy ex” kopiuje przykład do schowka.
+- **Pomoc kontekstowa:** START z kursorem na nazwie (`rectfill`, `sys.run`, `sys.system.run`)
+  otwiera jej stronę — pełna nazwa albo ostatni człon dla nazw bez kropki.
+- Testy: `tests/tools/editor_test.lua` (pomoc z prawdziwymi `docs/api`, Ren, Del z
+  potwierdzeniem); melonDS: pomoc kontekstowa na `require`, lista API, plik utworzony →
+  przemianowany → usunięty na karcie emulatora.

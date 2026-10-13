@@ -15,3 +15,6 @@ tests/carts/sound/music/rock.wav
 /*.mid
 /*.wav
 /private/
+
+# Copied from docs/api by build.ps1 (help of the code editor)
+/nitrofs/system/code/api/

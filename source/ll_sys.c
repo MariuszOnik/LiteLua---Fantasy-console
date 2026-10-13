@@ -286,6 +286,51 @@ static int l_mkdir(lua_State *L)
     return 2;
 }
 
+// sys.system.remove(cart, path) -> true, or nil and a message
+static int l_remove(lua_State *L)
+{
+    char rel[LL_PATH_MAX], err[160];
+    check_rel(L, 2, rel, sizeof(rel), false);
+    LLCart cart;
+    if (!open_files(L, &cart))
+        return 2;
+    bool ok = ll_cart_remove(&cart, rel, err, sizeof(err));
+    ll_cart_close(&cart);
+    ll_log("sys.system.remove: %s/%s%s%s", cart.name, rel, ok ? "" : ": ",
+           ok ? "" : err);
+    if (ok)
+    {
+        lua_pushboolean(L, 1);
+        return 1;
+    }
+    luaL_pushfail(L);
+    lua_pushstring(L, err);
+    return 2;
+}
+
+// sys.system.rename(cart, from, to) -> true, or nil and a message
+static int l_rename(lua_State *L)
+{
+    char from[LL_PATH_MAX], to[LL_PATH_MAX], err[160];
+    check_rel(L, 2, from, sizeof(from), false);
+    check_rel(L, 3, to, sizeof(to), false);
+    LLCart cart;
+    if (!open_files(L, &cart))
+        return 2;
+    bool ok = ll_cart_rename(&cart, from, to, err, sizeof(err));
+    ll_cart_close(&cart);
+    ll_log("sys.system.rename: %s/%s -> %s%s%s", cart.name, from, to,
+           ok ? "" : ": ", ok ? "" : err);
+    if (ok)
+    {
+        lua_pushboolean(L, 1);
+        return 1;
+    }
+    luaL_pushfail(L);
+    lua_pushstring(L, err);
+    return 2;
+}
+
 // sys.system.run(name, [data]): runs a game after this callback; when it
 // ends, this system cart starts again with the data in sys.system.start
 static int l_system_run(lua_State *L)
@@ -345,6 +390,8 @@ static void register_system(lua_State *L)
         { "read", l_read },
         { "write", l_write },
         { "mkdir", l_mkdir },
+        { "remove", l_remove },
+        { "rename", l_rename },
         { "run", l_system_run },
         { NULL, NULL },
     };

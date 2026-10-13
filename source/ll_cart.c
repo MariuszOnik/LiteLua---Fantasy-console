@@ -17,6 +17,7 @@
 #include <string.h>
 #include <strings.h>
 #include <sys/stat.h>
+#include <unistd.h>
 
 #include <fat.h>
 
@@ -878,6 +879,55 @@ bool ll_cart_mkdir(const LLCart *cart, const char *rel, char *err,
     if (mkdir(path, 0777) != 0 && !(stat(path, &st) == 0 && S_ISDIR(st.st_mode)))
     {
         snprintf(err, err_size, "cannot create folder %s", rel);
+        return false;
+    }
+    return true;
+}
+
+bool ll_cart_remove(const LLCart *cart, const char *rel, char *err,
+                    size_t err_size)
+{
+    char path[LL_PATH_MAX];
+    if (!writable_path(cart, rel, path, sizeof(path), err, err_size))
+        return false;
+    struct stat st;
+    if (stat(path, &st) != 0)
+    {
+        snprintf(err, err_size, "no file %s", rel);
+        return false;
+    }
+    bool dir = S_ISDIR(st.st_mode);
+    if ((dir ? rmdir(path) : unlink(path)) != 0)
+    {
+        snprintf(err, err_size, dir ? "cannot remove folder %s (not empty?)"
+                                    : "cannot remove %s", rel);
+        return false;
+    }
+    return true;
+}
+
+bool ll_cart_rename(const LLCart *cart, const char *from, const char *to,
+                    char *err, size_t err_size)
+{
+    char a[LL_PATH_MAX], b[LL_PATH_MAX];
+    if (!writable_path(cart, from, a, sizeof(a), err, err_size)
+        || !writable_path(cart, to, b, sizeof(b), err, err_size))
+        return false;
+    struct stat st;
+    if (stat(a, &st) != 0)
+    {
+        snprintf(err, err_size, "no file %s", from);
+        return false;
+    }
+    // Only a change of letter case may keep the "same" name (FAT)
+    if (strcasecmp(a, b) != 0 && stat(b, &st) == 0)
+    {
+        snprintf(err, err_size, "%s exists", to);
+        return false;
+    }
+    if (rename(a, b) != 0)
+    {
+        snprintf(err, err_size, "cannot rename %s (folder missing?)", from);
         return false;
     }
     return true;

@@ -575,6 +575,7 @@ press **Y**, or press **Y** on the error screen to jump straight to the line of 
 | **Y** / **R+Y** | undo / redo |
 | **X** | letters / symbols keyboard |
 | **SELECT** | files of the cartridge |
+| **START** | help (see below) |
 
 **Run** saves all changed files and starts the game. When you leave the game (**L+R+B**,
 `sys.exit()`) or press **SELECT** on its error screen, you are back in the editor at the
@@ -582,10 +583,19 @@ same file and line. After an error the editor opens the file of the error, marks
 and shows the stack traceback — touch a line of it to go there.
 
 **Files** shows the folders and files of the cartridge (touch twice or **A** to open,
-**B** goes up a folder); **File+** and **Dir+** create a new file or folder, **Carts**
-switches to another cartridge. Several files can be open at once; **Run** saves them all.
+**B** goes up a folder); **File+** and **Dir+** create a new file or folder, **Ren**
+renames (or moves, e.g. to `src/enemy.lua`) the chosen file or folder, **Del** deletes it
+(touch **Del** twice; a folder only when it is empty), **Carts** switches to another
+cartridge. Several files can be open at once; **Run** saves them all.
 Files are saved safely: a failed write never leaves half a file. Cartridges packed as
 `.lcart` can be read but not changed. The clipboard is kept between runs.
+
+**Help (START).** A short manual of the editor and the whole API reference — the same
+text as [docs/API.md](docs/API.md): choose a topic (Up/Down, **A**), then a function to
+see its arguments, description and example on the top screen (Left/Right scrolls a long
+page, **B** goes back). **Copy ex** copies the example: **Paste** puts it in your code.
+Press **START** with the cursor on a name like `rectfill` or `sys.run` to open its page
+directly.
 
 ## System carts: launcher and editors
 
