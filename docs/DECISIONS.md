@@ -899,6 +899,8 @@ osobne polecenie.
   `tests/tools/test_editor.py` uruchamia bufor, lekser i cały `main.lua` z atrapami API na PC
   (Lua 5.4 z pakietu `lupa`; bez niego test jest pomijany). melonDS sterowany skryptem
   (klawisze + kliknięcia na dolnym ekranie): pełny przepływ lista → Y → Run → błąd → Y →
-  `src/util.lua:5` → Run → B → powrót sprawdzony.
+  `src/util.lua:5` → Run → B → powrót sprawdzony. **Konsola DSi (2026-10-14):** cały
+  przepływ i pisanie rysikiem potwierdzone przez użytkownika („wszystko działa”);
+  dokładnego pomiaru czasu rysowania na konsoli nie robiliśmy.
 - Później: polskie litery na klawiaturze, podpowiedzi (P11a), wyszukiwanie, przewijanie
   kodu rysikiem, usuwanie/zmiana nazw plików, nowy kartridż (P10).

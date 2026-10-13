@@ -6,15 +6,15 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
-- **Następny krok:** do ustalenia z użytkownikiem — test edytora na konsoli (wydajność,
-  dotyk), potem P11a (podpowiedzi), reszta P10 (launcher w Lua, menu pauzy, tryb awaryjny,
+- **Następny krok:** do ustalenia z użytkownikiem — P11a (podpowiedzi), reszta P10 (launcher w Lua, menu pauzy, tryb awaryjny,
   nadpisywanie systemowych z karty, nowy kartridż) albo P8 (mapy).
 - **Ostatnio (2026-10-13):** P11 + P10-min (D43) — edytor kodu na DS jako kartridż
   systemowy `@code` (`nitrofs/system/code`): kod z kolorami i numerami linii, klawiatura
   ekranowa, zaznaczanie, schowek, cofnij/ponów, Check, Save, Run z powrotem do pliku/linii,
   Y na ekranie błędu → linia błędu + ślad stosu do dotknięcia; Y na liście → edytor.
   `sys.system` (pliki dowolnego kartridża, bezpieczny zapis, `run` z powrotem). Sprawdzone
-  w melonDS skryptem; **na konsoli jeszcze nie**.
+  w melonDS skryptem i **potwierdzone na DSi (2026-10-14)**: pisanie rysikiem, przewijanie,
+  Run → błąd → Y → linia błędu → Run → B → powrót.
 - **Wcześniej:** P18 S1 — utwory `.lsong` grane **na żywo** przez DS
   (`music("x")`, D41), potwierdzone nagraniem w melonDS i odsłuchem na DSi; import MIDI
   (D37), `.lsong` v1.1 (D38), projekt v1.2 (D39), manual `docs/COMPOSING.md`. Wcześniej
