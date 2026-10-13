@@ -1,6 +1,6 @@
 return {
-  id = "test-chip",
-  title = "S0 chiptune test",
+  id = "test-song",
+  title = "Live songs (S1)",
   author = "LiteLua",
   version = "1.0",
   api = 1,

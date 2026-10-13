@@ -44,7 +44,7 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - `examples/carts/` — przykładowe gry (np. `starcatch`); `build.ps1` kopiuje je na kartę emulatora
 - `examples/songs/` — przykładowe utwory `.lsong` (D36, `docs/LSONG.md`)
 - `tools/` — skrypty PC (Python): `litelua.py` (`pack` → `.lcart`, `song check|convert|render` — D36, reszta w P9), `lsong.py` (format `.lsong`), `midi.py` + `midi_import.py` (import MIDI, D37), `apidoc.py`, `make_font.py` (font 6×8)
-- `tests/carts/` — kartridże testowe (`bench` — benchmark VM, D19; `files` — piaskownica, D20; `sound` — P7); `build.ps1` kopiuje je na kartę emulatora
+- `tests/carts/` — kartridże testowe (`bench` — benchmark VM, D19; `files` — piaskownica, D20; `sound` — P7; `song` — utwory `.lsong` na żywo, D41); `build.ps1` kopiuje je na kartę emulatora
 - `tests/tools/` — testy narzędzi PC: `python -m unittest discover -s tests/tools`
 - `README.md` — manual użytkownika (po angielsku, D15); aktualizuj w każdym punkcie, który
   zmienia coś widocznego dla twórców gier

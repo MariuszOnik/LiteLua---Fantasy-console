@@ -350,8 +350,10 @@ end
 
 **Chiptune songs (`.lsong`).** A song can also be written as notes in a small text
 format (`docs/LSONG.md`): instruments (pulse, triangle, noise, drum kits), patterns of
-notes and a playlist — readable by people, tools and AI models. Today a song is turned
-into a WAV on the PC and played with `music`; a native player is planned (P18):
+notes and a playlist — readable by people, tools and AI models. Put it in `music/` and
+`music("mysong")` plays `music/mysong.lsong` **live** on the DS sound channels: a few KB
+instead of megabytes of WAV, and almost no CPU. A song can also be rendered to a WAV on
+the PC (a preview, or to play it as recorded music):
 
 ```
 python tools/litelua.py song check  mysong.lsong

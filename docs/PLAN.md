@@ -43,7 +43,9 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   **D39:** projekt `.lsong` v1.2 (sceny i klipy) zatwierdzony, bez implementacji.
   **S0 zrobione (D40):** synteza na żywo na DSi — przerwanie śr. 52 µs (ok. 0,3% CPU),
   tempo ±0,2%, 0 spóźnionych ticków, efekty i moduł Maxmoda naraz; trzaski akceptowalne.
-  S1 (sekwencer `.lsong`) — na osobne polecenie.
+  **S1 zaimplementowane (D41):** `music("x")` gra `music/x.lsong` na żywo (ładowarka →
+  segmenty → sekwencer timera 3); test `tests/carts/song` — **do potwierdzenia odsłuchem
+  na DSi** (Marsz Imperatora jako `private.lsong`, Metallica Extended `private2.lsong`).
 - **Następny krok:** P8 — mapy kafelkowe. (P7, D32/D33 sprawdzone na DSi: dźwięk, efekty,
   L+R+START, `_quit`.)
 - **Wydania (D29):** repo na GitHubie, tag `v0.6.0` wypchnięty; pliki wydania w
@@ -215,8 +217,9 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
     (`mmLockChannels`, efekty i muzyka z P7 naraz), zachowanie kanałów przy zmianie
     parametrów w trakcie nuty (wypełnienie, głośność, częstotliwość — trzaski, restart
     fazy), koszt CPU. Wynik decyduje: libnds przez FIFO czy własny kod ARM7.
-  - **S1 — rdzeń:** format `.lsong`, sekwencer z instrumentami (wypełnienie, obwiednia,
-    arpeggio, vibrato, slide), `music("x")` dla `.lsong`, test w grze.
+  - [~] **S1 — rdzeń** (D41): ładowarka `.lsong` → segmenty → sekwencer w przerwaniu,
+    `music("x")` gra `.lsong` na żywo; zbudowane, czeka na odsłuch na DSi
+    (`tests/carts/song`, Marsz Imperatora).
   - **S2 — prototyp edytora (przed P10):** piano roll rysikiem, 4 kanały, patterny, wybór
     instrumentu, odtwarzanie, zapis do `save/` własnego kartridża (eksport do gry ręcznie
     lub później przez P10).

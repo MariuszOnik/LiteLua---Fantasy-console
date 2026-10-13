@@ -29,8 +29,9 @@
 
 #include "lauxlib.h"
 
-#include "ll_chiptest.h"
 #include "ll_log.h"
+#include "ll_seq.h"
+#include "ll_song.h"
 #include "ll_sound.h"
 
 #define SOUND_MT "LiteLua.sound"
@@ -448,12 +449,13 @@ static int sound_tostring(lua_State *L)
 
 // --- Music ------------------------------------------------------------------
 
-enum { MUSIC_NONE, MUSIC_MAS, MUSIC_WAV };
+enum { MUSIC_NONE, MUSIC_MAS, MUSIC_WAV, MUSIC_LSONG };
 
 static struct {
     int type;
     int volume;      // 0..1024, kept for the next music of the cart
     void *mas;       // MUSIC_MAS: the module
+    LLSong *song;    // MUSIC_LSONG: played live by the sequencer (P18 S1)
     size_t bytes;    // Counted in the cart memory (module or ring)
 
     // MUSIC_WAV
@@ -536,6 +538,12 @@ static void music_stop(void)
         mmStop();
         free_later(music.mas, -1, ll_vblanks() + 2);
         music.mas = NULL;
+    }
+    else if (music.type == MUSIC_LSONG)
+    {
+        ll_seq_stop(); // The timer is off: nothing reads the song any more
+        free(music.song);
+        music.song = NULL;
     }
     else if (music.type == MUSIC_WAV)
     {
@@ -643,8 +651,36 @@ static void play_wav(lua_State *L, const char *rel, bool loop)
     mmStreamVolume(music.volume * 127 / 1024);
 }
 
-// music([name], [loop]): plays music/<name>.mas or music/<name>.wav (looped
-// unless loop is false); music() stops it
+// Plays a .lsong live; false if there is no such file
+static bool play_lsong(lua_State *L, const char *rel, bool loop)
+{
+    size_t size;
+    char *text = ll_cart_read(cart, rel, &size);
+    if (text == NULL)
+        return false;
+    char err[160];
+    LLSong *song = ll_song_load(text, size, rel, err, sizeof(err));
+    free(text);
+    if (song == NULL)
+        luaL_error(L, "%s", err);
+    if (!ll_mem_charge(mem, song->bytes))
+    {
+        lua_gc(L, LUA_GCCOLLECT);
+        if (!ll_mem_charge(mem, song->bytes))
+        {
+            free(song);
+            luaL_error(L, "not enough memory for %s", rel);
+        }
+    }
+    music.type = MUSIC_LSONG;
+    music.song = song;
+    music.bytes = song->bytes;
+    ll_seq_play(song, loop, music.volume);
+    return true;
+}
+
+// music([name], [loop]): plays music/<name>.lsong live, music/<name>.mas or
+// music/<name>.wav (looped unless loop is false); music() stops it
 static int l_music(lua_State *L)
 {
     music_stop();
@@ -657,7 +693,17 @@ static int l_music(lua_State *L)
 
     size_t len = strlen(name);
     bool wav = len > 4 && strcasecmp(name + len - 4, ".wav") == 0;
+    bool mas = len > 4 && strcasecmp(name + len - 4, ".mas") == 0;
+    bool lsong = len > 6 && strcasecmp(name + len - 6, ".lsong") == 0;
     char rel[LL_PATH_MAX];
+    if (!wav && !mas)
+    {
+        cart_path(L, "music", name, ".lsong", rel, sizeof(rel));
+        if (play_lsong(L, rel, loop))
+            return 0;
+        if (lsong)
+            return luaL_error(L, "cannot read %s", rel);
+    }
     if (!wav)
     {
         cart_path(L, "music", name, ".mas", rel, sizeof(rel));
@@ -694,6 +740,7 @@ static int l_music_volume(lua_State *L)
     lua_Number v = luaL_checknumber(L, 1);
     music.volume = clamp((int)(v * 1024 + 0.5), 0, 1024);
     mmSetModuleVolume(music.volume);
+    ll_seq_volume(music.volume);
     if (music.type == MUSIC_WAV)
         mmStreamVolume(music.volume * 127 / 1024);
     return 0;
@@ -728,6 +775,8 @@ void ll_sound_begin(const LLCart *c, LLMem *m)
 
 void ll_sound_update(void)
 {
+    if (music.type == MUSIC_LSONG && ll_seq_finished())
+        music_stop(); // A song played once has ended
     if (music.type == MUSIC_WAV)
     {
         stream_fill(STREAM_READ_MAX);
@@ -740,7 +789,6 @@ void ll_sound_update(void)
 
 void ll_sound_stop_all(void)
 {
-    ll_chiptest_stop();
     music_stop();
     mmEffectCancelAll();
     stop_vblank = ll_vblanks();

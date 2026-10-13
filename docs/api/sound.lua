@@ -51,15 +51,16 @@ sfx_stop(h)]],
         { "name", "string", "file in music/; nil stops the music" },
         { "loop", "boolean", "default true" },
       },
-      desc = "Plays music, one piece at a time: music/<name>.mas (a module "
-          .. "from MOD/XM/S3M/IT, made with mmutil -d -m) or music/<name>.wav "
-          .. "(\"name.wav\"), which is streamed from the SD card and uses "
-          .. "only half a second of memory. Streamed WAV: PCM 8 or 16 bit, "
-          .. "mono or stereo, at most 32768 Hz. In a .lcart the WAV must be "
-          .. "stored uncompressed (tools/litelua.py pack does that). "
-          .. "music() stops it.",
+      desc = "Plays music, one piece at a time. It looks for "
+          .. "music/<name>.lsong (a chiptune song, docs/LSONG.md, played live "
+          .. "by the DS sound channels: a few KB, almost no CPU), then "
+          .. "music/<name>.mas (a module from MOD/XM/S3M/IT, made with "
+          .. "mmutil -d -m), then music/<name>.wav, streamed from the SD card "
+          .. "(PCM 8 or 16 bit, mono or stereo, at most 32768 Hz; in a .lcart "
+          .. "stored uncompressed). A name with an extension picks that file. "
+          .. "loop false plays it once. music() stops it.",
       example = [[
-music("theme")        -- music/theme.mas
+music("theme")        -- music/theme.lsong (or .mas, .wav)
 music("intro.wav", false)
 music()]],
     },

@@ -797,3 +797,34 @@ osobne polecenie.
   tańszy i z mniejszą liczbą komunikatów; restart kanału tylko tam, gdzie słychać potrzebę
   (np. atak perkusji). Kanały sekwencera blokowane w Maxmodzie działają razem z P7.
   `chiptest` zostaje do S1 (potem usunięty).
+
+## D41 (2026-10-13) — S1: odtwarzacz `.lsong` na żywo (`music("x")`)
+- **Warstwy (warunek z przeglądu: sekwencer niezależny od v1.1):** ładowarka
+  (`source/ll_song.c`) → model pośredni (`ll_song.h`: instrumenty, bębny, nuty, klipy =
+  nuty jednej ścieżki, **segmenty** = „N ticków w tym tempie, na ścieżce k ten klip”, z
+  `times`, transpozycją wpisu i klipu) → sekwencer (`source/ll_seq.c`). Pattern v1.1 i
+  scena v1.2 dają te same segmenty — v1.2 wymaga tylko nowej ładowarki.
+- **Ładowarka:** parser danych (D38) do tymczasowego stanu Lua z limitem 3 MB (zwalniany
+  po wczytaniu; ok. 150 B na nutę w czasie parsowania — do odchudzenia, gdyby duże utwory
+  na DS bez „i” brakowało pamięci), sprawdza typy, zakresy i nazwy (pełna walidacja —
+  `song check` na PC), sortuje i ucina nuty (jedna naraz), jeden blok `malloc` (ok. 8 B
+  na nutę) liczony w limicie `memory` kartridża.
+- **Sekwencer:** przerwanie timera 3 z częstotliwością ticków utworu (`tempo × ppq / 60`;
+  dzielnik 1/64/256/1024 dobierany do tempa — błąd < 0,01%), tempo zmieniane na granicy
+  segmentu; obwiednie co 1/60 s czasu rzeczywistego (akumulator cykli magistrali):
+  `env`, `release`, `arp`, `vibrato`, slide `s`; `tie` przedłuża nutę bez ataku; zestawy
+  perkusyjne; transpozycja (bez perkusji); pętla albo jedno odtworzenie. Wnioski S0:
+  kanały ustawiane funkcjami „play” przy starcie (cicho), w przerwaniu tylko „set”
+  (częstotliwość przed głośnością, wysyłane tylko zmiany), tryb „w miejscu”.
+- **Kanały:** pulse → 8–13 (PSG), szum → 14–15, trójkąt → 6–7 (próbka 32 kroki, pętla);
+  zablokowane w Maxmodzie na czas utworu (efekty i inne dźwięki dzielą resztę). Brak
+  kanału → ścieżka cicha. Różnice wobec renderera PC: szum „short” gra jak „long” (DS ma
+  jeden tryb szumu), brak panoramy (środek).
+- **API:** `music(name)` szuka `music/<name>.lsong`, potem `.mas`, potem `.wav`; nazwa z
+  rozszerzeniem wybiera plik; `music(name, false)` — raz; `music_volume` działa;
+  `music()` i koniec kartridża zatrzymują (D14). Eksperymentalna tabela `chiptest` z S0
+  usunięta (D40), w jej miejsce `tests/carts/song` („Sky Hopper”, „Pixel Riff” i prywatne
+  `music/private*.lsong`, jeśli są na karcie — nie w repo).
+- **Stan:** zbudowane bez ostrzeżeń, wysłane na DSi; test w melonDS przerwany (okno
+  straciło fokus). **Do potwierdzenia odsłuchem na DSi** — pierwszy test: „Marsz
+  Imperatora” (plik użytkownika, `private.lsong`).
