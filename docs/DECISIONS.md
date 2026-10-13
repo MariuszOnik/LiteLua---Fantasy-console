@@ -849,3 +849,13 @@ osobne polecenie.
 - **Stan:** melonDS — gra (potwierdzone nagraniem); **DSi — gra** (odsłuch użytkownika
   2026-10-13: Sky Hopper, Pixel Riff, Marsz Imperatora). S1 zamknięte. **Do potwierdzenia odsłuchem na DSi** — pierwszy test: „Marsz
   Imperatora” (plik użytkownika, `private.lsong`).
+
+## D42 (2026-10-13) — Kolejność: edytor kodu (P11) przed mapami (P8)
+- Na prośbę użytkownika P8 (mapy kafelkowe) odłożone; następny jest P11 — edytor kodu na
+  DS. Mapy niczego nie blokują.
+- P11 zależy od części P10, więc idzie razem z **P10-min**: kartridże systemowe w ROM
+  (`sys.run("@code")`), API `sys.system` tylko dla nich (pliki dowolnego kartridża-folderu,
+  bezpieczny zapis, lista kartridży), uruchomienie gry z powrotem do edytora z danymi
+  (plik/linia, D14 wariant A). Gry nadal piszą tylko do `save/` (D20). Pełny launcher w
+  Lua, menu pauzy, tryb awaryjny i nadpisywanie systemowych z karty — reszta P10, później.
+- Szczegóły zakresu: `docs/PLAN.md`, „Gdzie skończyliśmy”.

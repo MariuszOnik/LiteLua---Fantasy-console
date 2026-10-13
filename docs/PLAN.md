@@ -6,75 +6,44 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
-- **Ostatnio:** P6 — dual30 (D28): 3D na obu ekranach przez zrzut do banków C/D
-  (przełączanie w przerwaniu VBlank), kolejność klatki: `_draw(TOP)` | `_draw(BOTTOM)` +
-  `_update`, konsola 2D usunięta (`print` → log + nakładka L+R+X), ekran błędu i
-  tymczasowa lista rysowane fontem 6×8, pomijanie BOM w plikach Lua. Kartridże testowe i
-  demo przerobione na dwa ekrany. Testy w melonDS ok; na konsoli — do sprawdzenia.
-- **D30 wdrożone:** reset stanu rysowania w `ll_gfx_begin` (`reset_draw_state`), setery
-  poza `_draw` → jeden wpis w logu, nakładka bez odtwarzania stanu; README i API
-  (`_draw(surface)`). Test: kartridż `gfx` celowo zostawia brudny stan na górze — dolny
-  ekran ma pokazać białe „D30: state reset ok” z ramką, a log `color() outside _draw has
-  no effect`. Do sprawdzenia w melonDS.
-- **D31 wdrożone:** koła piksel w piksel (r ≤ 16), `stroke(w)` dla `line/rect/circ/tri`,
-  test `tests/carts/shapes` (obraz sprawdzony w melonDS). Konsola DSi: `shapes` 2,3 ms,
-  400 kół 13,0 ms, `gfx` 2,8 ms; D30 i D31 działają (log bez błędów).
-- **D32 wdrożone:** L+R+START przez 1 s = wyjście z LiteLua (do loadera / wyłączenie);
-  melonDS ok (bez loadera → wyłączenie). Na konsoli: sprawdzić powrót do loadera.
-- **D33 wdrożone:** `_quit()` (zapis przy wyjściu, limit 1 s) i `sys.info()` (DS/DSi);
-  starcatch zapisuje rekord w `_quit`. melonDS ok.
-- **P7 zrobione (D34):** dźwięk — `sound/sfx/sfx_stop/music/music_volume`, efekty WAV w
-  RAM, muzyka `.mas` albo WAV strumieniowany z karty (też z `.lcart`, wpis bez
-  kompresji), pamięć dźwięku w limicie `memory`. Test `tests/carts/sound` w melonDS: logika
-  i pamięć ok. Konsola DSi: moduł, strumień, głośność, `_quit`, L+R+START ok; efekty
-  nie grały — błąd Maxmoda; własny bank próbek (D34), w melonDS uchwyty ok, **do odsłuchu
-  na konsoli**. Do
-  sprawdzenia: strumień WAV z `.lcart`.
-- **P18 / D35:** kierunek Music Studio zatwierdzony, etapy S0–S4 w planie; S0 tylko na
-  osobne polecenie. **S-1 zrobione (D36):** specyfikacja `.lsong` v1, `tools/lsong.py` +
-  `litelua.py song check|convert|render`, 19 testów (`python -m unittest discover -s
-  tests/tools`), przykład „Sky Hopper” (w teście `sound` pod X jako `sky.wav`).
-  Do decyzji (D36): bezpieczne wczytywanie `cart.lua` (parser danych / hook) i strażnik
-  L+R+B dla zawieszonej pętli w grze. **S-1b zrobione (D37):** import MIDI
-  (`song import`), 33 testy narzędzi, „Pixel Riff” MIDI → `.lsong` → WAV → DS (test
-  `sound`, X). **D38 zrobione:** `.lsong` v1.1 (tempo w playliście, `tie`), `cart.lua`
-  przez parser danych (`source/ll_data.c`, 29/29 manifestów zgodnych), strażnik L+R+B dla
-  zapętlonej gry (bez kosztu w normalnej grze); 40 testów narzędzi.
-  **D39:** projekt `.lsong` v1.2 (sceny i klipy) zatwierdzony, bez implementacji.
-  **S0 zrobione (D40):** synteza na żywo na DSi — przerwanie śr. 52 µs (ok. 0,3% CPU),
-  tempo ±0,2%, 0 spóźnionych ticków, efekty i moduł Maxmoda naraz; trzaski akceptowalne.
-  **S1 zaimplementowane (D41):** `music("x")` gra `music/x.lsong` na żywo (ładowarka →
-  segmenty → sekwencer timera 3); test `tests/carts/song` — **do potwierdzenia odsłuchem
-  na DSi** (Marsz Imperatora jako `private.lsong`, Metallica Extended `private2.lsong`).
-- **Stan na 2026-10-13 (koniec sesji):** P18 S1 zamknięte — `.lsong` grane na żywo,
-  potwierdzone nagraniem w melonDS i odsłuchem na DSi (Sky Hopper, Pixel Riff, Marsz
-  Imperatora). Manual kompozytora: `docs/COMPOSING.md`. FTP konsoli: adres z DHCP
-  (192.168.1.86 albo .89). Prywatne pliki (Metallica, Marsz) tylko w
-  `private/` i w katalogu głównym — ignorowane przez git.
-- **Następny krok:** P8 — mapy kafelkowe. Później w P18: S2
-  (prototyp piano rolla), `.lsong` v1.2 (sceny i klipy, D39), panorama na żywo. (P7, D32/D33 sprawdzone na DSi: dźwięk, efekty,
-  L+R+START, `_quit`.)
-- **Wydania (D29):** repo na GitHubie, tag `v0.6.0` wypchnięty; pliki wydania w
-  `builds/release-v0.6.0/` (`litelua.nds`, `starcatch.lcart`, `RELEASE_NOTES.md`) —
-  wydanie na stronie GitHuba tworzy użytkownik (sprawdzić, czy opublikowane). Na
-  konsoli jest build `v0.6.0`. Przykładowa gra: `examples/carts/starcatch`; instrukcja
-  „Making a game on a PC” w README.
-- **Później (uzgodnione):** poradnik dobrych praktyk i biblioteka algorytmów dla gier
-  (P16, P17). Dźwięki (2026-10-12, README „Getting sound effects into a game”):
-  **wbudowany zestaw ~20 klasycznych efektów w ROM** (`sound("@coin")`, generowane przez
-  nas, prefiks `@` jak kartridże systemowe D27) i **nagrywanie efektów mikrofonem DS/DSi**
-  (nagraj → przytnij → `sfx/x.wav`, w edytorze efektów P18 S3) — pomysł użytkownika. Optymalizacja: lista wyświetlania w RAM (D28) — tylko po pomiarach
-  na konsoli; wspólne 33 ms kosztuje +1 klatkę opóźnienia (D30).
-- **Dokumentacja API:** od P1 prowadzona na bieżąco (D12) — `docs/api/core.lua`, `input.lua`,
-  `gfx.lua`, `files.lua`, `sys.lua` (z `sys.stats`).
-- **Manual:** `README.md` (D15) — opisuje stan po P6.
-- **Otwarte sprawy:** błąd jako struktura plik/linia (D13) — przy P11.
-  **Potencjalny bug — opóźnienie wejścia (2026-10-12):** pomiar w melonDS (kartridż
-  `tests/carts/latency`, A → biały ekran, 30 prób): górny ekran 76–105 ms (mediana 91),
-  dolny 89–125 ms (104); ~15–20 ms dokłada melonDS. Eksperyment: wejście + `_update` tuż
-  przed `_draw(TOP)` → mediana 69 / 90 ms (zmiana cofnięta, kolejność D28 bez zmian).
-  Starcatch: dotyk wygładzany 0.3/klatkę (~200 ms do palca). Wrócić przy P15 (single60). Konsola tekstowa 2D
-  usunięta w P6 (D28).
+- **Następny krok: P11 — edytor kodu na DS, razem z minimalnym wycinkiem P10** (D42;
+  P8 mapy odłożone). Dwa etapy w kolejności:
+  1. **P10-min (fundament):** kartridże systemowe w ROM (`nitro:/system/<nazwa>/`,
+     uruchamiane `sys.run("@code")`), API `sys.system` widoczne **tylko** dla nich:
+     lista kartridży (z manifestami), odczyt / zapis / lista plików w kartridżu-folderze
+     (`.lcart` tylko do odczytu), tworzenie pliku i folderu, bezpieczny zapis (plik
+     tymczasowy → zamiana), uruchomienie gry z powrotem do kartridża wywołującego
+     z przekazaniem danych (plik, linia, kursor — D14 wariant A). Pełny launcher w Lua,
+     menu pauzy, tryb awaryjny i nadpisywanie systemowych z karty zostają w P10.
+  2. **P11 (edytor, kartridż systemowy w Lua `@code`):** wybór kartridża i pliku; kod na
+     górnym ekranie (font 6×8: 42 kolumny × 24 wiersze, przewijanie, numery linii,
+     kolorowanie składni), **klawiatura ekranowa na dolnym** (rysik, Shift, symbole Lua),
+     krzyżak i L/R do kursora; wstawianie/usuwanie, zaznaczanie, kopiuj/wklej, cofnij;
+     sprawdzanie składni przez `load` bez uruchamiania; zapis; „Uruchom” → gra → powrót
+     do pliku/linii; po błędzie gry przycisk „Edytuj” na ekranie błędu (D13: błąd jako
+     plik + linia). Podpowiedzi API — P11a, później.
+  Przed startem przeczytać: `docs/UX.md` (ekrany, przyciski, kartridże systemowe), D8,
+  D13, D14, D20 (piaskownica), D27. Prawdopodobnie potrzebne: powtarzanie klawiszy
+  (`btnp` z autorepeat) — sprawdzić `docs/api/input.lua`.
+- **Ostatnio (2026-10-13):** P18 S1 — utwory `.lsong` grane **na żywo** przez DS
+  (`music("x")`, D41), potwierdzone nagraniem w melonDS i odsłuchem na DSi; import MIDI
+  (D37), `.lsong` v1.1 (D38), projekt v1.2 (D39), manual `docs/COMPOSING.md`. Wcześniej
+  w tej serii: D30–D33 (stan rysowania, koła i `stroke`, wyjście L+R+START, `_quit`,
+  `sys.info`), P7 dźwięk (D34), `cart.lua` przez parser danych i strażnik L+R+B (D38).
+- **Testowanie:** melonDS sterowany skryptem (klawisze tylko gdy okno melonDS jest na
+  pierwszym planie); **dźwięk potwierdzać nagraniem wyjścia audio** (WASAPI loopback,
+  Python `soundcard` w osobnym venv) — liczniki nie wystarczą (lekcja z S0, D40). Konsola:
+  FTP pod adresem z DHCP (192.168.1.86 albo .89), port 5000.
+- **Prywatne pliki** (Metallica, Marsz Imperatora — MIDI, `.lsong`, WAV) tylko w `private/`
+  i w katalogu głównym, ignorowane przez git — nigdy do repo.
+- **Wydania (D29):** tag `v0.6.0` na GitHubie; od tego czasu wiele zmian — kolejne
+  wydanie (np. `v0.7.0`) do ustalenia z użytkownikiem.
+- **Później (uzgodnione):** P8 mapy; P18: S2 (prototyp piano rolla), v1.2 w kodzie,
+  panorama na żywo, Extended w imporcie dla dowolnych plików; P16/P17 (poradnik,
+  biblioteka algorytmów); dźwięki: wbudowany zestaw `sound("@coin")` i nagrywanie
+  mikrofonem; lista wyświetlania w RAM tylko po pomiarach (D28, D30).
+- **Otwarte sprawy:** opóźnienie wejścia ~91 ms w melonDS (`tests/carts/latency`,
+  wrócić przy P15 single60); strumień WAV z `.lcart` — niesprawdzony na konsoli.
 
 ## Punkty
 
@@ -137,7 +106,7 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   Dźwięki/strumienie zatrzymywane i zwalniane przy zamknięciu stanu kartridża (D14).
   Maxmod: efekty WAV, muzyka `.mas` z SD (`mmPlayMAS`), strumieniowanie WAV z SD
   (ADPCM — ewentualnie P9).
-- [ ] **P8 — Mapy kafelkowe**
+- [ ] **P8 — Mapy kafelkowe** (odłożone za P11 — D42)
 - [ ] **P9 — Narzędzie `litelua` na PC (Python)**
   `pack` (folder → `.lcart`), `audio` (MP3/OGG/FLAC → WAV ADPCM), `music` (→ `.mas`), `gfx`.
 - [ ] **P10 — Ekran wyboru kartridży** (kartridż systemowy w Lua)
@@ -146,7 +115,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   nadpisaniem z `sd:/litelua/system/`, tryb awaryjny (SELECT przy starcie), kopiowanie
   systemowych na kartę, `sys.run("@nazwa")`, API `sys.system`, biblioteka `ui.lua`.
   README ma już opis (sekcja „System carts”) — uaktualnić, gdy będzie działać.
-- [ ] **P11 — Edytor kodu na DS** z klawiaturą ekranową
+- [ ] **P11 — Edytor kodu na DS** z klawiaturą ekranową — **następny** (D42), razem z
+  minimalnym wycinkiem P10 (kartridże systemowe w ROM, `sys.system`, powrót z gry)
   Kod na górnym ekranie, klawiatura na dolnym; kolorowanie składni; przycisk „Edytuj” na
   ekranie błędu → plik i linia, dotknięcie ramki stosu (D13); sprawdzanie składni w tle
   (`load` bez uruchamiania); uruchomienie gry wg D14 wariant A (zapis buforów, powrót do
