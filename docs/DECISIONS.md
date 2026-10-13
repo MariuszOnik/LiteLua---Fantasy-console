@@ -846,5 +846,6 @@ osobne polecenie.
   utworu), dopiero potem konfiguracja kanałów. Po poprawce nagranie z melonDS: Sky Hopper
   RMS 0,35, najsilniejsze 196/262 Hz (bas G3/C4 intro), Pixel Riff 0,21 (494 Hz), Marsz 0,27
   (196 Hz). Miks sekwencera ściszony do 5/8 (szczyty dotykały granicy).
-- **Stan:** melonDS — gra (potwierdzone nagraniem). Do potwierdzenia uchem na DSi. **Do potwierdzenia odsłuchem na DSi** — pierwszy test: „Marsz
+- **Stan:** melonDS — gra (potwierdzone nagraniem); **DSi — gra** (odsłuch użytkownika
+  2026-10-13: Sky Hopper, Pixel Riff, Marsz Imperatora). S1 zamknięte. **Do potwierdzenia odsłuchem na DSi** — pierwszy test: „Marsz
   Imperatora” (plik użytkownika, `private.lsong`).
