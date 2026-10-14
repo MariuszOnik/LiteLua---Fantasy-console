@@ -11,7 +11,10 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   **Następny krok: P19** — zakres w **D55** (najpierw biblioteka `class` + pomiar na
   DSi, potem `scene` z komponentami jak w Unity); na starcie potwierdzić szczegóły z
   użytkownikiem (format sceny, nazwy haków).
-- **Ostatnio (2026-10-14):** P10 (D52) — launcher `@launcher` w Lua (lista, opis z
+- **Po 1.0 w kolejce (prośba użytkownika):** P17 biblioteka przydatnego kodu (pula,
+  cząsteczki, ścieżki — jako wzorcowy kod) i P16 mini poradnik „jak kodować”.
+- **Ostatnio (2026-10-14):** przykład `examples/carts/shooter` (middleclass, moduły,
+  pule). P10 (D52) — launcher `@launcher` w Lua (lista, opis z
   `cart.lua`, Play/Edit/New, nowa gra z klawiatury i szablonu, pamięć pozycji), menu
   pauzy w C (START 0,5 s: Resume/Restart/Edit code/Quit, dźwięk pauzowany — potwierdzone
   nagraniem), lista w C jako zapas i tryb awaryjny (SELECT na starcie), `sys.system.edit/
@@ -210,6 +213,11 @@ Po 1.0: P20, P21, preset `iso`, atlasy, P12, P13, P14, P9, P15, P16, P17, P18 (d
   - struktura gry: maszyna stanów (tytuł / gra / koniec), oddzielenie logiki od
     rysowania, zapisy w `save/`;
   - mierzenie: nakładka L+R+Y, `sys.stats()`, `micros()`, log.
+  - **Prośba użytkownika (2026-10-14):** krótki, praktyczny „jak kodować” — mini poradnik
+    z przykładami z biblioteki P17 (pula, cząsteczki, ścieżki) i `shooter`; koszty z D19
+    i D54 (pole ~0,2 µs, wywołanie ~1 µs, tworzenie obiektu 48–194 µs na DSi; płaskie
+    pola, lokalne zmienne, bez getterów i nowych tabel w pętlach, metoda rodzica w
+    zmiennej lokalnej); sprawdzić efekt pamięci podręcznej (10/100/1000 obiektów, D54).
 - [ ] **P17 — Biblioteka przydatnych algorytmów dla gier** (pomysł użytkownika)
   Moduły Lua wbudowane w ROM (`nitro:/lib/`, `require("…")` działa od P3, D21), licencja
   zlib, każdy z dokumentacją w `docs/api/` (podpowiedzi w edytorze, D12) i małym
@@ -231,6 +239,10 @@ Po 1.0: P20, P21, preset `iso`, atlasy, P12, P13, P14, P9, P15, P16, P17, P18 (d
   - `ui` — przyciski, listy, okna (wspólne z kartridżami systemowymi, D27).
   Kolejność i zakres ustalić na starcie punktu (część może wejść wcześniej, np. `ui` w
   P10, `anim` przy P12).
+  **Prośba użytkownika (2026-10-14):** na pierwszy ogień `pool` (pula obiektów),
+  `particles` (cząsteczki bez śmieci) i `path` (A* / BFS na mapie `tilemap`) — każdy z
+  małym kartridżem-przykładem i pomiarem na DSi, napisane czytelnie jako **wzór dobrego
+  kodu** (na bazie `class` z D55 i doświadczeń z `examples/carts/shooter`).
 - [ ] **P19 — Biblioteka `scene`** (D48): sceny z plików danych, prefaby, obiekty ze
   skryptami (`start`/`update`/`draw`, zdarzenia), przyczepienie (`parent` + przesunięcie),
   przejścia z maską „Loading” i zwalnianiem grafiki, grafika typów ładowana według kamery.
