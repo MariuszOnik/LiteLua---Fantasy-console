@@ -1280,3 +1280,23 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
   (wyszło przy tym kartridżu). Parser danych w C i `tools/lsong.py` łączą teraz
   **tylko stringi** (`"a" .. 'b' .. [[c]]`), z limitem długości stringa; nadal nic się nie
   wykonuje. Dotyczy też `.lsong` (`docs/LSONG.md` §8).
+
+## D55 (2026-10-14) — Zakres P19: własna biblioteka `class` + `scene` z komponentami
+Propozycja agenta po pomiarach D54, użytkownik za („czy to kiepski pomysł?” — nie);
+**do potwierdzenia szczegółów na starcie P19**.
+- **Biblioteka `class`** (zlib, ~60 linii, `nitro:/lib/class.lua`) obok middleclass:
+  klasa = tabela metod (`Class.__index = Class`), podklasa kopiuje metody rodzica przy
+  tworzeniu (metoda rodzica = zwykłe pole, ~10 µs zamiast 38 µs w middleclass),
+  tworzenie bliskie `setmetatable({...}, Class)` (cel ~50 µs zamiast 194 µs na DSi),
+  metametody, `is()`, proste mixiny. Szósty wariant w `tests/carts/oop`, pomiar na DSi.
+- **Biblioteka `scene` z komponentami (jak w Unity)**: obiekt sceny ma listę
+  `components = { { script = "health", props = { hp = 3 } }, ... }`; skrypt komponentu =
+  moduł z `src/` z hakami `start`, `update`, `draw`, `destroy` i zdarzeniami (`hit`,
+  `collide`...); `self.obj` = obiekt, `obj:get("health")` (wynik zapamiętywać w `start`).
+  Wydajność: osobne listy haków (kto ma `update`/`draw`), puste haki nie są wołane,
+  zdarzenia tylko do komponentów, które je mają. Płaska lista obiektów + przyczepienie
+  (D48), sceny jako dane (`scenes/*.lua`), przejścia z maską. Pomiar na DSi: 100 obiektów
+  × 3 komponenty (szacunek z D54: ~3 ms na klatkę).
+- **Po 1.0 (P21):** edytor sceny — zaznaczanie obiektu, panel komponentów („Add
+  component” z listy skryptów, edycja `props`), „Edit script” → zakładka Kod. Format z P19
+  bez zmian.

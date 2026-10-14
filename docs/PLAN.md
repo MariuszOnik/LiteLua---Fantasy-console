@@ -8,8 +8,9 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 ## Gdzie skończyliśmy
 - **Droga do 1.0 (D49):** ~~P8 mapy~~ (D50) → ~~P10 lekki launcher~~ (D52) → P19 lekka
   biblioteka `scene` → wydanie 1.0 (API, przykłady, `v1.0.0`). Wszystko inne po 1.0.
-  **Następny krok: P19** (biblioteka `scene`, sama Lua) — zakres w D48/D49; na starcie
-  ustalić z użytkownikiem format sceny i API.
+  **Następny krok: P19** — zakres w **D55** (najpierw biblioteka `class` + pomiar na
+  DSi, potem `scene` z komponentami jak w Unity); na starcie potwierdzić szczegóły z
+  użytkownikiem (format sceny, nazwy haków).
 - **Ostatnio (2026-10-14):** P10 (D52) — launcher `@launcher` w Lua (lista, opis z
   `cart.lua`, Play/Edit/New, nowa gra z klawiatury i szablonu, pamięć pozycji), menu
   pauzy w C (START 0,5 s: Resume/Restart/Edit code/Quit, dźwięk pauzowany — potwierdzone
