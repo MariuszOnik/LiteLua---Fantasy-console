@@ -2,12 +2,14 @@
 -- Top screen: the code. Bottom screen: toolbar, messages and the keyboard.
 -- Buttons: d-pad moves the cursor (L held: select, R: page / line start and
 -- end), A new line, B backspace, Y undo (R+Y redo), X letters/symbols,
+-- R+A the first suggestion of the bar above the keyboard (P11a),
 -- SELECT files, START help.
 
 local Buffer = require("buffer")
 local lexer = require("lexer")
 local kb = require("keyboard")
 local help = require("help")
+local suggest = require("suggest")
 
 local S = sys.system
 local COLS, ROWS = 42, 23     -- Code rows below the status bar
@@ -25,8 +27,10 @@ local frame = 0
 local clipboard = ""
 local err_line                -- Line of the last error in the current file
 
+local msg_frame = -1000         -- Frame of the last message
+
 local function say(s, col)
-  msg, msg_col = s, col or 13
+  msg, msg_col, msg_frame = s, col or 13, frame
   log("code: " .. s)
 end
 
@@ -307,6 +311,99 @@ local function run_game()
   sys.system.run(cart, state_data())
 end
 
+-- --- suggestions (P11a) ----------------------------------------------------
+
+-- The bar between the toolbar and the keyboard: names to complete the word
+-- before the cursor, or the signature of the function being called
+local BAR_Y, BAR_H = TOOL_H + 1, 15
+local bar = { key = nil, list = nil, pre = 0, sig = nil, arg = 0, page = 1,
+              boxes = {} }
+local scan = { b = nil, ver = -1, cy = 0 }
+
+local function update_bar()
+  local b = buf
+  -- Names from the code: rescanned when the cursor leaves an edited line
+  if scan.b ~= b or (scan.ver ~= b.ver and scan.cy ~= b.cy) then
+    suggest.scan(b)
+    scan.b, scan.ver, scan.cy = b, b.ver, b.cy
+  end
+  if scan.ver == b.ver then scan.cy = b.cy end
+  local key = tostring(b) .. ":" .. b.ver .. ":" .. b.cy .. ":" .. b.cx
+  if bar.key == key then return end
+  bar.key, bar.page = key, 1
+  bar.list, bar.pre = suggest.query(b)
+  bar.sig, bar.arg = nil, 0
+  if not bar.list then bar.sig, bar.arg = suggest.signature(b) end
+end
+
+local function accept(name)
+  if not info.writable then say("read only cart", 3); return end
+  buf:insert(name:sub(bar.pre + 1))
+  suggest.chosen(name)
+  bar.key = nil
+end
+
+-- Boxes of the current page: { x1, x2, name } and the arrow (more pages)
+local function layout_bar()
+  local boxes, x = {}, 0
+  local list = bar.list or {}
+  local i = 1
+  -- Skip the names of earlier pages
+  for _ = 2, bar.page do
+    local px = 0
+    while list[i] and px + #list[i] * 6 + 8 <= 240 do
+      px = px + #list[i] * 6 + 8
+      i = i + 1
+    end
+  end
+  while list[i] and x + #list[i] * 6 + 8 <= 240 do
+    local w = #list[i] * 6 + 8
+    boxes[#boxes + 1] = { x, x + w, list[i] }
+    x = x + w
+    i = i + 1
+  end
+  bar.more = list[i] ~= nil or bar.page > 1
+  bar.boxes = boxes
+end
+
+local function bar_tap(tx)
+  if tx >= 240 and bar.more then
+    local had = #bar.boxes
+    bar.page = bar.page + 1
+    layout_bar()
+    if #bar.boxes == 0 or had == 0 then bar.page = 1 end
+    return
+  end
+  for _, bx in ipairs(bar.boxes) do
+    if tx >= bx[1] and tx < bx[2] then accept(bx[3]); return end
+  end
+end
+
+local function draw_bar()
+  -- A new message is shown for 2 seconds, then the bar comes back
+  if frame - msg_frame < 60 or not (bar.list or bar.sig) then
+    bar.boxes, bar.more = {}, false
+    text(msg:sub(1, COLS), 1, BAR_Y + 4, msg_col)
+  elseif bar.list then
+    layout_bar()
+    for i, bx in ipairs(bar.boxes) do
+      rectfill(bx[1] + 1, BAR_Y + 1, bx[2] - bx[1] - 2, BAR_H - 2, i == 1 and bar.page == 1 and 9 or 15)
+      text(bx[3], bx[1] + 4, BAR_Y + 4, 12)
+    end
+    if bar.more then
+      rectfill(241, BAR_Y + 1, 14, BAR_H - 2, 14)
+      text(">", 245, BAR_Y + 4, 12)
+    end
+  elseif bar.sig then
+    local s = bar.sig:sub(1, COLS)
+    text(s, 1, BAR_Y + 4, 13)
+    local a1, a2 = suggest.arg_range(bar.sig, bar.arg)
+    if a1 and a1 <= COLS then
+      text(bar.sig:sub(a1, math.min(a2, COLS)), 1 + (a1 - 1) * 6, BAR_Y + 4, 4)
+    end
+  end
+end
+
 -- --- toolbar -----------------------------------------------------------------
 
 local tools = {}
@@ -477,7 +574,11 @@ local function update_code()
     if btnp("y") then actions.Undo() end
   end
   if rep("b") then key_action("back") end
-  if rep("a") then key_action("enter") end
+  if R and btnp("a") then
+    if bar.list and bar.list[1] then accept(bar.list[1]) else say("no suggestion", 3) end
+  elseif not R and rep("a") then
+    key_action("enter")
+  end
   if btnp("x") then kb.toggle_layer() end
   if btnp("select") then actions.Files() end
 end
@@ -529,6 +630,9 @@ function _update()
 
   if mode == "help" then
     -- Handled above
+  elseif mode == "code" and pressed and ty < kb.y then
+    bar_tap(tx)
+    update_code()
   elseif mode == "code" or mode == "prompt" then
     local a = kb.update(tx, ty, pressed)
     if a then key_action(a) end
@@ -738,7 +842,11 @@ local function draw_bottom()
   if mode == "help" then
     help.draw_bottom()
     text(msg:sub(1, COLS), 1, 184, msg_col)
-  elseif mode == "code" or mode == "prompt" then
+  elseif mode == "code" then
+    update_bar()
+    draw_bar()
+    kb.draw()
+  elseif mode == "prompt" then
     text(msg:sub(1, COLS), 1, 18, msg_col)
     kb.draw()
   elseif mode == "files" or mode == "carts" then
@@ -798,6 +906,7 @@ end
 
 function _init()
   load_clipboard()
+  suggest.init(help.load(S) or {})
   local st = S.start
   if st.data then restore(st.data) end
   if st.reason == "edit" and st.cart then

@@ -64,7 +64,7 @@ env.TOP, env.BOTTOM = 0, 1
 local real_io = io
 env.io = { open = function() return nil end }
 -- The API docs as the help reads them from the ROM (api/*.lua)
-local API = { "core", "gfx", "input", "sound", "files", "sys", "system" }
+local API = { "core", "gfx", "input", "sound", "files", "sys", "lua", "system" }
 for _, m in ipairs(API) do
   local f = assert(real_io.open(ROOT .. "/docs/api/" .. m .. ".lua", "rb"))
   files["@code/api/" .. m .. ".lua"] = f:read("a")
@@ -145,5 +145,41 @@ frame({}, 140, 5); frame()      -- Del: asks
 assert(not removed, "Del asks first")
 frame({}, 140, 5); frame()      -- Del again
 assert(removed, "removed")
+
+-- Suggestions (P11a)
+local suggest = require("suggest")
+local mods = {}
+for _, m in ipairs(API) do
+  mods[#mods + 1] = assert(load(files["@code/api/" .. m .. ".lua"], m, "t", {}))()
+end
+suggest.init(mods)
+local function q(text)
+  local sb = Buffer.new("s.lua", text)
+  sb:set_cursor(#sb.lines, #sb.lines[#sb.lines])
+  suggest.scan(sb)
+  return sb, suggest.query(sb)
+end
+local _, list, pre = q("local player = 1\nprint(player)\npl")
+eq(list[1], "player", "code name first"); eq(pre, 2, "prefix")
+_, list = q("sys.r"); eq(list[1], "run", "api field")
+_, list = q("string.fo"); eq(list[1], "format", "lua library field")
+_, list = q("self.speed = 1\nself.sp"); eq(list[1], "speed", "code field")
+_, list = q('x = "pl'); eq(list, nil, "no suggestions in a string")
+_, list = q("-- re"); eq(list, nil, "no suggestions in a comment")
+local sb2 = q("rectfill(1, 2")
+local sig, arg = suggest.signature(sb2)
+eq(sig, "rectfill(x, y, w, h, [col])", "signature"); eq(arg, 2, "argument")
+local a1, a2 = suggest.arg_range(sig, arg); eq(sig:sub(a1, a2), "y", "argument range")
+eq(sig:sub(suggest.arg_range(sig, 5)), "[col]", "optional argument")
+
+-- In the editor: type "cl" on the keyboard, R+A takes the first suggestion
+env.sys.system.start = { reason = "edit", cart = "game" }
+f = assert(loadfile(ROOT .. "/nitrofs/system/code/main.lua", "t", env)); f()
+env._init(); frame()
+frame({}, 90, 140); frame()   -- c
+frame({}, 215, 110); frame()  -- l
+frame({ r = true, a = true }); frame()
+frame({}, 40, 5); frame()     -- Save
+assert(files["game/main.lua"]:find("^cls"), "suggestion inserted: " .. files["game/main.lua"]:sub(1, 20))
 
 print("all editor tests passed, drawn chars " .. drawn)

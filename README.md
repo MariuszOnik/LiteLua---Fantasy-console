@@ -574,6 +574,7 @@ press **Y**, or press **Y** on the error screen to jump straight to the line of 
 | **B** | backspace |
 | **Y** / **R+Y** | undo / redo |
 | **X** | letters / symbols keyboard |
+| **R+A** | take the first suggestion |
 | **SELECT** | files of the cartridge |
 | **START** | help (see below) |
 
@@ -589,6 +590,14 @@ renames (or moves, e.g. to `src/enemy.lua`) the chosen file or folder, **Del** d
 cartridge. Several files can be open at once; **Run** saves them all.
 Files are saved safely: a failed write never leaves half a file. Cartridges packed as
 `.lcart` can be read but not changed. The clipboard is kept between runs.
+
+**Suggestions.** While you type, the bar above the keyboard shows names that start with
+the word before the cursor: the LiteLua API, the Lua library, keywords and the names used
+in your code (names you have used most and picked lately come first). After `player.` or
+`sys.` it shows the fields. Touch a name to put it in (or press **R+A** for the first one);
+`>` shows more. Inside the parentheses of a known function the bar shows how to call it,
+with the current argument in yellow: `rectfill(x, y, w, h, [col])`. New names from your
+code are picked up when you leave the line.
 
 **Help (START).** A short manual of the editor and the whole API reference — the same
 text as [docs/API.md](docs/API.md): choose a topic (Up/Down, **A**), then a function to

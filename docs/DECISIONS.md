@@ -925,3 +925,29 @@ osobne polecenie.
 - Testy: `tests/tools/editor_test.lua` (pomoc z prawdziwymi `docs/api`, Ren, Del z
   potwierdzeniem); melonDS: pomoc kontekstowa na `require`, lista API, plik utworzony →
   przemianowany → usunięty na karcie emulatora.
+
+## D45 (2026-10-14) — P11a: podpowiedzi w edytorze
+- **Pasek** między paskiem narzędzi a klawiaturą (y 15–29) zamiast linii komunikatów; nowy
+  komunikat (`say`) zasłania pasek na 2 s. Nazwy w ramkach, pierwsza podświetlona, `>`
+  przewija strony. **Dotyk wstawia, R+A wstawia pierwszą** (decyzja użytkownika: L, R i A
+  mają już swoje role, R+A było wolne). Wstawiana jest reszta nazwy (cofanie łączy ją z
+  pisaniem).
+- **Źródła:** API z `docs/api` (te same moduły co pomoc, wczytane raz przy starcie),
+  słowa kluczowe Lua, nowy moduł **`docs/api/lua.lua`** (wybrane funkcje biblioteki
+  standardowej: podstawowe, `string`, `table`, `math`, `utf8`, `os`, `coroutine`) — trafia
+  też do pomocy i `docs/API.md`; nazwy i pola z kodu bieżącego pliku (lekki skan `gmatch`,
+  z licznikami).
+- **Kiedy:** od 1. znaku identyfikatora; po `x.`/`x:` pola `x` (z API dla pełnej nazwy
+  bazy, np. `sys.system.`, i z kodu dla ostatniego członu); nie w stringach i komentarzach
+  (kolory leksera). Kolejność: ostatnio wybrane, częstość w pliku, krótsze, alfabet;
+  najwyżej 24 nazwy.
+- **Sygnatura:** gdy nie ma czego podpowiadać, a kursor jest w nawiasach znanej funkcji
+  (skan wstecz w linii z licznikiem nawiasów i przecinków), pasek pokazuje `sig` z
+  bieżącym argumentem na żółto (argumenty w `[...]` liczone jako jeden).
+- **Wydajność:** zapytanie liczone tylko przy zmianie bufora lub kursora; skan nazw z
+  kodu, gdy kursor opuści zmienioną linię (nie po każdym znaku). melonDS (tryb DS),
+  pisanie w `bench/main.lua`: 28 FPS, CPU ~42%, rysowanie ~13,6 ms. Na konsoli — do
+  sprawdzenia.
+- Z planu P11a odpadło „L/R przewija, A akceptuje” (konflikt z P11) i „pomoc przez
+  przytrzymanie słowa” (jest START z P11b). Posortowana tablica z wyszukiwaniem binarnym
+  okazała się niepotrzebna — liniowy filtr ~200 nazw API + nazwy z kodu wystarcza.

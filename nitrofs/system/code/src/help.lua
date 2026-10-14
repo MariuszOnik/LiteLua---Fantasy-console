@@ -8,8 +8,8 @@ local COLS, ROWS = 42, 23
 local LIST_Y, ROW_H, LIST_ROWS = 24, 11, 15 -- List below its title line
 
 -- Order of the modules; others follow by name
-local ORDER = { core = 1, gfx = 2, input = 3, sound = 4, files = 5, sys = 6,
-                system = 7 }
+local ORDER = { core = 1, gfx = 2, input = 3, sound = 4, files = 5, sys = 6, lua = 7,
+                system = 8 }
 
 local MANUAL = [[
 LiteLua code editor
@@ -31,6 +31,16 @@ Buttons
   SELECT       files of the cart
   START        this help; on a name
                from the API: its page
+  R + A        take the first suggestion
+
+Suggestions
+  The bar above the keyboard shows names
+  that start with the word you type: the
+  API, Lua keywords and names from your
+  code (after "x." the fields of x).
+  Touch one to put it in, ">" shows more.
+  Inside f( ) the bar shows how to call
+  f, the current argument in yellow.
 
 Touch buttons
   Files  files and folders of the cart
@@ -105,6 +115,7 @@ local function load_topics()
     if oa ~= ob then return oa < ob end
     return a.module < b.module
   end)
+  M.modules = mods
   for _, m in ipairs(mods) do
     topics[#topics + 1] = { title = m.title or m.module, summary = m.summary or "",
                             entries = m.entries }
@@ -162,10 +173,17 @@ local function page()
   return out
 end
 
--- Opens the help; 'word' (a name under the cursor) jumps to its entry
-function M.open(sys_system, word)
+-- Reads the API documentation once; returns the modules (also used by the
+-- suggestions)
+function M.load(sys_system)
   S = sys_system
   if not topics then load_topics() end
+  return M.modules
+end
+
+-- Opens the help; 'word' (a name under the cursor) jumps to its entry
+function M.open(sys_system, word)
+  M.load(sys_system)
   M.active = true
   level, cursor, top = "topics", 1, 1
   if word and word ~= "" then
