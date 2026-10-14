@@ -6,6 +6,10 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
+- **Droga do 1.0 (D49):** P8 mapy (tylko `platform`) → P10 lekki launcher → P19 lekka
+  biblioteka `scene` → wydanie 1.0 (API, przykłady, `v1.0.0`). Wszystko inne po 1.0.
+  **Następny krok: P8** — najpierw krótko domknąć z użytkownikiem szczegóły map (rozmiar
+  kafelka, warstwy, format pliku, kolizje).
 - **Kierunek (2026-10-14, D48, dyskusja otwarta):** studio z zakładkami zamiast osobnych
   edytorów, sceny jako dane z obiektami ze skryptami (jak MonoBehaviour), prefaby i lekkie
   przyczepienie zamiast hierarchii, prawdziwa grafika w edytorze, grafika ładowana według
@@ -23,7 +27,7 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   Lua z nowego `docs/api/lua.lua`, słowa kluczowe, nazwy i pola z kodu), dotyk albo R+A
   wstawia, `>` następna strona; w nawiasach znanej funkcji sygnatura z bieżącym argumentem
   na żółto. Sprawdzone w melonDS; na konsoli jeszcze nie.
-- **Następny krok:** do ustalenia z użytkownikiem — reszta P10
+- **Wcześniej rozważane kolejne kroki** (przed D49): reszta P10
   (launcher w Lua, menu pauzy, tryb awaryjny, nadpisywanie systemowych z karty, nowy
   kartridż), P8 (mapy) albo wydanie `v0.7.0` (D29).
 - **Wcześniej (2026-10-14):** P11b (D44) — w edytorze Ren/Del w widoku plików
@@ -56,6 +60,15 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   mikrofonem; lista wyświetlania w RAM tylko po pomiarach (D28, D30).
 - **Otwarte sprawy:** opóźnienie wejścia ~91 ms w melonDS (`tests/carts/latency`,
   wrócić przy P15 single60); strumień WAV z `.lcart` — niesprawdzony na konsoli.
+
+## Droga do 1.0 (D49)
+
+- [ ] **P8 — Mapy, preset `platform`** (szczegóły niżej w punktach)
+- [ ] **P10 — Launcher (lekki)**: lista w Lua, Graj / Edytuj / Nowa gra, menu pauzy
+- [ ] **P19 — Biblioteka `scene` (lekka)**
+- [ ] **Wydanie 1.0**: przegląd API, 2–3 przykładowe gry (w tym platformówka), `v1.0.0`
+
+Po 1.0: P20, P21, preset `iso`, atlasy, P12, P13, P14, P9, P15, P16, P17, P18 (dalsze etapy).
 
 ## Punkty
 

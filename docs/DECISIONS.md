@@ -1064,3 +1064,27 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
   narzędzie na PC do pakowania klatek, edycja kotwic w edytorze grafiki (P12).
 - Rozmiar kafelka (8×8, 16×16, do wyboru), liczba warstw mapy, przewijanie mapy w
   edytorze na małym ekranie — na początku P8.
+
+## D49 (2026-10-14) — Zakres LiteLua 1.0: minimum teraz, „szwy” na rozbudowę
+- Decyzja użytkownika: skończyć projekt, a rozbudowę zostawić na 1.x — bez rozwlekania i
+  bez przepisywania silnika po 1.0. Zasada: **projektujemy szwy (formaty danych, API),
+  budujemy tylko minimum.**
+- **Do 1.0** (poza tym, co już jest: silnik, grafika, dźwięk, `.lsong`, `.lcart`, edytor
+  kodu P11–P11d):
+  1. **P8 Mapy — tylko preset `platform`**; format mapy z polem `mode`, `map()` w C,
+     kolizje z kafelkami, mapa z pliku.
+  2. **P10 Launcher (lekki)**: lista w Lua zamiast `ll_menu.c`, Graj / Edytuj / Nowa gra
+     (z szablonu), menu pauzy (START 0,5 s). Tryb awaryjny i nadpisywanie systemowych z
+     karty — jeśli zostanie czas, inaczej 1.x.
+  3. **P19 Biblioteka `scene` (lekka, sama Lua)**: sceny `enter`/`leave`, przejścia z maską,
+     obiekty ze skryptami.
+  4. **Wydanie 1.0**: przegląd dokumentacji API, 2–3 przykładowe gry (w tym mała
+     platformówka na mapie), tag `v1.0.0` (D29).
+- **Po 1.0 (1.x):** P20 studio, P21 edytor sceny, preset `iso`, atlasy z kotwicami, P12
+  edytor grafiki, P14 edytor efektów, P13 (część P21), P18 Music Studio dalej, P9
+  narzędzia PC, P15 single60, P16 poradnik, P17 algorytmy, wysyłanie wyników na konsolę itd.
+- **Szwy, żeby po 1.0 nie przepisywać:** mapa ma `mode` (renderer w C rozgałęzia się po
+  trybie, `map()` i dotyk → pole mają ogólne API — iso dochodzi jako nowa wartość);
+  edytor kodu jest modułowy (studio go opakuje); sceny z P19 są danymi (`scenes/*.lua` —
+  edytor sceny będzie je zapisywał); `image()` może dostać opcję atlasu bez zmiany
+  `spr`/`sub`; `api` w `cart.lua` i wersje formatów (`lsong`, mapa) chronią stare gry.
