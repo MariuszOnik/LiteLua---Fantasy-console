@@ -1264,7 +1264,18 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
   funkcja. Wniosek: middleclass śmieci tylko przy tworzeniu obiektów (jak każda tabela) —
   pule obiektów, metoda rodzica w zmiennej lokalnej w gorących pętlach. Powiększanie
   tabeli przy kolejnych polach w `initialize` nie robi śmieci dla GC (stary blok zwalniany
-  od razu), kosztuje tylko czas. Na DSi — do zmierzenia (wynik do P16).
+  od razu), kosztuje tylko czas.
+- **Konsola DSi (2026-10-14, tryb DSi):** tworzenie µs/obiekt — zwykła 48, middleclass
+  194, podklasa 319, domknięcia 71, middleclass z miejscem na pola 120; wywołanie metody
+  (z jej ciałem: `update` = 4 odczyty i 2 zapisy pól, `hit` = 1+1) ~10 µs we wszystkich
+  wariantach (domknięcia 9,3), podklasa z metodą rodzica przez klasę 38 µs; pamięć 160 B
+  (domknięcia 220 B); śmieci przy wywołaniach — brak. Wywołanie na DSi niewiele szybsze
+  niż w melonDS (tryb DS) i ~3× wolniejsze niż wynika z D19 (pętla na jednej tabeli) —
+  prawdopodobnie brak trafień w pamięci podręcznej danych (4 KB) przy 100 obiektach po
+  160 B rozrzuconych w RAM; do sprawdzenia w P16 (np. 10 vs 100 vs 1000 obiektów).
+  Przeliczenie na klatkę (33 ms): 100 obiektów × 2 metody ≈ 2 ms bez względu na
+  middleclass; 20 nowych obiektów na klatkę: zwykłe ~1 ms, middleclass ~4 ms, podklasa
+  ~6,4 ms → pule obiektów, a metoda rodzica w zmiennej lokalnej.
 - **`..` w plikach danych** (D38): `cart.lua` z `desc = "..." .. "..."` się nie wczytywał
   (wyszło przy tym kartridżu). Parser danych w C i `tools/lsong.py` łączą teraz
   **tylko stringi** (`"a" .. 'b' .. [[c]]`), z limitem długości stringa; nadal nic się nie

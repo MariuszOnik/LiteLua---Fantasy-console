@@ -20,7 +20,7 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   pomocy, pomoc z kartridża (`help/*.lua`, D53). Dodatki do edytora z kodem — po 1.0
   (szkic w D48). P10c (D54): middleclass w ROM (`require("middleclass")`), pomiar klas
   `tests/carts/oop` (wywołania bez śmieci; tworzenie ~3× wolniejsze), `..` między
-  stringami w `cart.lua`/`.lsong`. Pomiar na DSi — do zrobienia.
+  stringami w `cart.lua`/`.lsong`. Zmierzone też na DSi (D54).
 - **Wcześniej (2026-10-14):** P8 (D50) — mapy kafelkowe: `tilemap()`, rysowanie w C,
   kolizje przez flagi, ASCII i liczby, konwerter z Tiled (`litelua.py map`), grafika
   testowa ze skryptu (`make_tiles.py`), kartridż `tests/carts/map` (mała platformówka).
