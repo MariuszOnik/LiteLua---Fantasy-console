@@ -1157,3 +1157,5 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
   (8-bit 16 kHz, generowane kodem). Moneta z panoramą wg pozycji na ekranie, skok w wodzie
   niżej (`pitch` 0,7). melonDS: start bez błędów; odsłuch na DSi — użytkownik (nagrania
   WASAPI nie robiłem).
+- **Konsola DSi (2026-10-14):** mapy, skakanie (licznik naciśnięć = skoki), muzyka i
+  efekty potwierdzone przez użytkownika („wszystko gra”).

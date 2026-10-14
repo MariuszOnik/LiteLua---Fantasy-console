@@ -12,7 +12,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 - **Ostatnio (2026-10-14):** P8 (D50) — mapy kafelkowe: `tilemap()`, rysowanie w C,
   kolizje przez flagi, ASCII i liczby, konwerter z Tiled (`litelua.py map`), grafika
   testowa ze skryptu (`make_tiles.py`), kartridż `tests/carts/map` (mała platformówka).
-  Sprawdzone w melonDS; na konsoli jeszcze nie. Użytkownik ma Tiled na PC.
+  Sprawdzone w melonDS i **potwierdzone na DSi** (z muzyką „Grass Run”, efektami i
+  poprawką wejścia D51). Użytkownik ma Tiled na PC.
 - **Kierunek (2026-10-14, D48, dyskusja otwarta):** studio z zakładkami zamiast osobnych
   edytorów, sceny jako dane z obiektami ze skryptami (jak MonoBehaviour), prefaby i lekkie
   przyczepienie zamiast hierarchii, prawdziwa grafika w edytorze, grafika ładowana według
