@@ -11,7 +11,7 @@ local LIST_Y, ROW_H, LIST_ROWS = 24, 11, 15 -- List below its title line
 
 -- Order of the modules; others follow by name
 local ORDER = { core = 1, gfx = 2, map = 3, input = 4, sound = 5, files = 6, sys = 7, lua = 8,
-                keywords = 9, system = 10 }
+                keywords = 9, middleclass = 10, system = 11 }
 
 local MANUAL = [[
 LiteLua code editor

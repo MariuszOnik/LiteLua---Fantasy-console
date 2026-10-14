@@ -1249,3 +1249,23 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
   Wpisy bez `name` pomijane; plik, który nie jest tabelą — komunikat. Zapis pliku z
   `help/` w edytorze wczytuje pomoc od nowa. Przykład: `tests/carts/map/help/map.lua`;
   test `tests/tools/editor_help_test.lua`.
+
+## D54 (2026-10-14) — P10c: middleclass w ROM, pomiar klas, `..` w plikach danych
+- Prośba użytkownika (lubi middleclass, obawa o śmieci). **middleclass 4.1.1** (MIT,
+  kikito) bez zmian w `nitrofs/lib/middleclass.lua` — `require("middleclass")` w każdej
+  grze; licencja w pliku, wzmianka w README. Pomoc: `docs/api/middleclass.lua`.
+- **Pomiar** `tests/carts/oop` (ta sama klasa na 5 sposobów; GC zatrzymany na czas
+  pomiaru, przyrost `collectgarbage("count")`). melonDS, tryb DS (czasy niedokładne,
+  liczą się proporcje): tworzenie µs/obiekt — zwykła metatabela 67, middleclass 224,
+  podklasa 305, domknięcia 92, middleclass z `allocate` z miejscem na pola 126; pamięć
+  obiektu 160 B (domknięcia 220 B); wywołanie metody ~16 µs wszędzie, **bez śmieci** (po
+  rozgrzewce; ~100 B na cały pomiar to odrastający stos Lua po pełnym GC); podklasa
+  wołająca metodę rodzica przez klasę (`MC.hit(self)`) 38 µs — `__index` klasy to
+  funkcja. Wniosek: middleclass śmieci tylko przy tworzeniu obiektów (jak każda tabela) —
+  pule obiektów, metoda rodzica w zmiennej lokalnej w gorących pętlach. Powiększanie
+  tabeli przy kolejnych polach w `initialize` nie robi śmieci dla GC (stary blok zwalniany
+  od razu), kosztuje tylko czas. Na DSi — do zmierzenia (wynik do P16).
+- **`..` w plikach danych** (D38): `cart.lua` z `desc = "..." .. "..."` się nie wczytywał
+  (wyszło przy tym kartridżu). Parser danych w C i `tools/lsong.py` łączą teraz
+  **tylko stringi** (`"a" .. 'b' .. [[c]]`), z limitem długości stringa; nadal nic się nie
+  wykonuje. Dotyczy też `.lsong` (`docs/LSONG.md` §8).

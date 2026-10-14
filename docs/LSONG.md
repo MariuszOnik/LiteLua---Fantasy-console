@@ -202,12 +202,13 @@ parser for a small *data subset* of Lua that cannot express loops, functions or
 calls, so a broken or malicious file can only fail to load:
 
 - optional comments `--` and `--[[ ]]`, then `return` and one value;
-- values: tables `{ }`, strings (`"…"`, `'…'`, `[[…]]` with the usual escapes),
+- values: tables `{ }`, strings (`"…"`, `'…'`, `[[…]]` with the usual escapes;
+  strings may be joined with `..`, e.g. `"long " .. "text"` — only strings, D54),
   numbers (decimal, hexadecimal, an optional leading `-`), `true`, `false`;
 - table fields: `name = value`, `["key"] = value`, or a plain value (list
   item); separators `,` or `;`; a trailing separator is allowed;
 - nothing else: no `nil`, no variables, no operators (except a leading `-` on
-  a number), no expressions, no `..`.
+  a number, and `..` between strings), no expressions.
 
 A table is either a **list** (only plain values) or a **map** (only keyed
 fields with string keys); mixing them is an error, so every table maps to

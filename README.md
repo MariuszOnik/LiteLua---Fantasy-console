@@ -528,6 +528,30 @@ return M
 local enemy = require("enemy")
 ```
 
+**Classes.** The built-in [middleclass](https://github.com/kikito/middleclass) (MIT
+license) gives you classes, inheritance and mixins:
+
+```lua
+local class = require("middleclass")
+local Enemy = class("Enemy")
+function Enemy:initialize(x, y) self.x, self.y, self.hp = x, y, 3 end
+function Enemy:update() self.x = self.x - 1 end
+
+local Boss = Enemy:subclass("Boss")
+function Boss:initialize(x, y) Enemy.initialize(self, x, y); self.hp = 20 end
+
+local e = Enemy(100, 50)   -- or Enemy:new(100, 50)
+e:update()
+```
+
+Measured (`tests/carts/oop`, D54): calling a method makes **no garbage** and is as fast as
+with a plain metatable, and an object takes the same memory. Making an object is about
+3× slower than `setmetatable({ x = x, ... }, Enemy)`, so make objects at the start of a
+level and reuse them (a pool) instead of making new bullets every frame. Calling the
+parent's method (`Enemy.update(self)`) is slower than an own method: in a hot loop keep it
+in a local (`local enemy_update = Enemy.update`). Everything is in the help (START on
+`class`).
+
 Files are always given relative to the cartridge folder, with `/`: `"data/level1.txt"`.
 Absolute paths, drive names and `..` are not allowed — a game only sees its own files.
 The cartridge's files are **read only**: `io.open`, `io.lines`, `loadfile` and `dofile`
@@ -854,4 +878,5 @@ python tools/apidoc.py   # writes docs/API.md
 ## License
 
 zlib — see [LICENSE](LICENSE). Lua is MIT licensed (`vendor/lua/LICENSE`), miniz (ZIP and
-deflate) is MIT licensed (`vendor/miniz/LICENSE`).
+deflate) is MIT licensed (`vendor/miniz/LICENSE`), the built-in middleclass is MIT
+licensed (the license is in `nitrofs/lib/middleclass.lua`).

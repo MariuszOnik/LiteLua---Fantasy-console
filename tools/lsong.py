@@ -131,7 +131,7 @@ class _Lexer:
     NUM_RE = re.compile(r"0[xX][0-9a-fA-F]+|(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?")
 
     def next(self):
-        """Returns (kind, value): kind is one of { } [ ] = , ; - name str num eof"""
+        """Returns (kind, value): kind is one of { } [ ] = , ; - .. name str num eof"""
         self._skip()
         s = self.s
         if self.i >= len(s):
@@ -153,6 +153,9 @@ class _Lexer:
             return ("[", None)
         if c in "\"'":
             return ("str", self._string(c))
+        if s.startswith("..", self.i):
+            self.i += 2
+            return ("..", None)
         if c.isdigit() or (c == "." and self.i + 1 < len(s) and s[self.i + 1].isdigit()):
             m = self.NUM_RE.match(s, self.i)
             text = m.group()
@@ -202,6 +205,13 @@ def parse_lua(text):
                 lx.error(f"tables nested deeper than {MAX_DEPTH}")
             return table(depth + 1)
         if kind == "str":
+            # "a" .. "b": only strings can be joined, so it stays data
+            while peek()[0] == "..":
+                take()
+                k2, v2 = take()
+                if k2 != "str":
+                    lx.error("a string expected after '..' (only strings can be joined)")
+                v += v2
             if len(v) > MAX_STRING:
                 lx.error(f"string longer than {MAX_STRING} characters")
             return v

@@ -81,6 +81,17 @@ line]], list = { 1, 0x10; true, false, }, }"""
                 with self.assertRaises(lsong.LsongError):
                     lsong.parse_lua(text)
 
+    def test_joined_strings(self):
+        # D54: strings (only strings) may be joined with ..
+        self.assertEqual(lsong.parse_lua("return { d = \"ab\" .. 'c' ..\n [[d]] }"),
+                         {"d": "abcd"})
+        for text in ('return { d = "a" .. 1 }', 'return { d = 1 .. "a" }',
+                     'return { d = "a" .. }', 'return { d = "a" .. x }'):
+            with self.assertRaises(lsong.LsongError, msg=text):
+                lsong.parse_lua(text)
+        with self.assertRaises(lsong.LsongError):
+            lsong.parse_lua("return { s = '" + "x" * 300 + "' .. '" + "x" * 300 + "' }")
+
     def test_limits(self):
         with self.assertRaises(lsong.LsongError):
             lsong.parse_lua("return {" * 17 + "}" * 17)

@@ -18,7 +18,9 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   konsoli do sprawdzenia**. Potem P10b (D53): `sys.menu(label, fn)` — własne pozycje
   gry w menu pauzy (np. Save/Load; przykład w `tests/carts/map`), słowa kluczowe Lua w
   pomocy, pomoc z kartridża (`help/*.lua`, D53). Dodatki do edytora z kodem — po 1.0
-  (szkic w D48).
+  (szkic w D48). P10c (D54): middleclass w ROM (`require("middleclass")`), pomiar klas
+  `tests/carts/oop` (wywołania bez śmieci; tworzenie ~3× wolniejsze), `..` między
+  stringami w `cart.lua`/`.lsong`. Pomiar na DSi — do zrobienia.
 - **Wcześniej (2026-10-14):** P8 (D50) — mapy kafelkowe: `tilemap()`, rysowanie w C,
   kolizje przez flagi, ASCII i liczby, konwerter z Tiled (`litelua.py map`), grafika
   testowa ze skryptu (`make_tiles.py`), kartridż `tests/carts/map` (mała platformówka).
@@ -80,6 +82,7 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 - [x] **P8 — Mapy, preset `platform`** (D50)
 - [x] **P10 — Launcher (lekki)**: lista w Lua, Graj / Edytuj / Nowa gra, menu pauzy (D52)
 - [x] **P10b — Własne pozycje gry w menu pauzy** (`sys.menu`, D53)
+- [x] **P10c — Klasy: middleclass w ROM + pomiar** (D54)
 - [ ] **P19 — Biblioteka `scene` (lekka)**
 - [ ] **Wydanie 1.0**: przegląd API, 2–3 przykładowe gry (w tym platformówka), `v1.0.0`
 

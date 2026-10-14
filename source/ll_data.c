@@ -378,6 +378,48 @@ static void read_table(Parser *p, int depth)
     }
 }
 
+static bool at_string(const Parser *p)
+{
+    char c = p->s < p->end ? *p->s : '\0';
+    return c == '"' || c == '\'' || (c == '[' && long_bracket(p) >= 0);
+}
+
+// One quoted or long string; pushes it
+static void read_one_string(Parser *p)
+{
+    if (*p->s != '[')
+    {
+        read_string(p);
+        return;
+    }
+    size_t len;
+    const char *t = read_long(p, long_bracket(p), &len);
+    if (len > p->lim->max_string)
+        fail(p, "string longer than %u bytes", (unsigned)p->lim->max_string);
+    lua_pushlstring(p->L, t, len);
+}
+
+// A string, maybe joined with more strings by "..": "a" .. "b" (a long text
+// over several lines). Only strings can be joined, so it stays data.
+static void read_string_value(Parser *p)
+{
+    read_one_string(p);
+    while (1)
+    {
+        skip_space(p);
+        if (p->end - p->s < 2 || p->s[0] != '.' || p->s[1] != '.')
+            return;
+        p->s += 2;
+        skip_space(p);
+        if (!at_string(p))
+            fail(p, "a string expected after '..' (only strings can be joined)");
+        read_one_string(p);
+        if (lua_rawlen(p->L, -2) + lua_rawlen(p->L, -1) > p->lim->max_string)
+            fail(p, "string longer than %u bytes", (unsigned)p->lim->max_string);
+        lua_concat(p->L, 2);
+    }
+}
+
 static void read_value(Parser *p, int depth)
 {
     skip_space(p);
@@ -389,16 +431,8 @@ static void read_value(Parser *p, int depth)
         p->s++;
         read_table(p, depth + 1);
     }
-    else if (c == '"' || c == '\'')
-        read_string(p);
-    else if (c == '[' && long_bracket(p) >= 0)
-    {
-        size_t len;
-        const char *t = read_long(p, long_bracket(p), &len);
-        if (len > p->lim->max_string)
-            fail(p, "string longer than %u bytes", (unsigned)p->lim->max_string);
-        lua_pushlstring(p->L, t, len);
-    }
+    else if (at_string(p))
+        read_string_value(p);
     else if (is_digit(c) || (c == '.' && p->s + 1 < p->end && is_digit(p->s[1])))
         read_number(p, false);
     else if (c == '-')
