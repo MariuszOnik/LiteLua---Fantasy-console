@@ -49,7 +49,8 @@ Your own words
   for the suggestions: "name" or
   { name = "f", sig = "f(x)", desc = "" }
   START on a name in your code, then
-  Word+ adds it to words.lua.
+  Word+ adds it to words.lua (one new
+  line before the last }).
 
 Options (Opts in this help)
   The color theme of the code: Soft

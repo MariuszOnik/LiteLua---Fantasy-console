@@ -971,9 +971,9 @@ osobne polecenie.
   `a.b` — jako pola `a`, `sig` — do podpowiedzi argumentów. Wczytywany przy otwarciu
   kartridża i po zapisie `words.lua` w edytorze.
 - **Word+** na pasku pomocy: START na nazwie (albo zaznaczonym słowie) otwiera pomoc —
-  dla nazwy spoza API komunikat „Word+ adds it” — a Word+ dopisuje ją i przepisuje cały
-  plik (komentarze znikają, co mówi nagłówek pliku). Gdy `words.lua` jest otwarty i
-  niezapisany — najpierw zapis.
+  dla nazwy spoza API komunikat „Word+ adds it” — a Word+ dopisuje ją do `words.lua`.
+  Gdy `words.lua` jest otwarty i niezapisany — najpierw zapis. *(Zmienione: pierwotnie
+  Word+ przepisywał cały plik i gubił komentarze; teraz tylko dopisuje linię — niżej.)*
 - Testy: `tests/tools/editor_test.lua` (słowa, pola i sygnatury z `words.lua`, Word+,
   Opts); melonDS: podgląd motywów, Light zapisany i wczytany po ponownym starcie.
 - **Poprawka (2026-10-14, zgłoszenie użytkownika):** słowo usunięte z `words.lua` i
@@ -997,3 +997,9 @@ osobne polecenie.
   zakładki w kolejności z kursorem); `v1` nadal czytany.
 - Testy: zakładki, przełączanie i cofanie przy puszczeniu Y w `editor_test.lua` (atrapa
   `btnp`/`btnr` z poprzednią klatką); melonDS: dwie zakładki i Y+prawo.
+- **Word+ tylko dopisuje (2026-10-14, rekomendacja przyjęta przez użytkownika):** nowa
+  linia `  "nazwa",` przed ostatnim `}` pliku; reszta (komentarze, kolejność, wpisy z
+  `sig`/`desc`) bez zmian. Separator: jeśli ostatni znak przed `}` poza komentarzami nie
+  jest `{`, `,` ani `;`, linia zaczyna się od `, `. Nowy plik dostaje nagłówek. Wynik jest
+  sprawdzany (`load` jako dane + słowo na liście) przed zapisem; plik niekończący się `}`
+  → komunikat, bez zapisu.

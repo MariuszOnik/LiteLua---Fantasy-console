@@ -49,3 +49,16 @@ frame({}, 40, 5); frame()  -- Save
 assert(not files["game/words.lua"]:find("zebra"), "line deleted and saved")
 assert(q("zeb") == "-", "deleted word still suggested: " .. q("zeb"))
 assert(q("ya") == "yak_word", "other word kept")
+
+-- Word+ only adds a line before the last } (comments and the rest stay)
+local mine = 'return {\n  -- my words\n  "yak_word" -- no comma here\n}\n'
+files["game/words.lua"] = mine
+frame({ y = true }); frame({ y = true, left = true }); frame() -- tab main.lua
+frame({ start = true }); frame()   -- help on "function" under the cursor
+frame({}, 120, 5); frame()         -- Word+ (3rd of 5)
+local now = files["game/words.lua"]
+assert(now:sub(1, #mine - 2) == mine:sub(1, #mine - 2), "start of the file kept:\n" .. now)
+assert(now:find("-- my words", 1, true) and now:find("-- no comma here", 1, true), "comments kept")
+local t = assert(load(now, "words", "t", {}))()
+assert(t[1] == "yak_word" and t[2] == "function", "new word added: " .. now)
+

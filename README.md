@@ -621,7 +621,8 @@ return {
 
 It is only data (nothing in it runs) and the game does not use it. To add a word without
 typing the file: put the cursor on the name (or select it), press **START** and touch
-**Word+** in the help. You can also edit `words.lua` like any other file; the editor
+**Word+** in the help. Word+ only adds one line before the last `}` — your comments and
+everything else in the file stay as they are. You can also edit `words.lua` like any other file; the editor
 reads it again when you save it.
 
 **Color themes.** **START**, then **Opts**: *Soft dark* (the default), *Light* (white

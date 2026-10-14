@@ -175,7 +175,7 @@ local function words_text(list)
   local out = {
     "-- Words for the suggestions of the code editor (D46): \"name\" or",
     "-- { name = \"spawn\", sig = \"spawn(x, y)\", desc = \"...\" }.",
-    "-- Word+ in the help rewrites this file (comments are not kept).",
+    "-- Word+ in the help adds a line before the last } (nothing else changes).",
     "return {",
   }
   for _, w in ipairs(list) do
@@ -190,6 +190,21 @@ local function words_text(list)
   end
   out[#out + 1] = "}"
   return table.concat(out, "\n") .. "\n"
+end
+
+-- Adds word w to the text of words.lua as a new line before the closing }
+-- of the returned table, leaving everything else (comments too) as it is.
+-- Returns the new text, or nil when the file does not end with }.
+local function append_word(src, w)
+  local head, tail = src:match("^(.*)}(%s*)$")
+  if not head then return nil end
+  -- The last thing before } outside comments: a separator is needed unless
+  -- it is { , or ;
+  local code = head:gsub("%-%-%[(=*)%[.-%]%1%]", ""):gsub("%-%-[^\n]*", "")
+  local last = code:match("(%S)%s*$")
+  local sep = (last == "{" or last == "," or last == ";") and "" or ", "
+  if not head:match("\n%s*$") then head = head .. "\n" end
+  return head .. ("  %s%q,\n"):format(sep, w) .. "}" .. tail
 end
 
 local function load_settings()
@@ -632,12 +647,14 @@ function actions.Help()
   end
 end
 
-local function has_word(w)
-  for _, e in ipairs(words) do
+local function has_word_in(list, w)
+  for _, e in ipairs(list) do
     if e == w or (type(e) == "table" and e.name == w) then return true end
   end
   return false
 end
+
+local function has_word(w) return has_word_in(words, w) end
 
 -- Word+: adds the word under the cursor to the cart's words.lua (D46)
 local function add_word()
@@ -652,10 +669,15 @@ local function add_word()
     say("save " .. WORDS .. " first", 3)
     return
   end
-  local list = {}
-  for i, e in ipairs(words) do list[i] = e end
-  list[#list + 1] = w
-  local ok, e = S.write(cart, WORDS, words_text(list))
+  -- A new file gets the header; an existing one only gets one more line
+  local src = S.read(cart, WORDS)
+  local text = src and append_word(src, w) or words_text({ w })
+  local t = text and load_data(text, WORDS)
+  if not (t and has_word_in(t, w)) then
+    say(WORDS .. ": cannot add, the file must end with }", 2)
+    return
+  end
+  local ok, e = S.write(cart, WORDS, text)
   if not ok then say(e, 2); return end
   if buffers[WORDS] then drop_buffer(WORDS) end
   load_words()
