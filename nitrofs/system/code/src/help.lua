@@ -1,6 +1,8 @@
 -- Help of the code editor (START): how to use the editor and the API
 -- reference. The API comes from docs/api/*.lua (D12), copied into the ROM
--- as api/*.lua by build.ps1, so it always matches docs/API.md.
+-- as api/*.lua by build.ps1, so it always matches docs/API.md. The open
+-- cart may add its own topics in help/*.lua (same format, plus 'text' for a
+-- manual page): they come right after the editor's manual.
 
 local M = {}
 
@@ -93,11 +95,24 @@ Help
   Up/down choose, A open, B back,
   left/right scroll this page.
   "Copy ex" copies the example to the
-  clipboard: Paste puts it in the code.]]
+  clipboard: Paste puts it in the code.
+
+Help of your cart
+  Files in help/ of the cart add topics
+  here (a game's manual, the functions
+  of your modules), the same format as
+  the API files:
+  return { title = "My game",
+    text = "a manual page...",
+    entries = { { name = "spawn",
+      sig = "spawn(x, y)", desc = "..." } } }
+  Saving a file in help/ reloads it.]]
 
 M.active = false
 local S
 local topics            -- { {title, summary, entries | manual} }
+local api_topics        -- The editor's manual and the API (loaded once)
+local cart_topics = {}  -- From help/*.lua of the open cart
 local level = "topics"  -- topics | entries
 local topic             -- Chosen topic in level "entries"
 local cursor, top = 1, 1
@@ -119,6 +134,13 @@ local function wrap(s, cols, out, col, indent)
     end
     out[#out + 1] = { line, col }
   end
+end
+
+-- The editor's manual, the cart's topics, then the API
+local function join_topics()
+  topics = { api_topics[1] }
+  for _, t in ipairs(cart_topics) do topics[#topics + 1] = t end
+  for i = 2, #api_topics do topics[#topics + 1] = api_topics[i] end
 end
 
 local function load_topics()
@@ -145,6 +167,34 @@ local function load_topics()
     topics[#topics + 1] = { title = m.title or m.module, summary = m.summary or "",
                             entries = m.entries }
   end
+  api_topics = topics
+  join_topics()
+end
+
+-- Topics of the open cart from its help/*.lua (tables already loaded as
+-- data). Entries without a name are left out. Returns the number of topics.
+function M.set_cart(mods)
+  cart_topics = {}
+  for _, m in ipairs(mods) do
+    local entries
+    if type(m.entries) == "table" then
+      entries = {}
+      for _, e in ipairs(m.entries) do
+        if type(e) == "table" and type(e.name) == "string" then entries[#entries + 1] = e end
+      end
+      if #entries == 0 then entries = nil end
+    end
+    local text = type(m.text) == "string" and m.text or nil
+    if entries or text then
+      cart_topics[#cart_topics + 1] = {
+        title = tostring(m.title or m.module or "Cart help"),
+        summary = type(m.summary) == "string" and m.summary or "",
+        entries = entries, manual = text,
+      }
+    end
+  end
+  if api_topics then join_topics() end
+  return #cart_topics
 end
 
 local function items()
@@ -160,16 +210,20 @@ local function page()
   if detail_key == key then return detail end
   local out = {}
   if level == "topics" then
-    if it.manual then
+    if it.manual == true then
       for l in (MANUAL .. "\n"):gmatch("(.-)\n") do
         out[#out + 1] = { l, #out == 0 and 4 or 12 }
       end
     else
       out[1] = { it.title, 4 }
       out[2] = { "", 12 }
-      wrap(it.summary, COLS, out, 12)
-      out[#out + 1] = { "", 12 }
-      out[#out + 1] = { #it.entries .. " entries: A to open the list", 13 }
+      -- A cart's topic (help/*.lua) may have a manual text instead of, or
+      -- before, a summary
+      wrap(type(it.manual) == "string" and it.manual or it.summary, COLS, out, 12)
+      if it.entries then
+        out[#out + 1] = { "", 12 }
+        out[#out + 1] = { #it.entries .. " entries: A to open the list", 13 }
+      end
     end
   else
     wrap(it.sig or it.name, COLS, out, 4, "  ")

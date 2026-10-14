@@ -160,6 +160,7 @@ litelua/carts/mygame/
   src/          more of your code, loaded with require
   lib/          libraries used by the game
   gfx/ sfx/ music/ font/ map/ data/   assets (gfx/ images, sfx/ sound effects, music/)
+  help/         your own pages in the help of the code editor (optional, below)
 ```
 
 The folder names are fixed, so every cartridge looks the same. The manifest `cart.lua`
@@ -755,6 +756,25 @@ see its arguments, description and example on the top screen (Left/Right scrolls
 page, **B** goes back). **Copy ex** copies the example: **Paste** puts it in your code.
 Press **START** with the cursor on a name like `rectfill` or `sys.run`, or on a Lua keyword
 like `for` or `local`, to open its page directly.
+
+**Help of your cartridge.** Files in `help/` of a cartridge add topics to this help,
+right after the editor's manual: the manual of your game, or the functions of your own
+modules. The format is the one of [docs/api](docs/api/README.md), plus `text` for a page
+of plain text. It is only data, nothing in it runs:
+
+```lua
+-- help/mygame.lua
+return {
+  title = "My Game",
+  text = "Catch the stars! A: jump, hold START: pause menu.",
+  entries = {
+    { name = "spawn", sig = "spawn(x, y)", desc = "Adds a star at x, y." },
+  },
+}
+```
+
+**START** on `spawn` in your code then opens its page. Saving a file in `help/` in the
+editor reloads it. `tests/carts/map/help/map.lua` is an example.
 
 ## System carts: launcher and editors
 

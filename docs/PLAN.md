@@ -16,7 +16,9 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   nagraniem), lista w C jako zapas i tryb awaryjny (SELECT na starcie), `sys.system.edit/
   demo/create/manifest`. Edytor: sekcja o zakładkach w pomocy. Sprawdzone w melonDS; **na
   konsoli do sprawdzenia**. Potem P10b (D53): `sys.menu(label, fn)` — własne pozycje
-  gry w menu pauzy (np. Save/Load; przykład w `tests/carts/map`).
+  gry w menu pauzy (np. Save/Load; przykład w `tests/carts/map`), słowa kluczowe Lua w
+  pomocy, pomoc z kartridża (`help/*.lua`, D53). Dodatki do edytora z kodem — po 1.0
+  (szkic w D48).
 - **Wcześniej (2026-10-14):** P8 (D50) — mapy kafelkowe: `tilemap()`, rysowanie w C,
   kolizje przez flagi, ASCII i liczby, konwerter z Tiled (`litelua.py map`), grafika
   testowa ze skryptu (`make_tiles.py`), kartridż `tests/carts/map` (mała platformówka).

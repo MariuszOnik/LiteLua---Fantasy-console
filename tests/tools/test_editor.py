@@ -31,6 +31,11 @@ class EditorTest(unittest.TestCase):
         run = rt.eval("function(path, root) return assert(loadfile(path))(root) end")
         run(str(TEST.with_name("editor_words_test.lua")), ROOT.as_posix())
 
+    def test_cart_help(self):
+        rt = lua54.LuaRuntime()
+        run = rt.eval("function(path, root) return assert(loadfile(path))(root) end")
+        run(str(TEST.with_name("editor_help_test.lua")), ROOT.as_posix())
+
     def test_launcher(self):
         rt = lua54.LuaRuntime()
         run = rt.eval("function(path, root) return assert(loadfile(path))(root) end")

@@ -1078,6 +1078,18 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
   nie zależy.
 - Rozmiar kafelka (8×8, 16×16, do wyboru), liczba warstw mapy, przewijanie mapy w
   edytorze na małym ekranie — na początku P8.
+- **Dodatki do edytora (pomysł użytkownika, 2026-10-14) — po 1.0, razem ze studiem
+  (P20):** kartridż deklaruje w `cart.lua` `plugin = { editor = "plugin.lua", name =
+  "..." }`; edytor znajduje takie kartridże (`sys.system.carts` + `manifest`), użytkownik
+  włącza wybrane (lista w `saves/@code/settings.lua`, domyślnie nic). Kod dodatku przez
+  `load(src, "@cart/plugin.lua", "t", env)` w stanie edytora, z **ograniczonym `env`**
+  (bieżący bufor, wstawianie z cofaniem, `say`, odczyt plików otwartego kartridża — bez
+  `sys.system`, który zapisuje wszędzie); haki: `commands` (menu „Tools”), `on_save`,
+  `on_open`, `words`, później `tab` (zakładka studia). Każdy hak w `pcall`; pętlę zatrzyma
+  watchdog, pamięć — limit edytora. Druga odmiana: narzędzie jako osobny kartridż przez
+  `sys.system.run(tool, data)` (pełna piaskownica, ~0,5 s na przejście — dla generatorów i
+  konwerterów). W C nic nie potrzeba. Do 1.0 tylko szew: nazwa pola `plugin` w `cart.lua`
+  zarezerwowana. Pomoc z kartridża (`help/`) to same dane — zrobione od razu (D53).
 
 ## D49 (2026-10-14) — Zakres LiteLua 1.0: minimum teraz, „szwy” na rozbudowę
 - Decyzja użytkownika: skończyć projekt, a rozbudowę zostawić na 1.x — bez rozwlekania i
@@ -1230,3 +1242,10 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
   `docs/API.md`. Kolor słów kluczowych w kodzie bez zmian (lekser ma pierwszeństwo).
   Przy okazji: Y, który otwiera edytor z launchera albo ekranu błędu, nie cofa już
   zmiany po puszczeniu.
+- **Pomoc z kartridża (2026-10-14, pomysł użytkownika):** `help/*.lua` w kartridżu — format
+  `docs/api` plus `text` (strona zwykłego tekstu, np. manual gry), czytany jako dane
+  (`load` w pustym środowisku). Tematy kartridża w pomocy edytora zaraz po manualu
+  edytora, START na nazwie z nich otwiera jej stronę (mają pierwszeństwo przed API).
+  Wpisy bez `name` pomijane; plik, który nie jest tabelą — komunikat. Zapis pliku z
+  `help/` w edytorze wczytuje pomoc od nowa. Przykład: `tests/carts/map/help/map.lua`;
+  test `tests/tools/editor_help_test.lua`.

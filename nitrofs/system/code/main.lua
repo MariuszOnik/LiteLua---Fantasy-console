@@ -113,7 +113,7 @@ end
 -- Saves the changed buffers; returns false if one could not be saved
 -- words.lua is reloaded when it is saved (D46); load_words is defined below
 local WORDS = "words.lua"
-local load_words
+local load_words, load_cart_help
 
 local function save_all()
   if not info.writable then return true end
@@ -127,6 +127,7 @@ local function save_all()
       end
       b.dirty = false
       if path == WORDS then load_words() end
+      if path:match("^help/.+%.lua$") then load_cart_help() end
     end
   end
   return true
@@ -171,6 +172,24 @@ function load_words()
     end
   end
   suggest.set_words(words)
+end
+
+-- help/*.lua: the cart's own topics in the help (a manual, its modules)
+function load_cart_help()
+  local mods = {}
+  for _, f in ipairs(S.files(cart, "help") or {}) do
+    if not f.dir and f.name:match("%.lua$") then
+      local path = "help/" .. f.name
+      local t = load_data(S.read(cart, path), path)
+      if t then
+        t.title = t.title or f.name:gsub("%.lua$", "")
+        mods[#mods + 1] = t
+      else
+        say(path .. ": not a help file (return { ... })", 3)
+      end
+    end
+  end
+  help.set_cart(mods)
 end
 
 local function words_text(list)
@@ -255,6 +274,7 @@ local function open_cart(name, path)
   buffers, order, buf = {}, {}, nil
   list.dir = ""
   load_words()
+  load_cart_help()
   if i.error then say(i.error, 2) end
   if not path or not open_file(path) then open_dir("") end
   if not i.writable then say(name .. ": read only", 3) end
