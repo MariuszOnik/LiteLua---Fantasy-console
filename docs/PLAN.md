@@ -6,10 +6,16 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
+- **Kierunek (2026-10-14, D48, dyskusja otwarta):** studio z zakładkami zamiast osobnych
+  edytorów, sceny jako dane z obiektami ze skryptami (jak MonoBehaviour), prefaby i lekkie
+  przyczepienie zamiast hierarchii, prawdziwa grafika w edytorze, grafika ładowana według
+  kamery. Kolejność: **P8 → P19 → P20 → P21**. Otwarte tematy (izometria, atlasy z
+  klatkami różnych rozmiarów i kotwicami, szczegóły map) — w D48; użytkownik chce jeszcze
+  dopisywać, więc przed P8 wrócić do rozmowy.
 - **Ostatnio (2026-10-14):** P11d (D47) — zakładki otwartych plików w górnym pasku (do 5,
   Y+lewo/prawo, Y+B zamyka; cofanie przy puszczeniu Y), powrót z gry do tych samych
   zakładek; poprawka P11c: `words.lua` wczytywany po zapisie. Sprawdzone w melonDS.
-  Otwarte pytanie do użytkownika: czy Word+ ma tylko dopisywać linię (zachować komentarze).
+  Word+ tylko dopisuje linię do `words.lua` (komentarze zostają).
 - **Wcześniej (2026-10-14):** P11c (D46) — motywy kolorów kodu (Opts w pomocy, zapis w
   `saves/@code/settings.lua`), `words.lua` w kartridżu (własne słowa i sygnatury do
   podpowiedzi, Word+ w pomocy). Sprawdzone w melonDS; na konsoli jeszcze nie.
@@ -112,7 +118,9 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   Dźwięki/strumienie zatrzymywane i zwalniane przy zamknięciu stanu kartridża (D14).
   Maxmod: efekty WAV, muzyka `.mas` z SD (`mmPlayMAS`), strumieniowanie WAV z SD
   (ADPCM — ewentualnie P9).
-- [ ] **P8 — Mapy kafelkowe** (odłożone za P11 — D42)
+- [ ] **P8 — Mapy kafelkowe** (odłożone za P11 — D42; **następne wg D48**): format mapy,
+  `map()` w C, kolizje z kafelkami; fundament dla gry i edytora sceny. Na początku ustalić
+  rozmiar kafelka, warstwy, ewentualny tryb izometryczny (D48 — otwarte tematy).
 - [ ] **P9 — Narzędzie `litelua` na PC (Python)**
   `pack` (folder → `.lcart`), `audio` (MP3/OGG/FLAC → WAV ADPCM), `music` (→ `.mas`), `gfx`.
 - [ ] **P10 — Ekran wyboru kartridży** (kartridż systemowy w Lua)
@@ -149,7 +157,7 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   - Wydajność: indeks budowany raz przy starcie edytora (posortowana tablica, wyszukiwanie
     binarne); nazwy z kodu odświeżane przy zmianie linii, nie przy każdym znaku.
 - [ ] **P12 — Edytor grafiki**
-- [ ] **P13 — Edytor map**
+- [ ] **P13 — Edytor map** (wg D48 prawdopodobnie część zakładki Scena — P21)
 - [ ] **P14 — Edytor efektów dźwiękowych**
 - [ ] **P15 — Tryb single60, przegląd dokumentacji API, przykładowe kartridże**
 - [ ] **P16 — Poradnik: dobre praktyki pisania gier na LiteLua** (pomysł użytkownika)
@@ -190,6 +198,15 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   - `ui` — przyciski, listy, okna (wspólne z kartridżami systemowymi, D27).
   Kolejność i zakres ustalić na starcie punktu (część może wejść wcześniej, np. `ui` w
   P10, `anim` przy P12).
+- [ ] **P19 — Biblioteka `scene`** (D48): sceny z plików danych, prefaby, obiekty ze
+  skryptami (`start`/`update`/`draw`, zdarzenia), przyczepienie (`parent` + przesunięcie),
+  przejścia z maską „Loading” i zwalnianiem grafiki, grafika typów ładowana według kamery.
+  Wbudowana (`require("scene")`), opis w pomocy i API, przykład + pomiar czasu masek na DSi.
+- [ ] **P20 — Studio z zakładkami** (D48): `@code` → jeden kartridż systemowy z zakładkami
+  (na start Kod i Pliki), bez zmian w działaniu edytora kodu.
+- [ ] **P21 — Zakładka Scena** (D48): mapa kafelków z prawdziwym tilesetem, obiekty z
+  prawdziwymi sprite'ami (symbole dla obiektów bez grafiki), prefaby, grupy, właściwości,
+  „Edit script” → zakładka Kod, Run od wybranej sceny.
 - [ ] **P18 — LiteLua Music Studio: chiptune w stylu NES, edytor jak FL Studio** (D35)
   - [x] **S-1 — format `.lsong` v1** (D36): `docs/LSONG.md`, walidator, konwersja
     Lua ↔ JSON, renderer WAV (`tools/litelua.py song`), testy `tests/tools`, przykład

@@ -1003,3 +1003,50 @@ osobne polecenie.
   jest `{`, `,` ani `;`, linia zaczyna się od `, `. Nowy plik dostaje nagłówek. Wynik jest
   sprawdzany (`load` jako dane + słowo na liście) przed zapisem; plik niekończący się `}`
   → komunikat, bez zapisu.
+
+## D48 (2026-10-14) — Kierunek: sceny, prefaby i studio z zakładkami (dyskusja otwarta)
+Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywane (niżej
+„Otwarte tematy”) — nie zamykać dyskusji przy wdrażaniu.
+- **Studio zamiast osobnych edytorów:** jeden kartridż systemowy z zakładkami (Kod, Pliki,
+  potem Scena, Grafika, Dźwięk) w jednym stanie Lua — przełączanie natychmiastowe, wspólny
+  schowek, otwarte pliki, motyw i podpowiedzi. Osobne kartridże (`@scene` ↔ `@code`)
+  odrzucone: każde przejście = zamknięcie stanu i start drugiego edytora (~0,5 s). Zgodne
+  ze szkicem `[pliki][kod][grafika]…` w `docs/UX.md`; zmienia D8/D27 w tym, że edytory są
+  modułami jednego kartridża, a nie osobnymi kartridżami. Edytor kodu jest już modułowy.
+- **Sceny jako dane** (`scenes/<nazwa>.lua`, czytane jak `cart.lua`): mapa kafelków +
+  obiekty (`name`, `x`, `y`, `look`, `script`, `props`). **Skrypt obiektu** jak
+  MonoBehaviour: tabela z `start`, `update`, `draw`, zdarzeniami (np. `hit`); `props` z
+  edytora stają się polami obiektu. W grze biblioteka `scene` (wbudowana, `require`):
+  wczytuje scenę, tworzy obiekty, woła callbacki, przejścia z maską „Loading” i
+  zwalnianiem grafiki (wzorzec z rozmowy: `enter`/`leave` sceny, `collectgarbage`).
+- **Prawdziwa grafika w edytorze** (uwaga użytkownika: platformówki nie da się projektować
+  na symbolach): edytor rysuje te same PNG co gra; symbole (`@box`, `@circle`…) tylko dla
+  obiektów bez grafiki (start, wyzwalacz, kamera) i jako zastępstwo przed wczytaniem.
+- **Mapa kafelków:** numery kafelków + jeden tileset na warstwę (np. 256×256 4 bpp = 32 KB
+  VRAM, 256 kafelków 16×16); rysowanie `map()` w C — to **P8**, fundament i dla gry, i dla
+  edytora (edytor sceny przejmuje rolę edytora map z P13).
+- **Grafika według kamery:** obiekty ładują arkusz na **typ**, nie na sztukę; edytor (i
+  gra przy długich poziomach) wczytuje typy widoczne/bliskie kamery, zwalnia dawno
+  niewidziane przy braku VRAM, do tego czasu symbol zastępczy.
+- **Bez pełnej hierarchii rodzic–dziecko** (za droga na DS, rzadko potrzebna w
+  platformówkach). Zamiast niej: **przyczepienie** (`parent` + przesunięcie, bez obrotu i
+  skali), **grupy** tylko w edytorze (w grze płaska lista), **prefaby** (szablon typu z
+  grafiką, skryptem i domyślnymi `props`; na scenie pozycja + zmiany). Pełną hierarchię
+  można dodać później — przyczepienie jej nie blokuje.
+- **Kolejność:** P8 (mapy w silniku) → P19 (biblioteka `scene`) → P20 (studio z
+  zakładkami: Kod, Pliki) → P21 (zakładka Scena). P10 (launcher) i reszta — do ustalenia.
+
+**Otwarte tematy (do dyskusji, niczego jeszcze nie przesądzają):**
+- **Gry izometryczne** (pomysł użytkownika): mapa w rzucie izometrycznym (kafelki w
+  romb, kolejność rysowania po głębokości, przeliczanie ekran ↔ kratka), może jako tryb
+  mapy w P8 albo w bibliotece `scene`; edytor sceny musiałby umieć stawiać kafelki i
+  obiekty na siatce izometrycznej.
+- **Arkusze animacji z klatkami różnych rozmiarów** (pomysł użytkownika): np. arkusz
+  512×512, w którym klatki mają własne prostokąty i **punkty zaczepienia (kotwice)**, a
+  nie stałą siatkę 64×64. Potrzebny opis atlasu (plik danych obok PNG, np. `hero.atlas.lua`
+  z `{ x, y, w, h, ax, ay }` na klatkę, nazwane animacje) i rysowanie klatki względem
+  kotwicy (`spr`/`sprx` z atlasem). Dziś da się to zrobić ręcznie przez `sub(img, x, y, w,
+  h)`; docelowo atlas wczytywany przez `image()` albo osobną funkcję. Do ustalenia: format,
+  narzędzie na PC do pakowania klatek, edycja kotwic w edytorze grafiki (P12).
+- Rozmiar kafelka (8×8, 16×16, do wyboru), liczba warstw mapy, przewijanie mapy w
+  edytorze na małym ekranie — na początku P8.
