@@ -17,6 +17,7 @@
 #include "ll_input.h"
 
 static u32 keys_held, keys_down, keys_up;
+static u32 pending_down, pending_up; // From ll_input_sample since the last frame
 static touchPosition touch_pos;
 
 static const struct {
@@ -32,12 +33,20 @@ static const struct {
     { "touch", KEY_TOUCH },
 };
 
+void ll_input_sample(void)
+{
+    scanKeys();
+    pending_down |= keysDown();
+    pending_up |= keysUp();
+}
+
 void ll_input_update(void)
 {
     scanKeys();
     keys_held = keysHeld();
-    keys_down = keysDown();
-    keys_up = keysUp();
+    keys_down = keysDown() | pending_down;
+    keys_up = keysUp() | pending_up;
+    pending_down = pending_up = 0;
     if (keys_held & KEY_TOUCH)
         touchRead(&touch_pos);
 }

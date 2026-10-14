@@ -19,6 +19,12 @@ local p = { x = START_X, y = START_Y, vx = 0, vy = 0, ground = false,
 local coins, deaths, total = 0, 0, #m:find(8)
 local camx = 0
 local walk_t = 0
+-- Jump buffer: A pressed a moment before landing still jumps. Coyote time:
+-- a jump is still possible a moment after walking off an edge. Both are
+-- counted in game frames (30 per second).
+local JUMP_BUFFER, COYOTE = 4, 4
+local jump_buf, coyote = 0, 0
+local jumps, presses = 0, 0 -- Shown on the bottom screen: every press should jump
 
 local function solid_at(x, y, w, h)
   return m:hit(x + BX, y + BY, w or BW, h or BH, "solid", "main")
@@ -38,9 +44,16 @@ local function move_x(dx)
   end
 end
 
+-- Standing on something: a solid tile or the top of a one-way platform
+-- right under the feet. Checked every frame, not only when the hero moved.
+local function standing()
+  if solid_at(p.x, p.y + 1) then return true end
+  local feet = p.y + BY + BH -- First pixel below the box
+  return feet % T == 0 and m:hit(p.x + BX, feet, BW, 1, "platform", "main") ~= nil
+end
+
 local function move_y(dy)
   local step = dy > 0 and 1 or -1
-  p.ground = false
   for _ = 1, math.floor(math.abs(dy) + 0.5) do
     local ny = p.y + step
     local blocked = solid_at(p.x, ny)
@@ -52,7 +65,6 @@ local function move_y(dy)
       end
     end
     if blocked then
-      if step > 0 then p.ground = true end
       p.vy = 0
       return
     end
@@ -84,11 +96,20 @@ function _update()
   else
     local in_water = m:hit(p.x + BX, p.y + BY, BW, BH, "water", "main")
     p.vy = math.min(p.vy + (in_water and 0.15 or 0.4), in_water and 1.5 or 6)
-    if btnp("a") and (p.ground or in_water) then p.vy = in_water and -3 or -6.2 end
+    if btnp("a") then jump_buf = JUMP_BUFFER; presses = presses + 1 end
+    if jump_buf > 0 and (coyote > 0 or in_water) then
+      p.vy = in_water and -3 or -6.2
+      jump_buf, coyote = 0, 0
+      jumps = jumps + 1
+    end
   end
+  jump_buf = math.max(0, jump_buf - 1)
 
   move_x(p.vx)
   move_y(p.vy)
+  p.ground = p.vy >= 0 and standing()
+  if p.ground then p.vy = 0 end
+  coyote = p.ground and COYOTE or math.max(0, coyote - 1)
 
   -- Coins: take the tile away
   local cx, cy = m:hit(p.x + BX, p.y + BY, BW, BH, "coin", "main")
@@ -129,6 +150,7 @@ function _draw(s)
     text(("tile under %d,%d = %d"):format(tx, ty, m:get(tx, ty + 1, "main")), 4, 14, 13)
     text("A jump, up/down ladder, SELECT level", 4, 160, 13)
     text(LEVELS[level], 200, 4, 11)
+    text(("A pressed %d, jumps %d"):format(presses, jumps), 4, 148, 11)
     text(tostring(m), 4, 172, 14)
   end
 end

@@ -192,7 +192,7 @@ if btn("right") then x = x + 1 end
 btnp(name) -> boolean
 ```
 
-Use for actions that should happen once per press (jump, menu).
+Use for actions that should happen once per press (jump, menu). Buttons are read every screen refresh (60 times a second), so even a press shorter than a game frame is seen in the next frame.
 
 | Argument | Type | Description |
 |---|---|---|

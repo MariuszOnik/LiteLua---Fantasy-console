@@ -10,6 +10,8 @@ Script lines (# starts a comment):
   wait <seconds>
   key <name> [hold_seconds]        a b x y l r start select up down left right
   keys <name+name> [hold_seconds]  several at once, e.g. keys l+r+y
+  down <name> / up <name>          hold a key / let it go (e.g. run while
+                                   tapping another key)
   tap <x> <y>                      bottom screen pixel (0-255, 0-191)
   shot <name>                      both screens as outdir/<name>.png (256x384)
 Needs Pillow."""
@@ -56,6 +58,11 @@ def key(names, hold):
         u.keybd_event(VK[n], 0, flags, 0)
     time.sleep(0.15)
 
+def press(name, down):
+    flags = (1 if name in EXT else 0) | (0 if down else 2)
+    u.keybd_event(VK[name], 0, flags, 0)
+
+
 def tap(h, x, y):
     ox, oy, s = screens(h)
     sx, sy = int(ox + (x + 0.5) * s), int(oy + (192 + y + 0.5) * s)
@@ -90,6 +97,7 @@ def main():
             if c == "wait": time.sleep(float(line[1]))
             elif c in ("key", "keys"):
                 key(line[1].split("+"), float(line[2]) if len(line) > 2 else 0.1)
+            elif c in ("down", "up"): press(line[1], c == "down")
             elif c == "tap": tap(h, int(line[1]), int(line[2]))
             elif c == "shot": shot(h, os.path.join(out, line[1] + ".png"))
     finally:

@@ -22,7 +22,9 @@ if btn("right") then x = x + 1 end]],
       sig = "btnp(name) -> boolean",
       args = { { "name", "string", "button name" } },
       ret = { { "boolean", "true in the frame the button was pressed" } },
-      desc = "Use for actions that should happen once per press (jump, menu).",
+      desc = "Use for actions that should happen once per press (jump, menu). "
+          .. "Buttons are read every screen refresh (60 times a second), so even "
+          .. "a press shorter than a game frame is seen in the next frame.",
       example = [[
 if btnp("a") then jump() end]],
     },

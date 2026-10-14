@@ -399,6 +399,7 @@ static void frame_loop(lua_State *L)
             return;
         ll_sound_update();
         swiWaitForVBlank();
+        ll_input_sample(); // Keys every VBlank: short presses are not lost (D51)
 
         ok = draw_screen(L, SCREEN_BOTTOM, &fs.draw_bottom_us);
         ll_gfx_counts(SCREEN_BOTTOM, &fs.polys_bottom, &fs.verts_bottom);
@@ -413,6 +414,7 @@ static void frame_loop(lua_State *L)
         fs.update_us = elapsed_us(t0);
         ll_sound_update();
         swiWaitForVBlank();
+        ll_input_sample(); // After both VBlanks: samples ~16 ms apart (D51)
     }
 }
 

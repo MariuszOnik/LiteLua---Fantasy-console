@@ -1135,3 +1135,19 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
   Tiled, SELECT przełącza). melonDS (tryb DS): 30 FPS, CPU 10–12%, rysowanie 2,3–3,5 ms
   (2 warstwy + mapa w pomniejszeniu na dolnym ekranie), VRAM 8 KB. Na konsoli — do
   sprawdzenia.
+
+## D51 (2026-10-14) — Wejście: przyciski czytane co VBlank; skok w kartridżu testowym
+- **Zgłoszenie użytkownika:** gra „czasem nie rejestruje A” (bieg po ziemi, skok).
+- **Przyczyna 1 (kartridż `tests/carts/map`, główna):** `p.ground` ustawiane tylko przy
+  ruchu w dół; stojąc, grawitacja w co drugiej klatce nie przesuwała o piksel, więc co
+  druga klatka „w powietrzu” — ok. połowa skoków ginęła. Poprawka: `standing()` co klatkę
+  (ściana albo górna krawędź platformy pod stopami) + **bufor skoku** (4 klatki) i
+  **coyote time** (4 klatki) — standard platformówek, do poradnika (P16).
+- **Przyczyna 2 (silnik):** przyciski czytane raz na klatkę gry (co 33 ms); dodatkowy
+  odczyt dodany najpierw tylko po pierwszym VBlanku wypadał kilka ms przed zwykłym, więc
+  i tak ~30 ms przerwy. Teraz `ll_input_sample()` po **obu** VBlankach (odczyty co ~16 ms),
+  naciśnięcia i puszczenia sumowane do następnego `_update` (`btnp`/`btnr` widzą je
+  wtedy; naciśnięte i puszczone między klatkami: `btnp` i `btnr` naraz, `btn` false).
+- **Pomiar (melonDS, `tools/melon.py`, licznik w kartridżu):** stuknięcia 20 ms — przed
+  poprawką 7/10, po 10/10; bieg z trzymaną strzałką + stuknięcia A 30 ms — 8/8 skoków.
+  `tools/melon.py` dostał `down`/`up` (trzymanie klawisza). Na konsoli — do sprawdzenia.
