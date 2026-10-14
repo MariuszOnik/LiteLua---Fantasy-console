@@ -797,6 +797,29 @@ void ll_sound_stop_all(void)
         p->free_at = stop_vblank + 2;
 }
 
+void ll_sound_pause(bool pause)
+{
+    if (pause)
+        mmEffectCancelAll(); // Short sounds: stopped, not resumed
+    if (music.type == MUSIC_MAS)
+    {
+        if (pause)
+            mmPause();
+        else
+            mmResume();
+    }
+    else if (music.type == MUSIC_LSONG)
+    {
+        ll_seq_pause(pause);
+    }
+    else if (music.type == MUSIC_WAV)
+    {
+        // A stream cannot stop: it plays on silently (ll_sound_update keeps
+        // feeding it) and continues further on
+        mmStreamVolume(pause ? 0 : music.volume * 127 / 1024);
+    }
+}
+
 void ll_sound_end(void)
 {
     ll_sound_stop_all(); // Also for sounds collected by lua_close

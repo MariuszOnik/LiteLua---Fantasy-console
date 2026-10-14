@@ -13,12 +13,14 @@ typedef enum {
     LL_RUN_NEXT,    // Run ll_sys_take_next_cart() (sys.run)
     LL_RUN_QUIT,    // Quit LiteLua (L+R+START, D32)
     LL_RUN_EDIT,    // Open the code editor at the error (Y on the error screen)
+    LL_RUN_EDIT_GAME, // Open the code editor for the game (pause menu)
+    LL_RUN_DEMO,    // Run the built-in demo (sys.system.demo)
 } LLRunResult;
 
 // Runs one session of 'cart' (the built-in demo when NULL) in a new Lua
 // state: loads the entry file, calls _init and then the frame loop. Returns
-// when the cart stops: after an error has been shown, on sys.run/sys.exit or
-// when L+R+B is held. The state is closed before returning (D14).
+// when the cart stops: after an error has been shown, on sys.run/sys.exit,
+// when L+R+B is held or on a choice in the pause menu. The state is closed before returning (D14).
 LLRunResult ll_run(const LLCart *cart);
 
 // Message (with the stack traceback) of the error that ended the last

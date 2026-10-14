@@ -1067,6 +1067,15 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
   „pixel-art-xl” dla SDXL — licencję sprawdzić przed użyciem obrazów w repo). Dobre do
   teł, postaci i ekranu tytułowego; kafelki mapy lepiej rysować skryptem (siatka,
   krawędzie). Eksperyment przy przykładowej grze do wydania 1.0, nie w P8.
+- **Pixel Engine** (pixelengine.ai, sprawdzone 2026-10-14 na pytanie użytkownika): usługa
+  w chmurze z API — generowanie pixel-artu, `pixelate` (darmowe) i **animacja gotowego
+  sprite'a** (klatki z jednej postaci; ~0,10–0,20 USD za animację, ~90 s). Mocna strona
+  względem lokalnego ComfyUI: spójne klatki. Regulamin: wyniki wolno używać „w dowolnym
+  celu, także w komercyjnych grach”, ale własność nieopisana, firma może trenować na
+  danych użytkownika, wyniki API do pobrania tylko 24 h. Grafika z niego w repo — z
+  osobną notką o pochodzeniu (nie zlib). Wynik i tak przez skrypt w `tools/` (rozmiar,
+  paleta, atlas). Opcja dla animacji postaci w przykładowej grze 1.0; silnik od niego
+  nie zależy.
 - Rozmiar kafelka (8×8, 16×16, do wyboru), liczba warstw mapy, przewijanie mapy w
   edytorze na małym ekranie — na początku P8.
 
@@ -1159,3 +1168,45 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
   WASAPI nie robiłem).
 - **Konsola DSi (2026-10-14):** mapy, skakanie (licznik naciśnięć = skoki), muzyka i
   efekty potwierdzone przez użytkownika („wszystko gra”).
+
+## D52 (2026-10-14) — P10: launcher w Lua, menu pauzy, tryb awaryjny
+- Decyzje użytkownika: nazwa nowej gry z **klawiatury** (ta sama co w edytorze), menu
+  pauzy **tylko w grach** (edytor używa START do pomocy), lista w C **zostaje jako
+  zapas**.
+- **Launcher** = kartridż systemowy `@launcher` (`nitrofs/system/launcher`), startuje
+  zamiast listy w C. Górny ekran: tytuł, autor, wersja, `desc` z `cart.lua` (nowe
+  opcjonalne pole, tylko do wyświetlania), położenie, błąd manifestu; dolny: lista (dotyk:
+  wybór, drugie dotknięcie = uruchom) i przyciski Play / Edit / New. A / Y / X, góra/dół,
+  L/R strona. Ostatnio uruchomiony kartridż w `save/last.txt` launchera (powrót z gry,
+  edytora i demo na tę samą pozycję). Demo — ostatnia pozycja listy.
+- **Nowa gra:** nazwa 1–32 znaki `[A-Za-z0-9_-]` z klawiatury (`keyboard.lua` przeniesiony
+  do `nitro:/lib`, wspólny dla edytora i launchera), folder przez `sys.system.create`,
+  pliki z szablonu `nitrofs/system/launcher/template/` (`$ID` = nazwa małymi literami,
+  `$TITLE` = nazwa), potem edytor.
+- **Nowe w `sys.system`:** `edit(cart)` (edytor z `reason="edit"`; po wyjściu — launcher),
+  `demo()`, `create(name)`, `manifest(cart)` (cały `cart.lua` parserem danych D38). Gry
+  launcher uruchamia przez `sys.run` — koniec gry wraca do „listy”, czyli launchera.
+- **Menu pauzy (C, `ll_pause.c`):** START sam (bez L/R) trzymany 30 VBlanków (0,5 s) w
+  grze albo demo; Resume / Restart / Edit code (nie w demo) / Quit game; B albo ponowne
+  START (po puszczeniu) wraca. Rysowane na czystym tle, nie na przyciemnionej klatce gry
+  jak w szkicu `docs/UX.md` (gra nie jest rysowana w pauzie, a przechwytywanie obrazu w
+  dual30 tego nie ułatwia). Resume czeka na puszczenie wszystkich przycisków i rysika.
+  Edit code: gra uruchomiona z edytora wraca do niego z jego danymi, inaczej edytor
+  otwiera pliki gry. Restart i Quit wołają `_quit` (zapis gry). Krótkie START dostaje
+  gra — także to, które otwiera menu.
+- **Dźwięk w pauzie:** efekty zatrzymane, `.mas` przez `mmPause`, `.lsong` — timer
+  sekwencera stoi, głosy wyciszone (nuty wracają w następnej klatce obwiedni), strumień WAV
+  tylko wyciszony (gra dalej). Nagranie WASAPI w melonDS (mapa z „Grass Run”): muzyka →
+  cisza przez całą pauzę → muzyka po wznowieniu.
+- **Zapas i tryb awaryjny:** lista w C (`ll_menu.c`) przy SELECT trzymanym na starcie,
+  bez NitroFS, gdy launcher się nie otworzy albo zakończy błędem (do restartu LiteLua; START
+  na ekranie błędu daje mu jeszcze jedną szansę). Nadpisywanie systemowych z karty i
+  kopiowanie ich na kartę — po 1.0.
+- **Edytor (prośba użytkownika):** pomoc ma sekcję o zakładkach; przy otwarciu drugiego
+  pliku komunikat „Y+left/right switches, Y+B closes” (zakładki są na górnym ekranie, który
+  nie jest dotykowy).
+- **Testy:** `tests/tools/launcher_test.lua` (granie, pamięć pozycji, uszkodzony
+  manifest, demo, nowa gra z klawiatury, istniejąca nazwa); melonDS skryptem: lista →
+  gra → pauza → Quit → ta sama pozycja; New → „test” → edytor → L+R+B → launcher; pauza →
+  Edit code; demo; SELECT przy starcie (`tools/melon.py` dostał `boothold`). Na konsoli —
+  do sprawdzenia.

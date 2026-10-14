@@ -15,6 +15,7 @@ typedef enum {
     LL_SYS_NONE, // Keep running
     LL_SYS_RUN,  // sys.run(name): start another cart
     LL_SYS_EXIT, // sys.exit(): back to the cart list
+    LL_SYS_DEMO, // sys.system.demo(): run the built-in demo
 } LLSysRequest;
 
 // Registers the 'sys' table for 'cart' (NULL for the demo) and clears any

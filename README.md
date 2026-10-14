@@ -19,14 +19,32 @@ litelua/saves/<id>/   save files, one folder per cartridge
 litelua/log.txt       the log (see below)
 ```
 
-LiteLua starts with a list of the cartridges in `litelua/carts` (Up/Down, **A** to run,
-**Y** to open its code in the [code editor](#code-editor-on-the-ds)).
-The first entry is a built-in demo that shows the frame rate, input and memory use and lets
-you test the error screen (SELECT, Y) and the memory limit (X). Without an SD card the
-demo starts directly. (This simple list will be replaced by a proper cartridge browser.)
+LiteLua starts with the **launcher**: the cartridges in `litelua/carts` on the bottom
+screen, the chosen one (title, author, version, description) on the top screen.
 
-To leave a running game and go back to the list, hold **L+R+B** together. To quit
-LiteLua completely, hold **L+R+START** for a second (in a game, in the list or on the
+| in the launcher | |
+|---|---|
+| Up/Down, **L**/**R** (a page), or touch | choose |
+| **A**, **Play** or touch the chosen one again | run it |
+| **Y** or **Edit** | open its code in the [code editor](#code-editor-on-the-ds) |
+| **X** or **New** | make a new game (below) |
+
+The launcher remembers the cartridge you ran last. The last entry is a built-in demo that
+shows the frame rate, input and memory use and lets you test the error screen (SELECT, Y)
+and the memory limit (X).
+
+**A new game on the DS.** **X** (or **New**) asks for a name — the folder in
+`litelua/carts`, letters, digits, `_` and `-` — typed with the on-screen keyboard. **OK**
+(or **A**) makes the folder with `cart.lua` and a small `main.lua` (a ball moved with the
+D-pad) and opens it in the code editor; **Run** there starts it.
+
+**Pause menu.** In a game, hold **START** for half a second: **Resume**, **Restart**,
+**Edit code** (the game's files in the code editor) or **Quit game**. The game stops
+meanwhile and the music pauses (a streamed WAV goes silent and plays on). A short press of
+START still goes to the game — but the game also sees the START press that opens the menu.
+
+To leave a running game at once and go back to the launcher, hold **L+R+B** together. To quit
+LiteLua completely, hold **L+R+START** for a second (in a game, in the launcher or on the
 error screen): you go back to the loader you started LiteLua from, or the console turns
 off if the loader cannot be returned to.
 
@@ -95,11 +113,11 @@ every function.
 1. copy the `mygame` folder to `litelua/carts/` in that SD folder,
 2. start (or reset) `litelua.nds` in melonDS — melonDS reads the folder only when the ROM
    starts, so **reset after every change**,
-3. choose `mygame` in the list.
+3. choose `mygame` in the launcher.
 
 When something goes wrong, the error screen shows the file and line. Hold **L+R** and
 press **X** to see your `print` output, **L+R+Y** for the speed and memory numbers, and
-**L+R+B** to go back to the list. Everything is also written to `litelua/log.txt` — in
+**L+R+B** to go back to the launcher. Everything is also written to `litelua/log.txt` — in
 melonDS it appears in the SD folder after you stop the emulation.
 
 **4. Play it on the DS.** Copy the folder to `litelua/carts/` on the SD card of the DS. Or
@@ -136,8 +154,9 @@ returns a table:
 return {
   id = "mygame",          -- a-z 0-9 _ - . ; names the save folder (default: folder name)
   title = "My Game",      -- shown in lists (default: id)
-  author = "me",
+  author = "me",          -- shown in the launcher, like version and desc
   version = "1.0",
+  desc = "Catch the stars!", -- a short description (optional)
   api = 1,                -- LiteLua API version the game was written for
   memory = 2048,          -- Lua memory limit in KB (optional, default 2048)
 }
@@ -638,8 +657,10 @@ The repository has a VM benchmark cartridge in `tests/carts/bench`: copy the fol
 
 ## Code editor on the DS
 
-You can write and fix your game on the console itself. Choose a cartridge in the list and
-press **Y**, or press **Y** on the error screen to jump straight to the line of the error.
+You can write and fix your game on the console itself. Choose a cartridge in the launcher
+and press **Y**, choose **Edit code** in the pause menu of a game, or press **Y** on the error
+screen to jump straight to the line of the error. Leaving the editor (**L+R+B**) goes back
+to the launcher.
 
 - **Top screen:** the code with line numbers and colors, the file name (`*` = not saved)
   and the cursor position.
@@ -722,39 +743,42 @@ directly.
 
 ## System carts: launcher and editors
 
-*The code editor is the first system cart (P11); the launcher comes in P10. Until then a
-simple built-in list starts the games, and system carts always come from the ROM.*
+*The launcher (P10) and the code editor (P11) are built in. Running your own version
+from the card (below) is planned after 1.0: for now system carts always come from the
+ROM.*
 
 The cart browser (launcher) and the editors are carts too, written in Lua. They come
 **built into** `litelua.nds`, so they always work and always match the engine version.
 You can still change them:
 
-- **Your own version on the SD card wins.** If a folder `litelua/system/<name>/` (for
+- **Your own version on the SD card wins** *(after 1.0)*. If a folder `litelua/system/<name>/` (for
   example `litelua/system/launcher/`) exists on the card, LiteLua runs it instead of the
   built-in one. If its `api` in `cart.lua` does not match the engine, the built-in one is
   used and the log says why.
-- **Make a copy to edit.** In the launcher, choose "Copy system carts to the card": the
+- **Make a copy to edit** *(after 1.0)*. In the launcher, choose "Copy system carts to the card": the
   built-in cart is copied to `litelua/system/`, and you can edit it on the DS like any
   game.
-- **Safe mode.** Hold **SELECT** while LiteLua starts: only the built-in system carts are
-  used. A broken launcher on the card can never lock you out.
-- **Back to the original.** Delete the folder from `litelua/system/` and the built-in
+- **Safe mode.** Hold **SELECT** while LiteLua starts: a simple cart list built into the
+  engine replaces the launcher (it also takes over if the launcher fails with an error).
+  Y there opens the code editor too.
+- **Back to the original** *(after 1.0)*. Delete the folder from `litelua/system/` and the built-in
   version is used again.
 
 System carts can do a few things games cannot: list all carts, read and write the files of
-any cart and run a game that comes back to them when it ends (`sys.system`, see
-[docs/API.md](docs/API.md)). `sys.run("@code")` starts the built-in code editor.
+any cart, create a cart, run a game that comes back to them when it ends (`sys.system`,
+see [docs/API.md](docs/API.md)). `sys.run("@code")` starts the built-in code editor,
+`sys.run("@launcher")` the launcher.
 
 ### System buttons
 
 | buttons | what they do |
 |---|---|
-| hold **START** for half a second | pause menu: Resume, Restart, Edit code, Quit (coming in P10) |
-| **L+R+B** | leave the game at once, back to the list (also stops a game stuck in an endless loop: hold it for a moment) |
+| hold **START** for half a second | pause menu of a game: Resume, Restart, Edit code, Quit game |
+| **L+R+B** | leave the game at once, back to the launcher (also stops a game stuck in an endless loop: hold it for a moment) |
 | hold **L+R+START** for a second | quit LiteLua: back to the loader (or power off) |
 | **L+R+Y** | statistics overlay on/off |
 | **L+R+X** | console overlay with the last `print` lines (on the bottom screen) |
-| hold **SELECT** at start | safe mode: built-in system carts only (coming in P10) |
+| hold **SELECT** at start | safe mode: the simple cart list instead of the launcher |
 
 Games see these buttons too, so avoid using L+R together with B, X, Y or START in a game.
 

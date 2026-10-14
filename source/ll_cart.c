@@ -932,3 +932,61 @@ bool ll_cart_rename(const LLCart *cart, const char *from, const char *to,
     }
     return true;
 }
+
+bool ll_cart_push_manifest(lua_State *L, const LLCart *cart, char *err,
+                           size_t err_size)
+{
+    size_t len;
+    char *src = ll_cart_read(cart, MANIFEST, &len);
+    if (src == NULL)
+    {
+        snprintf(err, err_size, "no " MANIFEST);
+        return false;
+    }
+    static const LLDataLimits limits = { 16 * 1024, 16, 512 };
+    bool ok = ll_data_parse(L, src, len, MANIFEST, &limits, err, err_size);
+    free(src);
+    if (ok && !lua_istable(L, -1))
+    {
+        lua_pop(L, 1);
+        snprintf(err, err_size, MANIFEST " must return a table");
+        return false;
+    }
+    return ok;
+}
+
+bool ll_cart_create(const char *name, char *err, size_t err_size)
+{
+    size_t len = strlen(name);
+    bool ok = len >= 1 && len <= LL_NEW_NAME_MAX;
+    for (const char *p = name; ok && *p; p++)
+        ok = isalnum((unsigned char)*p) || *p == '_' || *p == '-';
+    if (!ok)
+    {
+        snprintf(err, err_size, "a name is 1-%d letters, digits, _ or -",
+                 LL_NEW_NAME_MAX);
+        return false;
+    }
+    if (ll_base[0] == '\0')
+    {
+        snprintf(err, err_size, "no SD card");
+        return false;
+    }
+
+    char path[LL_PATH_MAX];
+    struct stat st;
+    snprintf(path, sizeof(path), "%s/carts/%s" LL_CART_EXT, ll_base, name);
+    bool taken = stat(path, &st) == 0;
+    path[strlen(path) - (sizeof(LL_CART_EXT) - 1)] = '\0';
+    if (taken || stat(path, &st) == 0) // FAT: also in another letter case
+    {
+        snprintf(err, err_size, "'%s' exists", name);
+        return false;
+    }
+    if (mkdir(path, 0777) != 0)
+    {
+        snprintf(err, err_size, "cannot create folder carts/%s", name);
+        return false;
+    }
+    return true;
+}

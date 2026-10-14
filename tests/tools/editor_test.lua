@@ -3,7 +3,8 @@
 -- Tests of the code editor (nitrofs/system/code, P11) on a PC with a stubbed
 -- LiteLua API; run by test_editor.py (needs the Python package lupa).
 local ROOT = ...
-package.path = ROOT .. "/nitrofs/system/code/src/?.lua;" .. package.path
+package.path = ROOT .. "/nitrofs/system/code/src/?.lua;" .. ROOT .. "/nitrofs/lib/?.lua;"
+  .. package.path
 
 local function eq(a, b, what)
   if a ~= b then error(("%s: got %q, want %q"):format(what, tostring(a), tostring(b)), 2) end

@@ -24,6 +24,7 @@
 
 static LLSysRequest request;
 static LLCart next_cart;
+static char next_edit[LL_NAME_MAX]; // sys.system.edit: the game to edit
 static const LLCart *current; // Cart of the state, NULL for the demo
 
 // Return to a system cart after the game it started; 'pending' becomes
@@ -65,6 +66,7 @@ void ll_sys_discard(void)
     if (request == LL_SYS_RUN)
         ll_cart_close(&next_cart);
     return_clear(&pending);
+    next_edit[0] = '\0';
     request = LL_SYS_NONE;
 }
 
@@ -359,6 +361,63 @@ static int l_system_run(lua_State *L)
     return 0;
 }
 
+// sys.system.edit(name): opens the code editor for game 'name' after this
+// callback, like Y on the cart list
+static int l_edit(lua_State *L)
+{
+    const char *name = luaL_checkstring(L, 1);
+    LLCart cart;
+    if (!open_files(L, &cart))
+        return luaL_error(L, "sys.system.edit: %s", lua_tostring(L, -1));
+    ll_cart_close(&cart);
+    open_next(L, "@code");
+    snprintf(next_edit, sizeof(next_edit), "%s", name);
+    return 0;
+}
+
+// sys.system.demo(): runs the built-in demo after this callback
+static int l_demo(lua_State *L)
+{
+    (void)L;
+    ll_sys_discard();
+    request = LL_SYS_DEMO;
+    return 0;
+}
+
+// sys.system.create(name) -> true, or nil and a message: a new empty cart
+// folder litelua/carts/<name>
+static int l_create(lua_State *L)
+{
+    const char *name = luaL_checkstring(L, 1);
+    char err[160];
+    if (ll_cart_create(name, err, sizeof(err)))
+    {
+        ll_log("sys.system.create: carts/%s", name);
+        lua_pushboolean(L, 1);
+        return 1;
+    }
+    luaL_pushfail(L);
+    lua_pushstring(L, err);
+    return 2;
+}
+
+// sys.system.manifest(name) -> table, or nil and a message: the whole
+// cart.lua of a cart, read as data
+static int l_manifest(lua_State *L)
+{
+    LLCart cart;
+    char err[160];
+    if (!open_files(L, &cart))
+        return 2;
+    bool ok = ll_cart_push_manifest(L, &cart, err, sizeof(err));
+    ll_cart_close(&cart);
+    if (ok)
+        return 1;
+    luaL_pushfail(L);
+    lua_pushstring(L, err);
+    return 2;
+}
+
 static void push_start(lua_State *L)
 {
     lua_createtable(L, 0, 4);
@@ -393,6 +452,10 @@ static void register_system(lua_State *L)
         { "remove", l_remove },
         { "rename", l_rename },
         { "run", l_system_run },
+        { "edit", l_edit },
+        { "demo", l_demo },
+        { "create", l_create },
+        { "manifest", l_manifest },
         { NULL, NULL },
     };
     luaL_newlib(L, funcs);
@@ -426,6 +489,12 @@ LLSysRequest ll_sys_request(void)
 LLCart ll_sys_take_next_cart(void)
 {
     request = LL_SYS_NONE; // The caller owns the open cart now
+    if (next_edit[0])
+    {
+        ll_sys_start_edit(next_edit);
+        next_edit[0] = '\0';
+        return next_cart;
+    }
     set_start("run", NULL, NULL, NULL);
     if (pending.active)
     {

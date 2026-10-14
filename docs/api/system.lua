@@ -3,7 +3,8 @@
 return {
   module = "system",
   title = "System carts",
-  summary = "Extra functions of the built-in system carts (the code editor). "
+  summary = "Extra functions of the built-in system carts (the launcher, the "
+         .. "code editor). "
          .. "Games do not have sys.system.",
   since = "P11",
   entries = {
@@ -11,7 +12,8 @@ return {
       name = "sys.system.start", kind = "table",
       sig = "sys.system.start -> table",
       desc = "Why the system cart was started. Fields: reason (\"run\": "
-          .. "sys.run(\"@code\"), \"edit\": Y on the cart list, \"exit\": the "
+          .. "sys.run(\"@code\") or the launcher, \"edit\": Y on the cart list, "
+          .. "sys.system.edit or Edit code in the pause menu, \"exit\": the "
           .. "game started with sys.system.run has ended, \"error\": Y on the "
           .. "error screen), cart (name of the game), data (the string given "
           .. "to sys.system.run), error (the message with the stack traceback).",
@@ -125,6 +127,46 @@ sys.system.rename("mygame", "src/a.lua", "src/enemy.lua")]],
           .. "error screen opens the code editor with reason \"error\".",
       example = [[
 sys.system.run("mygame", "main.lua:12")]],
+    },
+    {
+      name = "sys.system.edit", kind = "function",
+      sig = "sys.system.edit(cart)",
+      args = { { "cart", "string", "cart whose files to open" } },
+      desc = "Opens the code editor with the files of a cart when the current "
+          .. "callback returns (it gets sys.system.start.reason = \"edit\"). "
+          .. "When the editor is left, the launcher starts again.",
+      example = [[
+sys.system.edit("mygame")]],
+    },
+    {
+      name = "sys.system.demo", kind = "function",
+      sig = "sys.system.demo()",
+      desc = "Runs the built-in demo when the current callback returns.",
+      example = [[
+if btnp("select") then sys.system.demo() end]],
+    },
+    {
+      name = "sys.system.create", kind = "function",
+      sig = "sys.system.create(name) -> true | nil, err",
+      args = { { "name", "string", "1-32 letters, digits, _ or -" } },
+      desc = "Creates an empty cart folder litelua/carts/<name> for a new game "
+          .. "(fill it with sys.system.write). An error if a cart of that name "
+          .. "(folder or .lcart) exists.",
+      example = [[
+local ok, err = sys.system.create("mygame")
+if ok then sys.system.write("mygame", "main.lua", "-- my game
+") end]],
+    },
+    {
+      name = "sys.system.manifest", kind = "function",
+      sig = "sys.system.manifest(cart) -> table | nil, err",
+      args = { { "cart", "string", "cart name" } },
+      ret = { { "table", "the whole cart.lua" } },
+      desc = "Reads the manifest cart.lua of a cart as data (nothing in it "
+          .. "runs), with all its fields, e.g. author, version and desc.",
+      example = [[
+local m = sys.system.manifest("mygame")
+if m then print(m.title, m.author) end]],
     },
   },
 }

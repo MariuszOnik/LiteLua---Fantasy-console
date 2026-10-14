@@ -28,6 +28,11 @@ void ll_sound_update(void);
 // the cart's Lua state is closed). Safe to repeat.
 void ll_sound_stop_all(void);
 
+// Pause menu: stops the sound effects and pauses the music (a WAV stream
+// only goes silent and plays on), or resumes it. Keep calling
+// ll_sound_update while paused.
+void ll_sound_pause(bool pause);
+
 // After the Lua state is closed: waits until all sound data is freed.
 void ll_sound_end(void);
 

@@ -12,6 +12,9 @@ Script lines (# starts a comment):
   keys <name+name> [hold_seconds]  several at once, e.g. keys l+r+y
   down <name> / up <name>          hold a key / let it go (e.g. run while
                                    tapping another key)
+  boothold <name>                  first line only: hold a key from the
+                                   moment the window appears (e.g. SELECT
+                                   for the safe mode); let it go with up
   tap <x> <y>                      bottom screen pixel (0-255, 0-191)
   shot <name>                      both screens as outdir/<name>.png (256x384)
 Needs Pillow."""
@@ -81,17 +84,23 @@ def shot(h, path):
 def main():
     script, out = sys.argv[1], sys.argv[2]
     os.makedirs(out, exist_ok=True)
+    lines = open(script, encoding="utf-8").read().splitlines()
+    first = lines[0].split("#")[0].split() if lines else []
+    boothold = first[1] if first[:1] == ["boothold"] else None
     p = subprocess.Popen([MELON, ROM])
     h = None
-    for _ in range(50):
-        time.sleep(0.2)
+    for _ in range(250):
+        time.sleep(0.2 if not boothold else 0.01)
         h = find_window(p.pid)
         if h: break
+    if boothold:
+        u.SetForegroundWindow(h)
+        press(boothold, True)
     time.sleep(1.5)
     try:
-        for line in open(script, encoding="utf-8"):
+        for line in lines:
             line = line.split("#")[0].split()
-            if not line: continue
+            if not line or line[0] == "boothold": continue
             u.SetForegroundWindow(h)
             c = line[0]
             if c == "wait": time.sleep(float(line[1]))

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: Zlib
 //
-// LiteLua - temporary cart list (D20), replaced by the cart selection cart
-// in P10. Lists the folders and .lcart files in litelua/carts: the list is on
-// the bottom (touch) screen, the chosen cart and the help on the top one.
+// LiteLua - the simple cart list in C (D20): the fallback of the launcher
+// (P10) in safe mode (SELECT held at start) or when the launcher fails.
+// Lists the folders and .lcart files in litelua/carts: the list is on the
+// bottom (touch) screen, the chosen cart and the help on the top one.
 
 #include <dirent.h>
 #include <stdbool.h>
@@ -51,6 +52,7 @@ static void draw(int screen, void *ud)
 
         text(4, 40, label(l, cursor), 12);
         text(4, 52, cursor == 0 ? "built into LiteLua" : "litelua/carts", 14);
+        text(4, 100, "Safe mode: the built-in cart list", 3);
 
         text(4, 130, "Hold L+R+START: quit LiteLua", 14);
         text(4, 140, "Up/Down or touch: choose", 13);

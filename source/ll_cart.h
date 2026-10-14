@@ -84,6 +84,20 @@ bool ll_cart_remove(const LLCart *cart, const char *rel, char *err,
 bool ll_cart_rename(const LLCart *cart, const char *from, const char *to,
                     char *err, size_t err_size);
 
+// Pushes the manifest (cart.lua) of an open cart as a table, read with the
+// data parser (nothing runs; memory from L). Returns false with a message in
+// 'err' (nothing pushed) if it is missing or broken.
+bool ll_cart_push_manifest(lua_State *L, const LLCart *cart, char *err,
+                           size_t err_size);
+
+// Longest name of a new cart
+#define LL_NEW_NAME_MAX 32
+
+// Creates an empty cart folder litelua/carts/<name> for a new game (P10).
+// The name may only use letters, digits, _ and -, and no cart (folder or
+// .lcart) of that name may exist.
+bool ll_cart_create(const char *name, char *err, size_t err_size);
+
 // Closes the archive of a .lcart; does nothing for folders. Safe to repeat.
 void ll_cart_close(LLCart *cart);
 

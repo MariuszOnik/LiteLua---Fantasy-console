@@ -64,7 +64,7 @@ typedef struct {
 
 static struct {
     const LLSong *song;
-    bool on, loop, finished;
+    bool on, loop, finished, paused;
     int volume;         // 0..1024
     int segment, rep;
     u32 tick;           // In the segment
@@ -413,6 +413,26 @@ void ll_seq_stop(void)
             soundKill(sq.v[t].channel);
     mmUnlockChannels(locked);
     locked = 0;
+}
+
+void ll_seq_pause(bool pause)
+{
+    if (!sq.on || sq.paused == pause)
+        return;
+    sq.paused = pause;
+    if (pause)
+    {
+        // The timer stops (no ticks); the voices go silent but keep their
+        // notes, and the next envelope frame after resuming sets them again
+        TIMER_CR(3) &= ~TIMER_ENABLE;
+        for (int t = 0; t < sq.song->tracks; t++)
+            if (sq.v[t].channel >= 0 && sq.v[t].kind != 0xFF)
+                send(&sq.v[t], sq.v[t].rate, 0);
+    }
+    else
+    {
+        TIMER_CR(3) |= TIMER_ENABLE;
+    }
 }
 
 void ll_seq_volume(int volume)

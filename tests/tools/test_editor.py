@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: Zlib
 #
-# Tests of the on-DS code editor (P11) on a PC: runs editor_test.lua with
+# Tests of the on-DS code editor (P11) and the launcher (P10) on a PC: runs
+# editor_test.lua and launcher_test.lua with
 # Lua 5.4 from the lupa package (skipped when it is not installed):
 #   pip install lupa
 #   python -m unittest discover -s tests/tools -v
@@ -29,6 +30,11 @@ class EditorTest(unittest.TestCase):
         rt = lua54.LuaRuntime()
         run = rt.eval("function(path, root) return assert(loadfile(path))(root) end")
         run(str(TEST.with_name("editor_words_test.lua")), ROOT.as_posix())
+
+    def test_launcher(self):
+        rt = lua54.LuaRuntime()
+        run = rt.eval("function(path, root) return assert(loadfile(path))(root) end")
+        run(str(TEST.with_name("launcher_test.lua")), ROOT.as_posix())
 
 
 if __name__ == "__main__":

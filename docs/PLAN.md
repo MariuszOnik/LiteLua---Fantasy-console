@@ -6,10 +6,18 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
-- **Droga do 1.0 (D49):** ~~P8 mapy~~ (zrobione, D50) → P10 lekki launcher → P19 lekka
+- **Droga do 1.0 (D49):** ~~P8 mapy~~ (D50) → ~~P10 lekki launcher~~ (D52) → P19 lekka
   biblioteka `scene` → wydanie 1.0 (API, przykłady, `v1.0.0`). Wszystko inne po 1.0.
-  **Następny krok: P10** (lekki launcher w Lua, menu pauzy) — zakres w D49.
-- **Ostatnio (2026-10-14):** P8 (D50) — mapy kafelkowe: `tilemap()`, rysowanie w C,
+  **Następny krok: P19** (biblioteka `scene`, sama Lua) — zakres w D48/D49; na starcie
+  ustalić z użytkownikiem format sceny i API.
+- **Ostatnio (2026-10-14):** P10 (D52) — launcher `@launcher` w Lua (lista, opis z
+  `cart.lua`, Play/Edit/New, nowa gra z klawiatury i szablonu, pamięć pozycji), menu
+  pauzy w C (START 0,5 s: Resume/Restart/Edit code/Quit, dźwięk pauzowany — potwierdzone
+  nagraniem), lista w C jako zapas i tryb awaryjny (SELECT na starcie), `sys.system.edit/
+  demo/create/manifest`. Edytor: sekcja o zakładkach w pomocy. Sprawdzone w melonDS; **na
+  konsoli do sprawdzenia**. Otwarte (pytanie użytkownika): Save/Load w menu pauzy —
+  własne pozycje menu od gry (jak `menuitem` w PICO-8), do decyzji.
+- **Wcześniej (2026-10-14):** P8 (D50) — mapy kafelkowe: `tilemap()`, rysowanie w C,
   kolizje przez flagi, ASCII i liczby, konwerter z Tiled (`litelua.py map`), grafika
   testowa ze skryptu (`make_tiles.py`), kartridż `tests/carts/map` (mała platformówka).
   Sprawdzone w melonDS i **potwierdzone na DSi** (z muzyką „Grass Run”, efektami i
@@ -68,7 +76,7 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 ## Droga do 1.0 (D49)
 
 - [x] **P8 — Mapy, preset `platform`** (D50)
-- [ ] **P10 — Launcher (lekki)**: lista w Lua, Graj / Edytuj / Nowa gra, menu pauzy
+- [x] **P10 — Launcher (lekki)**: lista w Lua, Graj / Edytuj / Nowa gra, menu pauzy (D52)
 - [ ] **P19 — Biblioteka `scene` (lekka)**
 - [ ] **Wydanie 1.0**: przegląd API, 2–3 przykładowe gry (w tym platformówka), `v1.0.0`
 
@@ -140,7 +148,8 @@ Po 1.0: P20, P21, preset `iso`, atlasy, P12, P13, P14, P9, P15, P16, P17, P18 (d
   rozmiar kafelka, warstwy, ewentualny tryb izometryczny (D48 — otwarte tematy).
 - [ ] **P9 — Narzędzie `litelua` na PC (Python)**
   `pack` (folder → `.lcart`), `audio` (MP3/OGG/FLAC → WAV ADPCM), `music` (→ `.mas`), `gfx`.
-- [ ] **P10 — Ekran wyboru kartridży** (kartridż systemowy w Lua)
+- [x] **P10 — Ekran wyboru kartridży** (kartridż systemowy w Lua; lekka wersja wg D49 —
+  D52; nadpisywanie z karty i kopiowanie systemowych na kartę po 1.0)
   Wyjście z gry (menu pauzy) → powrót do listy na zapamiętaną pozycję (D14).
   Wg D27 / `docs/UX.md`: menu pauzy (START 0,5 s), kartridże systemowe w ROM z
   nadpisaniem z `sd:/litelua/system/`, tryb awaryjny (SELECT przy starcie), kopiowanie

@@ -82,6 +82,8 @@ local function open_file(path)
     buf = Buffer.new(path, text)
     buffers[path] = buf
     order[#order + 1] = path
+    -- The tabs are on the top screen, which is not a touch screen
+    if #order == 2 then say("2 files open: Y+left/right switches, Y+B closes", 4) end
   end
   use(buf)
   err_line = nil

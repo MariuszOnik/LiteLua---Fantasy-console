@@ -36,7 +36,8 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - `source/ll_data.c` — parser plików danych w składni Lua (`cart.lua`, `.lsong`; D38) — nic nie jest wykonywane
 - `vendor/miniz/` — miniz 3.0.2 (MIT): ZIP (`.lcart`) i deflate, bez zmian (D21)
 - `nitrofs/` — pliki wbudowane w ROM (`nitro:/`), np. `nitrofs/lib/` dla `require`,
-  `nitrofs/system/<x>/` — kartridże systemowe (`sys.run("@x")`; edytor kodu `@code`, D43)
+  `nitrofs/system/<x>/` — kartridże systemowe (`sys.run("@x")`; edytor kodu `@code`, D43;
+  launcher `@launcher`, D52), `nitrofs/lib/keyboard.lua` — klawiatura ekranowa obu
 - `docs/` — plan, decyzje, `UX.md` (projekt aplikacji: ekrany, przepływ, przyciski,
   kartridże systemowe), `newCzatWorkflow.md` (jak zaczynać nowy czat), `LSONG.md`
   (specyfikacja formatu muzyki), `COMPOSING.md` (manual kompozytora)
@@ -50,7 +51,7 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - `tools/` — skrypty PC (Python): `litelua.py` (`pack` → `.lcart`, `song check|convert|render` — D36, reszta w P9), `lsong.py` (format `.lsong`), `midi.py` + `midi_import.py` (import MIDI, D37), `apidoc.py`, `make_font.py` (font 6×8), `make_tiles.py` (grafika testowa map), `tiledmap.py` (Tiled → mapa, `litelua.py map`, D50), `melon.py` (sterowanie melonDS w testach: klawisze, dotyk, zrzuty)
 - `tests/carts/` — kartridże testowe (`bench` — benchmark VM, D19; `files` — piaskownica, D20; `sound` — P7; `song` — utwory `.lsong` na żywo, D41; `edit` — edytor kodu; `map` — mapy kafelkowe, D50); `build.ps1` kopiuje je na kartę emulatora
 - `tests/tools/` — testy narzędzi PC: `python -m unittest discover -s tests/tools`
-  (też edytor `@code` z atrapami API — wymaga pakietu `lupa`, inaczej pominięty)
+  (też edytor `@code` i launcher z atrapami API — wymaga pakietu `lupa`, inaczej pominięty)
 - `README.md` — manual użytkownika (po angielsku, D15); aktualizuj w każdym punkcie, który
   zmienia coś widocznego dla twórców gier
 - `.claude/commands/punkt.md` — komenda `/punkt`: cykl jednego punktu planu

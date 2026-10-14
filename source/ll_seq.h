@@ -17,6 +17,9 @@ void ll_seq_stop(void);
 
 void ll_seq_volume(int volume);
 
+// Pauses the song (silent, the position is kept) or resumes it.
+void ll_seq_pause(bool pause);
+
 // True when a song played once has reached its end (call ll_seq_stop then).
 bool ll_seq_finished(void);
 

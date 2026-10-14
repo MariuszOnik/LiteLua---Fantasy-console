@@ -27,6 +27,7 @@
 #include "ll_log.h"
 #include "ll_map.h"
 #include "ll_mem.h"
+#include "ll_pause.h"
 #include "ll_runtime.h"
 #include "ll_sandbox.h"
 #include "ll_sound.h"
@@ -40,8 +41,10 @@
 
 extern const char ll_demo_lua[];
 
-// Hold all of these to leave the cart (until the pause menu of P10)
+// Hold all of these to leave the cart at once
 #define KEYS_LEAVE (KEY_L | KEY_R | KEY_B)
+// START held this long opens the pause menu of a game (P10)
+#define PAUSE_HOLD_VBLANKS 30
 // L+R held, then Y: statistics overlay on/off, X: console overlay on/off
 #define KEYS_OVERLAY (KEY_L | KEY_R)
 
@@ -201,6 +204,9 @@ static bool stop_requested(void)
         case LL_SYS_EXIT:
             result = LL_RUN_MENU;
             return true;
+        case LL_SYS_DEMO:
+            result = LL_RUN_DEMO;
+            return true;
         default:
             return false;
     }
@@ -328,8 +334,61 @@ static bool load_main(lua_State *L, const LLCart *cart)
     return !stop_requested();
 }
 
+// The pause menu (games only: the system carts use START themselves). The
+// sound is paused meanwhile. Returns false and sets 'result' if the game
+// must stop.
+static bool pause_menu(void)
+{
+    ll_log("pause menu");
+    ll_sound_pause(true);
+    LLPauseChoice c = ll_pause_show(run_cart ? run_cart->title : "Demo",
+                                    run_cart != NULL);
+    switch (c)
+    {
+        case LL_PAUSE_RESUME:
+            ll_sound_pause(false);
+            return true;
+        case LL_PAUSE_RESTART:
+            result = LL_RUN_RESTART;
+            break;
+        case LL_PAUSE_EDIT:
+            result = LL_RUN_EDIT_GAME;
+            break;
+        case LL_PAUSE_QUIT:
+            result = LL_RUN_MENU;
+            break;
+    }
+    ll_log("pause menu: %s", c == LL_PAUSE_RESTART ? "restart"
+                             : c == LL_PAUSE_EDIT  ? "edit code" : "quit");
+    return false;
+}
+
+// True when START alone has been held for PAUSE_HOLD_VBLANKS in a game
+static bool pause_poll(u32 held)
+{
+    static bool holding;
+    static unsigned long since;
+
+    bool game = run_cart == NULL || !run_cart->system;
+    if (!game || !(held & KEY_START) || (held & (KEY_L | KEY_R)))
+    {
+        holding = false;
+        return false;
+    }
+    if (!holding)
+    {
+        holding = true;
+        since = ll_vblanks();
+        return false;
+    }
+    if (ll_vblanks() - since < PAUSE_HOLD_VBLANKS)
+        return false;
+    holding = false;
+    return true;
+}
+
 // Reads the buttons and handles the system combinations. Returns false if
-// the cart must stop (L+R+B).
+// the cart must stop (L+R+B, a choice in the pause menu).
 static bool read_input(void)
 {
     ll_input_update();
@@ -349,6 +408,8 @@ static bool read_input(void)
         ll_stats_toggle_overlay();
     if ((held & KEYS_OVERLAY) == KEYS_OVERLAY && (down & KEY_X))
         ll_console_toggle_overlay();
+    if (pause_poll(held))
+        return pause_menu();
     return true;
 }
 

@@ -35,6 +35,17 @@ Buttons
                from the API: its page
   R + A        take the first suggestion
 
+Open files (tabs)
+  Up to 5 files can be open; their names
+  are tabs in the bar on the top screen
+  (the top screen is not a touch screen).
+  SELECT, then a file: opens it in a new
+  tab. Hold Y and press left/right to go
+  to the previous / next tab, Y + B
+  closes the tab (unsaved: press twice).
+  A 6th file closes the saved tab used
+  least recently.
+
 Suggestions
   The bar above the keyboard shows names
   that start with the word you type: the

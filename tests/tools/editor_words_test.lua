@@ -3,7 +3,8 @@
 -- Regression test (D46): a word deleted from words.lua and saved in the editor
 -- must leave the suggestions. Run by test_editor.py.
 local ROOT = ...
-package.path = ROOT .. "/nitrofs/system/code/src/?.lua;" .. package.path
+package.path = ROOT .. "/nitrofs/system/code/src/?.lua;" .. ROOT .. "/nitrofs/lib/?.lua;"
+  .. package.path
 local files = {
   ["game/main.lua"] = "function _draw()\n  cls(1)\nend\n",
   ["game/words.lua"] = 'return {\n  "zebra_word",\n  "yak_word",\n}\n',
