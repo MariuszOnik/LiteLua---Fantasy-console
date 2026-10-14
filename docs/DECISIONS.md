@@ -1210,3 +1210,17 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
   gra → pauza → Quit → ta sama pozycja; New → „test” → edytor → L+R+B → launcher; pauza →
   Edit code; demo; SELECT przy starcie (`tools/melon.py` dostał `boothold`). Na konsoli —
   do sprawdzenia.
+
+## D53 (2026-10-14) — P10b: własne pozycje gry w menu pauzy (`sys.menu`)
+- Pytanie użytkownika: Save/Load w menu pauzy, skoro to, co zapisać, zależy od gry.
+  Ogólny „zrzut stanu” (cały stan Lua, tekstury, dźwięk) odrzucony — zawodny i duży na
+  DS. Zamiast tego gra dodaje **własne pozycje** (jak `menuitem` w PICO-8), decyzja
+  agenta za zgodą użytkownika („zrób jak wolisz”).
+- **`sys.menu(label, [fn])`**: do 3 pozycji (etykieta 1–20 bajtów) po Resume; ta sama
+  etykieta zastępuje funkcję, bez `fn` — usuwa. Trzymane w rejestrze stanu Lua (giną z
+  nim). Wybór: menu się zamyka, dźwięk wraca, `fn` wołane chronione (watchdog jak inne
+  callbacki), potem gra dalej; błąd → ekran błędu, `sys.run`/`sys.exit` w `fn` działają.
+  Przy 5+ pozycjach przyciski menu są ciaśniej.
+- Przykład: `tests/carts/map` — „Save position” / „Load position” (`save/pos.txt`: poziom
+  i pozycja). melonDS: zapis → ruch → odczyt przywraca pozycję. Na konsoli — do
+  sprawdzenia.

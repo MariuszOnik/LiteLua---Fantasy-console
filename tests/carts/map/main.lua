@@ -2,7 +2,7 @@
 -- d-pad: walk, climb ladders; A: jump; SELECT: next level (level1 is ASCII,
 -- level2 was converted from Tiled: tests/tools/data/level2.tmj). Top screen:
 -- the game with a camera following the hero. Bottom screen: the whole map
--- zoomed out, statistics.
+-- zoomed out, statistics. Pause menu (hold START): Save / Load position.
 
 local LEVELS = { "level1", "level2" }
 local level = 1
@@ -83,7 +83,28 @@ local function load_level(n)
   deaths = 0
 end
 
+-- Pause menu items (hold START): the game decides what a save holds; here
+-- the level and the hero's position (the coins start again)
+local SAVE = "save/pos.txt"
+local message, message_t = nil, 0
+sys.menu("Save position", function()
+  local f = assert(io.open(SAVE, "w"))
+  f:write(("%d %d %d\n"):format(level, p.x // 1, p.y // 1))
+  f:close()
+  message, message_t = "saved", 60
+end)
+sys.menu("Load position", function()
+  local f = io.open(SAVE, "r")
+  if not f then message, message_t = "nothing saved yet", 60; return end
+  local lv, x, y = f:read("n", "n", "n")
+  f:close()
+  load_level(lv)
+  p.x, p.y = x, y
+  message, message_t = "loaded", 60
+end)
+
 function _update()
+  if message_t > 0 then message_t = message_t - 1 end
   if btnp("select") then load_level(level % #LEVELS + 1) return end
   local on_ladder = m:hit(p.x + BX + 3, p.y + BY, BW - 6, BH, "ladder", "main")
   if on_ladder and (btn("up") or btn("down")) then p.climb = true end
@@ -156,6 +177,7 @@ function _draw(s)
     text(("tile under %d,%d = %d"):format(tx, ty, m:get(tx, ty + 1, "main")), 4, 14, 13)
     text("A jump, up/down ladder, SELECT level", 4, 160, 13)
     text(LEVELS[level], 200, 4, 11)
+    if message_t > 0 then text(message, 200, 14, 4) end
     text(("A pressed %d, jumps %d"):format(presses, jumps), 4, 148, 11)
     text(tostring(m), 4, 172, 14)
   end

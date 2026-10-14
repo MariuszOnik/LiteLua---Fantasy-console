@@ -15,8 +15,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   pauzy w C (START 0,5 s: Resume/Restart/Edit code/Quit, dźwięk pauzowany — potwierdzone
   nagraniem), lista w C jako zapas i tryb awaryjny (SELECT na starcie), `sys.system.edit/
   demo/create/manifest`. Edytor: sekcja o zakładkach w pomocy. Sprawdzone w melonDS; **na
-  konsoli do sprawdzenia**. Otwarte (pytanie użytkownika): Save/Load w menu pauzy —
-  własne pozycje menu od gry (jak `menuitem` w PICO-8), do decyzji.
+  konsoli do sprawdzenia**. Potem P10b (D53): `sys.menu(label, fn)` — własne pozycje
+  gry w menu pauzy (np. Save/Load; przykład w `tests/carts/map`).
 - **Wcześniej (2026-10-14):** P8 (D50) — mapy kafelkowe: `tilemap()`, rysowanie w C,
   kolizje przez flagi, ASCII i liczby, konwerter z Tiled (`litelua.py map`), grafika
   testowa ze skryptu (`make_tiles.py`), kartridż `tests/carts/map` (mała platformówka).
@@ -77,6 +77,7 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 
 - [x] **P8 — Mapy, preset `platform`** (D50)
 - [x] **P10 — Launcher (lekki)**: lista w Lua, Graj / Edytuj / Nowa gra, menu pauzy (D52)
+- [x] **P10b — Własne pozycje gry w menu pauzy** (`sys.menu`, D53)
 - [ ] **P19 — Biblioteka `scene` (lekka)**
 - [ ] **Wydanie 1.0**: przegląd API, 2–3 przykładowe gry (w tym platformówka), `v1.0.0`
 

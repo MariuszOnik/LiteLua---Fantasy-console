@@ -11,6 +11,7 @@
 // data): when the game ends, the system cart is started again and finds the
 // data in sys.system.start, so it can go back to where it was (D14 variant A).
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -94,6 +95,95 @@ static int l_exit(lua_State *L)
     ll_sys_discard();
     request = LL_SYS_EXIT;
     return 0;
+}
+
+// The game's pause menu items: a registry array of { label, function }
+static const char menu_key[] = "litelua.menu";
+
+static void push_menu(lua_State *L)
+{
+    if (lua_getfield(L, LUA_REGISTRYINDEX, menu_key) != LUA_TTABLE)
+    {
+        lua_pop(L, 1);
+        lua_newtable(L);
+        lua_pushvalue(L, -1);
+        lua_setfield(L, LUA_REGISTRYINDEX, menu_key);
+    }
+}
+
+// sys.menu(label, fn): adds an item to the pause menu (or changes the
+// function of the item with that label); sys.menu(label) removes it
+static int l_menu(lua_State *L)
+{
+    size_t len;
+    const char *label = luaL_checklstring(L, 1, &len);
+    luaL_argcheck(L, len > 0 && len <= LL_MENU_LABEL_MAX, 1,
+                  "label of 1-20 characters expected");
+    bool remove = lua_isnoneornil(L, 2);
+    if (!remove)
+        luaL_checktype(L, 2, LUA_TFUNCTION);
+
+    push_menu(L);
+    int menu = lua_gettop(L);
+    lua_Integer n = luaL_len(L, menu), at = n + 1;
+    for (lua_Integer i = 1; i <= n; i++)
+    {
+        lua_rawgeti(L, menu, i);
+        lua_rawgeti(L, -1, 1);
+        bool same = strcmp(lua_tostring(L, -1), label) == 0;
+        lua_pop(L, 2);
+        if (same)
+        {
+            at = i;
+            break;
+        }
+    }
+    if (remove)
+    {
+        if (at <= n) // Shift the rest down
+        {
+            for (lua_Integer i = at; i < n; i++)
+            {
+                lua_rawgeti(L, menu, i + 1);
+                lua_rawseti(L, menu, i);
+            }
+            lua_pushnil(L);
+            lua_rawseti(L, menu, n);
+        }
+        return 0;
+    }
+    if (at > LL_MENU_ITEMS)
+        return luaL_error(L, "sys.menu: at most %d items", LL_MENU_ITEMS);
+    lua_createtable(L, 2, 0);
+    lua_pushvalue(L, 1);
+    lua_rawseti(L, -2, 1);
+    lua_pushvalue(L, 2);
+    lua_rawseti(L, -2, 2);
+    lua_rawseti(L, menu, at);
+    return 0;
+}
+
+int ll_sys_menu_labels(lua_State *L, char labels[][LL_MENU_LABEL_MAX + 1])
+{
+    push_menu(L);
+    int n = 0;
+    while (n < LL_MENU_ITEMS && lua_rawgeti(L, -1, n + 1) == LUA_TTABLE)
+    {
+        lua_rawgeti(L, -1, 1);
+        snprintf(labels[n++], LL_MENU_LABEL_MAX + 1, "%s", lua_tostring(L, -1));
+        lua_pop(L, 2);
+    }
+    lua_pop(L, 2); // The last item (nil) and the menu
+    return n;
+}
+
+void ll_sys_menu_push(lua_State *L, int index)
+{
+    push_menu(L);
+    lua_rawgeti(L, -1, index + 1);
+    lua_rawgeti(L, -1, 2);
+    lua_replace(L, -3);
+    lua_pop(L, 1);
 }
 
 // sys.info(): the console the game runs on (D33)
@@ -470,6 +560,7 @@ void ll_sys_register(lua_State *L, const LLCart *cart)
         { "run", l_run },
         { "exit", l_exit },
         { "info", l_info },
+        { "menu", l_menu },
         { NULL, NULL },
     };
 

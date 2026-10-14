@@ -335,19 +335,35 @@ static bool load_main(lua_State *L, const LLCart *cart)
 }
 
 // The pause menu (games only: the system carts use START themselves). The
-// sound is paused meanwhile. Returns false and sets 'result' if the game
-// must stop.
-static bool pause_menu(void)
+// sound is paused meanwhile. A game's item (sys.menu) resumes the game and
+// calls its function. Returns false and sets 'result' if the game must stop.
+static bool pause_menu(lua_State *L)
 {
+    char labels[LL_MENU_ITEMS][LL_MENU_LABEL_MAX + 1];
+    const char *ptrs[LL_MENU_ITEMS];
+    int count = ll_sys_menu_labels(L, labels), item = 0;
+    for (int i = 0; i < count; i++)
+        ptrs[i] = labels[i];
+
     ll_log("pause menu");
     ll_sound_pause(true);
     LLPauseChoice c = ll_pause_show(run_cart ? run_cart->title : "Demo",
-                                    run_cart != NULL);
+                                    run_cart != NULL, ptrs, count, &item);
     switch (c)
     {
         case LL_PAUSE_RESUME:
             ll_sound_pause(false);
             return true;
+        case LL_PAUSE_ITEM:
+            ll_sound_pause(false);
+            ll_log("pause menu: %s", labels[item]);
+            ll_sys_menu_push(L, item);
+            if (watched_pcall(L, 0, 0) != LUA_OK)
+            {
+                show_error(L);
+                return false;
+            }
+            return !stop_requested();
         case LL_PAUSE_RESTART:
             result = LL_RUN_RESTART;
             break;
@@ -389,7 +405,7 @@ static bool pause_poll(u32 held)
 
 // Reads the buttons and handles the system combinations. Returns false if
 // the cart must stop (L+R+B, a choice in the pause menu).
-static bool read_input(void)
+static bool read_input(lua_State *L)
 {
     ll_input_update();
     u32 held = keysHeld(), down = keysDown();
@@ -409,7 +425,7 @@ static bool read_input(void)
     if ((held & KEYS_OVERLAY) == KEYS_OVERLAY && (down & KEY_X))
         ll_console_toggle_overlay();
     if (pause_poll(held))
-        return pause_menu();
+        return pause_menu(L);
     return true;
 }
 
@@ -448,7 +464,7 @@ static void frame_loop(lua_State *L)
 {
     LLFrameStats fs = { 0 };
     u32 t0 = cpuGetTiming();
-    if (!read_input() || !call_hook(L, "_update", -1))
+    if (!read_input(L) || !call_hook(L, "_update", -1))
         return;
     fs.update_us = elapsed_us(t0);
 
@@ -470,7 +486,7 @@ static void frame_loop(lua_State *L)
         ll_log_flush();
 
         t0 = cpuGetTiming();
-        if (!read_input() || !call_hook(L, "_update", -1))
+        if (!read_input(L) || !call_hook(L, "_update", -1))
             return;
         fs.update_us = elapsed_us(t0);
         ll_sound_update();

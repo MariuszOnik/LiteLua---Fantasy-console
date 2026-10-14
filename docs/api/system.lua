@@ -154,8 +154,7 @@ if btnp("select") then sys.system.demo() end]],
           .. "(folder or .lcart) exists.",
       example = [[
 local ok, err = sys.system.create("mygame")
-if ok then sys.system.write("mygame", "main.lua", "-- my game
-") end]],
+if ok then sys.system.write("mygame", "main.lua", "-- my game\n") end]],
     },
     {
       name = "sys.system.manifest", kind = "function",

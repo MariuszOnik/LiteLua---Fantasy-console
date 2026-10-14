@@ -22,6 +22,18 @@ typedef enum {
 // pending request. System carts also get sys.system.
 void ll_sys_register(lua_State *L, const LLCart *cart);
 
+// Most items a game can add to the pause menu with sys.menu, and the
+// longest label (bytes)
+#define LL_MENU_ITEMS 3
+#define LL_MENU_LABEL_MAX 20
+
+// Labels of the game's pause menu items (sys.menu): fills 'labels' (each
+// LL_MENU_LABEL_MAX + 1 bytes) and returns their number.
+int ll_sys_menu_labels(lua_State *L, char labels[][LL_MENU_LABEL_MAX + 1]);
+
+// Pushes the function of the game's pause menu item 'index' (0-based).
+void ll_sys_menu_push(lua_State *L, int index);
+
 // Request made by the cart; checked by the runtime after every callback.
 LLSysRequest ll_sys_request(void);
 

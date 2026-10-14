@@ -16,13 +16,14 @@
 #define ITEM_X 32
 #define ITEM_W 192
 #define ITEM_H 30
-#define ITEM_STEP 38
+#define MAX_ITEMS 7
 
 typedef struct {
     const char *title;
-    const char *labels[4];
-    LLPauseChoice choices[4];
-    int count, cursor;
+    const char *labels[MAX_ITEMS];
+    LLPauseChoice choices[MAX_ITEMS];
+    int items[MAX_ITEMS]; // Index of a game's item
+    int count, cursor, step;
 } Menu;
 
 static void text(int x, int y, const char *s, u32 color)
@@ -40,8 +41,8 @@ static void text_centered(int y, const char *s, u32 color)
 
 static int item_y(const Menu *m, int i)
 {
-    int top = (192 - (m->count - 1) * ITEM_STEP - ITEM_H) / 2;
-    return top + i * ITEM_STEP;
+    int top = (192 - (m->count - 1) * m->step - ITEM_H) / 2;
+    return top + i * m->step;
 }
 
 static void draw(int screen, void *ud)
@@ -85,9 +86,10 @@ static int touched_item(const Menu *m)
     return -1;
 }
 
-static void add(Menu *m, const char *label, LLPauseChoice choice)
+static void add(Menu *m, const char *label, LLPauseChoice choice, int item)
 {
     m->labels[m->count] = label;
+    m->items[m->count] = item;
     m->choices[m->count++] = choice;
 }
 
@@ -100,15 +102,20 @@ static void frame(Menu *m)
         ll_sys_quit();
 }
 
-LLPauseChoice ll_pause_show(const char *title, bool can_edit)
+LLPauseChoice ll_pause_show(const char *title, bool can_edit,
+                            const char *const labels[], int count, int *item)
 {
     static Menu m;
     m = (Menu){ .title = title };
-    add(&m, "Resume", LL_PAUSE_RESUME);
-    add(&m, "Restart", LL_PAUSE_RESTART);
+    add(&m, "Resume", LL_PAUSE_RESUME, 0);
+    for (int i = 0; i < count && m.count < MAX_ITEMS - 3; i++)
+        add(&m, labels[i], LL_PAUSE_ITEM, i);
+    add(&m, "Restart", LL_PAUSE_RESTART, 0);
     if (can_edit)
-        add(&m, "Edit code", LL_PAUSE_EDIT);
-    add(&m, "Quit game", LL_PAUSE_QUIT);
+        add(&m, "Edit code", LL_PAUSE_EDIT, 0);
+    add(&m, "Quit game", LL_PAUSE_QUIT, 0);
+    // Up to 4 items fit with large gaps; more are closer together
+    m.step = m.count <= 4 ? 38 : (192 - 8 - ITEM_H) / (m.count - 1);
 
     // The frame the game sent last is shown at the next VBlank; the menu's
     // frames then alternate screens from the top one
@@ -133,6 +140,7 @@ LLPauseChoice ll_pause_show(const char *title, bool can_edit)
         if (down & KEY_A)
         {
             choice = m.choices[m.cursor];
+            *item = m.items[m.cursor];
             break;
         }
         if ((down & KEY_B) || (start_armed && !lr && (down & KEY_START)))
@@ -154,13 +162,14 @@ LLPauseChoice ll_pause_show(const char *title, bool can_edit)
         else if (touch_item >= 0)
         {
             choice = m.choices[touch_item];
+            *item = m.items[touch_item];
             break;
         }
     }
 
     // Back to the game only with nothing held, so it does not see the menu's
     // buttons or stylus as its own presses
-    if (choice == LL_PAUSE_RESUME)
+    if (choice == LL_PAUSE_RESUME || choice == LL_PAUSE_ITEM)
         while (keysHeld() & ~KEY_LID)
             frame(&m);
     return choice;

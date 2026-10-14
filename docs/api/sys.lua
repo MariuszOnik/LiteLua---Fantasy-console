@@ -28,6 +28,25 @@ if btnp("start") then sys.run("mygame2") end]],
 if btnp("select") then sys.exit() end]],
     },
     {
+      name = "sys.menu", kind = "function",
+      sig = "sys.menu(label, [fn])",
+      args = {
+        { "label", "string", "1-20 characters" },
+        { "fn", "function", "called when the item is chosen; nil removes the item" },
+      },
+      desc = "Adds your own item to the pause menu (hold START), e.g. Save and "
+          .. "Load: the game decides what to save. Up to 3 items, shown after "
+          .. "Resume; the same label again replaces the function. Choosing it "
+          .. "closes the menu, the game goes on and fn is called (before the "
+          .. "next _update).",
+      example = [[
+sys.menu("Save", function()
+  local f = io.open("save/game.txt", "w")
+  f:write(level, " ", score, "\n")
+  f:close()
+end)]],
+    },
+    {
       name = "sys.info", kind = "function",
       sig = "sys.info() -> table",
       ret = { { "table", "console, cpu_mhz, ram_kb" } },

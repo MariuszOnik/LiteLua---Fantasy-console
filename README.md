@@ -43,6 +43,21 @@ D-pad) and opens it in the code editor; **Run** there starts it.
 meanwhile and the music pauses (a streamed WAV goes silent and plays on). A short press of
 START still goes to the game — but the game also sees the START press that opens the menu.
 
+A game can add up to 3 items of its own to this menu, for example **Save** and **Load** —
+only the game knows what is worth saving:
+
+```lua
+sys.menu("Save", function()
+  local f = io.open("save/game.txt", "w")
+  f:write(level, " ", score, "\n")
+  f:close()
+end)
+```
+
+Choosing the item closes the menu and calls the function; the game goes on.
+`sys.menu("Save")` without a function removes the item. `tests/carts/map` saves and loads
+the hero's position this way.
+
 To leave a running game at once and go back to the launcher, hold **L+R+B** together. To quit
 LiteLua completely, hold **L+R+START** for a second (in a game, in the launcher or on the
 error screen): you go back to the loader you started LiteLua from, or the console turns
