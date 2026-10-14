@@ -784,7 +784,9 @@ end
 
 -- Y is also a modifier (P11d): Y+left/right switch tabs, Y+B closes the
 -- tab, so undo (R+Y: redo) happens when Y is released without them
-local y_used = false
+-- (true at start: the Y that opened the editor from the launcher or the
+-- error screen is released here and must not undo)
+local y_used = true
 local close_path -- Unsaved tab waiting for a second Y+B
 
 local function close_tab()
