@@ -951,3 +951,28 @@ osobne polecenie.
 - Z planu P11a odpadło „L/R przewija, A akceptuje” (konflikt z P11) i „pomoc przez
   przytrzymanie słowa” (jest START z P11b). Posortowana tablica z wyszukiwaniem binarnym
   okazała się niepotrzebna — liniowy filtr ~200 nazw API + nazwy z kodu wystarcza.
+
+## D46 (2026-10-14) — P11c: motywy kolorów edytora i `words.lua`
+- Na prośbę użytkownika (obecne kolory: za duży kontrast; ktoś woli jasne tło jak
+  Notepad++).
+- **Motywy** (`nitrofs/system/code/src/themes.lua`, kolory `0xRRGGBB`): **Soft dark**
+  (domyślny: ciemne tło, pastelowe kolory, słowa kluczowe niebieskie), **Light
+  (Notepad++)** (białe tło, słowa kluczowe niebieskie, komentarze zielone, liczby
+  pomarańczowe, stringi szare) i **Classic** (dotychczasowy Sweetie 16 — zostawiony jako
+  opcja). Motyw dotyczy górnego ekranu (kod, numery linii, pasek stanu, zaznaczenie,
+  kursor); dolny ekran (klawiatura, pasek podpowiedzi) zostaje ciemny.
+- **Opcje:** przycisk **Opts** na pasku pomocy (decyzja użytkownika); lista motywów z
+  podglądem na żywo (przykładowy kod na górnym ekranie), A/OK zapisuje, B/Back wraca.
+  Zapis w `saves/@code/settings.lua` (`return { theme = "light" }`, wczytywany jak dane),
+  wspólny dla wszystkich kartridży.
+- **`words.lua` w kartridżu** (decyzja użytkownika: plik w kartridżu, jedzie z nim, też w
+  `.lcart`): lista `"nazwa"` albo `{ name =, sig =, desc = }`, wczytywana jako dane
+  (`load` w pustym środowisku); gra go nie używa. Nazwy idą do podpowiedzi (przed API),
+  `a.b` — jako pola `a`, `sig` — do podpowiedzi argumentów. Wczytywany przy otwarciu
+  kartridża i po zapisie `words.lua` w edytorze.
+- **Word+** na pasku pomocy: START na nazwie (albo zaznaczonym słowie) otwiera pomoc —
+  dla nazwy spoza API komunikat „Word+ adds it” — a Word+ dopisuje ją i przepisuje cały
+  plik (komentarze znikają, co mówi nagłówek pliku). Gdy `words.lua` jest otwarty i
+  niezapisany — najpierw zapis.
+- Testy: `tests/tools/editor_test.lua` (słowa, pola i sygnatury z `words.lua`, Word+,
+  Opts); melonDS: podgląd motywów, Light zapisany i wczytany po ponownym starcie.

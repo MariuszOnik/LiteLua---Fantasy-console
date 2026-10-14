@@ -599,6 +599,26 @@ in your code (names you have used most and picked lately come first). After `pla
 with the current argument in yellow: `rectfill(x, y, w, h, [col])`. New names from your
 code are picked up when you leave the line.
 
+**Your own words.** A file `words.lua` in the cartridge adds words to the suggestions —
+your functions, constants or module fields, with an optional hint for the call:
+
+```lua
+return {
+  "spawn_enemy",
+  "MAX_LIVES",
+  { name = "Enemy.new", sig = "Enemy.new(x, y)", desc = "a new enemy" },
+}
+```
+
+It is only data (nothing in it runs) and the game does not use it. To add a word without
+typing the file: put the cursor on the name (or select it), press **START** and touch
+**Word+** in the help. You can also edit `words.lua` like any other file; the editor
+reads it again when you save it.
+
+**Color themes.** **START**, then **Opts**: *Soft dark* (the default), *Light* (white
+background, colors like Notepad++) or *Classic* (high contrast). The code on the top
+screen shows each theme while you choose; **A** keeps it for all cartridges.
+
 **Help (START).** A short manual of the editor and the whole API reference — the same
 text as [docs/API.md](docs/API.md): choose a topic (Up/Down, **A**), then a function to
 see its arguments, description and example on the top screen (Left/Right scrolls a long

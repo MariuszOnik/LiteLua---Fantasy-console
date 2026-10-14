@@ -182,4 +182,22 @@ frame({ r = true, a = true }); frame()
 frame({}, 40, 5); frame()     -- Save
 assert(files["game/main.lua"]:find("^cls"), "suggestion inserted: " .. files["game/main.lua"]:sub(1, 20))
 
+-- The cart's own words (words.lua, D46)
+suggest.set_words({ "spawn_enemy", { name = "Enemy.new", sig = "Enemy.new(x, y)" } })
+_, list = q("spa"); eq(list[1], "spawn_enemy", "cart word")
+_, list = q("Enemy.n"); eq(list[1], "new", "cart field")
+eq((suggest.signature(q("Enemy.new(1, "))), "Enemy.new(x, y)", "cart signature")
+suggest.set_words({})
+
+-- Word+ in the help writes words.lua; Opts opens the theme list
+frame({ start = true }); frame()      -- help on the word under the cursor
+frame({}, 120, 5); frame()            -- Word+ (3rd of 5 buttons)
+local wsrc = assert(files["game/words.lua"], "words.lua written")
+local wl = assert(load(wsrc, "words", "t", {}))()
+assert(type(wl[1]) == "string", "a word in words.lua")
+frame({}, 170, 5); frame()            -- Opts (4th of 5)
+frame({ down = true }); frame()       -- preview the next theme
+frame({ a = true }); frame()          -- keep it (save fails: io stub)
+frame({}, 240, 5); frame()            -- Close the help
+
 print("all editor tests passed, drawn chars " .. drawn)

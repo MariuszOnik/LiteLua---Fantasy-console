@@ -42,6 +42,17 @@ Suggestions
   Inside f( ) the bar shows how to call
   f, the current argument in yellow.
 
+Your own words
+  words.lua in the cart lists more words
+  for the suggestions: "name" or
+  { name = "f", sig = "f(x)", desc = "" }
+  START on a name in your code, then
+  Word+ adds it to words.lua.
+
+Options (Opts in this help)
+  The color theme of the code: Soft
+  dark, Light (Notepad++) or Classic.
+
 Touch buttons
   Files  files and folders of the cart
   Save   save the changed files
@@ -200,7 +211,7 @@ function M.open(sys_system, word)
 end
 
 function M.toolbar()
-  return { "Back", "Copy ex", "Close" }
+  return { "Back", "Copy ex", "Word+", "Opts", "Close" }
 end
 
 -- Returns "close", or "copy" and the example text, or nil
@@ -225,6 +236,8 @@ end
 function M.tool(name)
   if name == "Back" then return back() end
   if name == "Close" then M.active = false; return "close" end
+  if name == "Word+" then return "word" end
+  if name == "Opts" then return "opts" end
   if name == "Copy ex" then
     local it = level == "entries" and topic.entries[cursor]
     if it and it.example then return "copy", it.example end

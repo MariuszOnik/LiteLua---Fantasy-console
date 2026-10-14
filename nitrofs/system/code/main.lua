@@ -10,6 +10,7 @@ local lexer = require("lexer")
 local kb = require("keyboard")
 local help = require("help")
 local suggest = require("suggest")
+local themes = require("themes")
 
 local S = sys.system
 local COLS, ROWS = 42, 23     -- Code rows below the status bar
@@ -22,6 +23,8 @@ local buffers, order = {}, {} -- Open files by path, in the order opened
 local buf                     -- Current buffer
 local mode = "carts"          -- code | files | carts | prompt | error | help
 local help_from               -- Mode to go back to from the help
+local settings = { theme = themes.default } -- save/settings.lua (D46)
+local theme = themes.get(settings.theme)
 local msg, msg_col = "", 13
 local frame = 0
 local clipboard = ""
@@ -74,6 +77,7 @@ local function save_all()
         return false
       end
       b.dirty = false
+      if path == WORDS then load_words() end
     end
   end
   return true
@@ -93,6 +97,72 @@ local function goto_error(e)
     err_line = line
   end
   say(e:match("^[^\n]*"), 2)
+end
+
+-- --- words.lua: the cart's own words for the suggestions (D46) -------------
+
+local WORDS = "words.lua"
+local words = {}              -- Entries of words.lua: "name" or { name, sig, desc }
+
+local function load_data(src, name)
+  local f = src and load(src, "=" .. name, "t", {})
+  if not f then return nil end
+  local ok, t = pcall(f)
+  return ok and type(t) == "table" and t or nil
+end
+
+local function load_words()
+  words = {}
+  local src = S.read(cart, WORDS)
+  if src then
+    local t = load_data(src, WORDS)
+    if t then
+      words = t
+    else
+      say(WORDS .. " is not a list of words", 3)
+    end
+  end
+  suggest.set_words(words)
+end
+
+local function words_text(list)
+  local out = {
+    "-- Words for the suggestions of the code editor (D46): \"name\" or",
+    "-- { name = \"spawn\", sig = \"spawn(x, y)\", desc = \"...\" }.",
+    "-- Word+ in the help rewrites this file (comments are not kept).",
+    "return {",
+  }
+  for _, w in ipairs(list) do
+    if type(w) == "string" then
+      out[#out + 1] = ("  %q,"):format(w)
+    elseif type(w) == "table" and w.name then
+      local parts = { ("name = %q"):format(w.name) }
+      if w.sig then parts[#parts + 1] = ("sig = %q"):format(w.sig) end
+      if w.desc then parts[#parts + 1] = ("desc = %q"):format(w.desc) end
+      out[#out + 1] = "  { " .. table.concat(parts, ", ") .. " },"
+    end
+  end
+  out[#out + 1] = "}"
+  return table.concat(out, "\n") .. "\n"
+end
+
+local function load_settings()
+  local f = io.open("save/settings.lua")
+  if f then
+    local t = load_data(f:read("a"), "settings.lua")
+    f:close()
+    if t then
+      for k, v in pairs(t) do settings[k] = v end
+    end
+  end
+  theme = themes.get(settings.theme)
+end
+
+local function save_settings()
+  local f = io.open("save/settings.lua", "w")
+  if not f then say("cannot save the settings", 2); return end
+  f:write(("return { theme = %q }\n"):format(settings.theme))
+  f:close()
 end
 
 -- --- the files list and the carts list ---------------------------------------
@@ -121,6 +191,7 @@ local function open_cart(name, path)
   cart, info = name, i
   buffers, order, buf = {}, {}, nil
   list.dir = ""
+  load_words()
   if i.error then say(i.error, 2) end
   if not path or not open_file(path) then open_dir("") end
   if not i.writable then say(name .. ": read only", 3) end
@@ -416,6 +487,8 @@ local function tool_list()
     return { "Code", "Help" }
   elseif mode == "help" then
     return help.toolbar()
+  elseif mode == "options" then
+    return { "OK", "Back" }
   elseif mode == "prompt" then
     return { "OK", "Cancel" }
   else
@@ -485,9 +558,12 @@ function actions.Del()
   list.cursor = math.max(1, math.min(cur, #list.items))
 end
 
--- Word under the cursor ("sys.run", "rectfill") for the help
+-- Word under the cursor ("sys.run", "rectfill") or the selected word, for
+-- the help and Word+
 local function word_at_cursor()
   if mode ~= "code" or not buf then return nil end
+  local sel = buf:copy()
+  if sel and sel:match("^[%a_][%w_%.]*$") then return sel end
   local line, x = buf.lines[buf.cy], buf.cx
   local s, e = x + 1, x
   while s > 1 and line:sub(s - 1, s - 1):match("[%w_.]") do s = s - 1 end
@@ -496,11 +572,91 @@ local function word_at_cursor()
   return w
 end
 
+local help_word -- Word under the cursor when the help was opened
+
 function actions.Help()
   local from = mode
   if mode == "help" then return end
-  help.open(S, word_at_cursor())
+  help_word = word_at_cursor()
+  local found = help.open(S, help_word)
   help_from, mode = from, "help"
+  if help_word and help_word:match("^[%a_]") and not found then
+    say("'" .. help_word .. "' is not in the API; Word+ adds it", 13)
+  end
+end
+
+local function has_word(w)
+  for _, e in ipairs(words) do
+    if e == w or (type(e) == "table" and e.name == w) then return true end
+  end
+  return false
+end
+
+-- Word+: adds the word under the cursor to the cart's words.lua (D46)
+local function add_word()
+  local w = help_word
+  if not w or not w:match("^[%a_][%w_%.]*$") then
+    say("put the cursor on a name in the code first", 3)
+    return
+  end
+  if not info.writable then say("read only cart", 3); return end
+  if has_word(w) then say(w .. " is already in " .. WORDS, 13); return end
+  if buffers[WORDS] and buffers[WORDS].dirty then
+    say("save " .. WORDS .. " first", 3)
+    return
+  end
+  local list = {}
+  for i, e in ipairs(words) do list[i] = e end
+  list[#list + 1] = w
+  local ok, e = S.write(cart, WORDS, words_text(list))
+  if not ok then say(e, 2); return end
+  if buffers[WORDS] then drop_buffer(WORDS) end
+  load_words()
+  say("added " .. w .. " to " .. WORDS, 6)
+end
+
+-- --- options (D46) -------------------------------------------------------------
+
+local opts = { cursor = 1, preview = nil }
+local SAMPLE = [[
+-- Theme preview
+local speed = 2.5
+
+function _update()
+  if btn("left") then
+    x = x - speed -- move
+  end
+end
+
+function _draw(s)
+  cls(1)
+  text("Score: " .. score, 2, 2)
+end]]
+
+local function open_options()
+  opts.preview = opts.preview or Buffer.new("theme preview", SAMPLE)
+  opts.preview:set_cursor(5, 4)
+  for i, t in ipairs(themes.list) do
+    if t.id == settings.theme then opts.cursor = i end
+  end
+  mode = "options"
+end
+
+local function choose_theme(i)
+  opts.cursor = i
+  theme = themes.list[i]
+end
+
+local function confirm_theme()
+  settings.theme = themes.list[opts.cursor].id
+  save_settings()
+  say("theme: " .. themes.list[opts.cursor].name, 6)
+  mode = "help"
+end
+
+local function cancel_options()
+  theme = themes.get(settings.theme)
+  mode = "help"
 end
 actions.OK = finish_prompt
 function actions.Cancel() mode = "files" end
@@ -604,6 +760,28 @@ function _update()
   local entered = mode
   local tx, ty, pressed = read_touch()
 
+  if mode == "options" then
+    if pressed and ty < TOOL_H then
+      if tool_at(tx) == "OK" then confirm_theme() else cancel_options() end
+    else
+      local n = #themes.list
+      if rep("up") and opts.cursor > 1 then choose_theme(opts.cursor - 1) end
+      if rep("down") and opts.cursor < n then choose_theme(opts.cursor + 1) end
+      if pressed and ty >= LIST_Y then
+        local i = (ty - LIST_Y) // ROW_H
+        if themes.list[i] then
+          if i == opts.cursor then confirm_theme() else choose_theme(i) end
+        end
+      end
+      if btnp("a") then confirm_theme()
+      elseif btnp("b") or btnp("start") then cancel_options() end
+    end
+    if mode ~= "options" then
+      for b, n in pairs(held) do if n > 0 then held[b] = -math.huge end end
+    end
+    return
+  end
+
   local help_result, help_text
   if pressed and ty < TOOL_H then
     local name = tool_at(tx)
@@ -626,6 +804,11 @@ function _update()
     say("example copied: Paste puts it in the code", 6)
   elseif help_result == "none" then
     say("no example here", 3)
+  elseif help_result == "word" then
+    add_word()
+  elseif help_result == "opts" then
+    open_options()
+    return
   end
 
   if mode == "help" then
@@ -733,27 +916,35 @@ local function layers(b, code_cols)
   return result
 end
 
-local function draw_code()
-  local b = buf
+-- Lexer color -> class name, for the theme
+local class_of = {}
+for k, v in pairs(lexer.colors) do class_of[v] = k end
+
+local function draw_code(b)
+  b = b or buf
+  local th = theme
   local g = gutter_cols(b)
   local code_x = g * 6
   local code_cols = COLS - g
   follow(b, code_cols)
 
-  -- Status bar
-  rectfill(0, 0, 256, 8, 8)
+  -- Background, gutter, status bar
+  rectfill(0, 8, 256, 184, th.bg)
+  rectfill(0, 8, code_x - 2, 184, th.gutter_bg)
+  rectfill(0, 0, 256, 8, th.status_bg)
   local name = b.path .. (b.dirty and "*" or "")
   local pos = ("%d:%d"):format(b.cy, b:dcol(b.cy, b.cx) + 1)
-  text(name, 1, 0, 12)
-  text(pos, 256 - #pos * 6 - 1, 0, 13)
+  text(name, 1, 0, th.status_fg)
+  text(pos, 256 - #pos * 6 - 1, 0, th.pos_fg)
 
   -- Current line, error line, selection
   local cr = b.cy - b.top
   local function row_y(y) return 8 + (y - b.top) * 8 end
-  if err_line and err_line >= b.top and err_line < b.top + ROWS then
-    rectfill(0, row_y(err_line), 256, 8, 1)
+  local el = b == buf and err_line
+  if el and el >= b.top and el < b.top + ROWS then
+    rectfill(0, row_y(el), 256, 8, th.err_bg)
   end
-  rectfill(code_x, 8 + cr * 8, 256 - code_x, 8, 15)
+  rectfill(code_x, 8 + cr * 8, 256 - code_x, 8, th.line_bg)
   local y1, x1, y2, x2 = b:sel()
   if y1 then
     for y = math.max(y1, b.top), math.min(y2, b.top + ROWS - 1) do
@@ -762,7 +953,7 @@ local function draw_code()
       local sx = code_x + (d1 - b.scroll_x) * 6
       local w = (d2 - d1) * 6
       if sx < code_x then w, sx = w - (code_x - sx), code_x end
-      if w > 0 then rectfill(sx, row_y(y), w, 8, 9) end
+      if w > 0 then rectfill(sx, row_y(y), w, 8, th.sel_bg) end
     end
   end
 
@@ -773,19 +964,19 @@ local function draw_code()
     if y > #b.lines then break end
     nums[#nums + 1] = ("%" .. (g - 1) .. "d"):format(y)
   end
-  text(table.concat(nums, "\n"), 0, 8, 14)
+  text(table.concat(nums, "\n"), 0, 8, th.gutter_fg)
 
   -- Code
   clip(code_x, 8, 256 - code_x, 184)
   -- The layer strings start at column b.scroll_x
   for _, l in ipairs(layers(b, code_cols)) do
-    text(l[2], code_x, 8, l[1])
+    text(l[2], code_x, 8, th.syntax[class_of[l[1]]] or l[1])
   end
 
   -- Cursor
   if frame % 30 < 20 then
     local cx = code_x + (b:dcol(b.cy, b.cx) - b.scroll_x) * 6
-    rectfill(cx, 8 + cr * 8, 1, 8, 4)
+    rectfill(cx, 8 + cr * 8, 1, 8, th.cursor)
   end
   clip()
 end
@@ -839,7 +1030,17 @@ end
 
 local function draw_bottom()
   draw_toolbar()
-  if mode == "help" then
+  if mode == "options" then
+    text("Color theme of the code", 1, LIST_Y - 1, 13)
+    for i, t in ipairs(themes.list) do
+      local y = LIST_Y + i * ROW_H
+      if i == opts.cursor then rectfill(0, y, 256, ROW_H, 9) end
+      text(t.name .. (t.id == settings.theme and "  (saved)" or ""), 4, y + 2, 12)
+    end
+    text("Up/down: preview  A or OK: keep", 1, 160, 13)
+    text("B or Back: cancel", 1, 170, 13)
+    text(msg:sub(1, COLS), 1, 184, msg_col)
+  elseif mode == "help" then
     help.draw_bottom()
     text(msg:sub(1, COLS), 1, 184, msg_col)
   elseif mode == "code" then
@@ -881,6 +1082,7 @@ function _draw(screen)
   if screen == TOP then
     if mode == "code" then draw_code()
     elseif mode == "help" then help.draw_top()
+    elseif mode == "options" then draw_code(opts.preview)
     elseif mode == "prompt" then draw_prompt_top()
     elseif mode == "error" then
       if buf then draw_code() else draw_list_top() end
@@ -906,6 +1108,7 @@ end
 
 function _init()
   load_clipboard()
+  load_settings()
   suggest.init(help.load(S) or {})
   local st = S.start
   if st.data then restore(st.data) end

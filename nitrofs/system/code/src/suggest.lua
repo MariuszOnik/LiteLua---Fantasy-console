@@ -21,6 +21,7 @@ local globals = {}      -- Names without a dot: API, module tables, keywords
 local api_fields = {}   -- "sys" -> { "exit", "info", "run", ... }
 local code_names, code_fields = {}, {} -- From the code: name -> count
 local recent, recent_n = {}, 0         -- Chosen names -> order of choice
+local cart_names, cart_fields, cart_api = {}, {}, {} -- words.lua
 
 function M.init(modules)
   local seen = {}
@@ -44,7 +45,28 @@ function M.init(modules)
   end
 end
 
-function M.entry(name) return api[name] end
+function M.entry(name) return api[name] or cart_api[name] end
+
+-- Words of the cart (words.lua, D46): "name" or { name =, sig =, desc = }
+function M.set_words(list)
+  cart_names, cart_fields, cart_api = {}, {}, {}
+  for _, w in ipairs(list) do
+    local e = type(w) == "table" and w or { name = w }
+    local n = e.name
+    if type(n) == "string" and n:match("^[%a_][%w_%.]*$") then
+      cart_api[n] = e
+      local base, field = n:match("^(.*)%.([%w_]+)$")
+      if base then
+        local t = cart_fields[base]
+        if not t then t = {}; cart_fields[base] = t end
+        t[#t + 1] = field
+        cart_names[#cart_names + 1] = n:match("^[%w_]+")
+      else
+        cart_names[#cart_names + 1] = n
+      end
+    end
+  end
+end
 
 -- Names and fields used in the code of buffer b (counted). Cheap enough to
 -- run when the cursor leaves an edited line, not after every key.
@@ -103,12 +125,14 @@ function M.query(b)
   local base, pre = line:match("([%a_][%w_%.]*)[%.:]([%w_]*)$")
   if base then
     for _, f in ipairs(api_fields[base] or {}) do add(f, pre) end
+    for _, f in ipairs(cart_fields[base] or {}) do add(f, pre) end
     local last = base:match("[%w_]+$")
     for f in pairs(code_fields[last] or {}) do add(f, pre) end
     if #found == 0 and pre == "" then return nil end
   else
     pre = line:match("[%a_][%w_]*$")
     if not pre then return nil end
+    for _, n in ipairs(cart_names) do add(n, pre) end
     for _, n in ipairs(globals) do add(n, pre) end
     for n in pairs(code_names) do add(n, pre) end
   end
@@ -139,7 +163,7 @@ function M.signature(b)
     elseif c == "(" then
       if depth == 0 then
         local name = line:sub(1, i - 1):match("([%a_][%w_%.]*)%s*$")
-        local e = name and api[name]
+        local e = name and (api[name] or cart_api[name])
         if e and e.sig then return e.sig, arg end
         return nil
       end

@@ -6,7 +6,10 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
-- **Ostatnio (2026-10-14):** P11a (D45) — pasek podpowiedzi nad klawiaturą (API, biblioteka
+- **Ostatnio (2026-10-14):** P11c (D46) — motywy kolorów kodu (Opts w pomocy, zapis w
+  `saves/@code/settings.lua`), `words.lua` w kartridżu (własne słowa i sygnatury do
+  podpowiedzi, Word+ w pomocy). Sprawdzone w melonDS; na konsoli jeszcze nie.
+- **Wcześniej (2026-10-14):** P11a (D45) — pasek podpowiedzi nad klawiaturą (API, biblioteka
   Lua z nowego `docs/api/lua.lua`, słowa kluczowe, nazwy i pola z kodu), dotyk albo R+A
   wstawia, `>` następna strona; w nawiasach znanej funkcji sygnatura z bieżącym argumentem
   na żółto. Sprawdzone w melonDS; na konsoli jeszcze nie.
@@ -123,6 +126,9 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   pliku/linii/kursora).
 - [x] **P11b — Pliki i pomoc w edytorze** (D44): usuwanie i zmiana nazw plików/folderów,
   pomoc (START): manual edytora i API z `docs/api` w ROM, pomoc kontekstowa.
+- [x] **P11c — Opcje edytora i własne słowa** (D46): motywy kolorów (Soft dark domyślny,
+  Light jak Notepad++, Classic), `words.lua` w kartridżu z własnymi słowami podpowiedzi,
+  Word+ w pomocy.
 - [x] **P11a — Podpowiedzi i pomoc w edytorze** (D45; pomoc już w P11b)
   - Źródła: API z `docs/api/*.lua` (D12, w ROM przez NitroFS), słowa kluczowe Lua, wybrane
     funkcje biblioteki standardowej (osobny plik `docs/api/lua.lua`), nazwy z kodu gracza
