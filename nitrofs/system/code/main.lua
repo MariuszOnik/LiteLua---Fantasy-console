@@ -2,6 +2,7 @@
 -- Top screen: the code. Bottom screen: toolbar, messages and the keyboard.
 -- Buttons: d-pad moves the cursor (L held: select, R: page / line start and
 -- end), A new line, B backspace, Y undo (R+Y redo), X letters/symbols,
+-- Y+left/right switch the tab of an open file, Y+B close it (P11d),
 -- R+A the first suggestion of the bar above the keyboard (P11a),
 -- SELECT files, START help.
 
@@ -39,6 +40,34 @@ end
 
 -- --- files -------------------------------------------------------------------
 
+-- Open files are tabs (P11d, D47): at most MAX_TABS; opening one more
+-- closes the saved tab used longest ago (an unsaved one never closes itself)
+local MAX_TABS = 5
+local use_count = 0
+
+local function use(b)
+  use_count = use_count + 1
+  b.used = use_count
+end
+
+local function make_room()
+  if #order < MAX_TABS then return true end
+  local oldest
+  for i, p in ipairs(order) do
+    local b = buffers[p]
+    if not b.dirty and b ~= buf and (not oldest or b.used < buffers[order[oldest]].used) then
+      oldest = i
+    end
+  end
+  if not oldest then
+    say("5 files with unsaved changes: save first", 3)
+    return false
+  end
+  buffers[order[oldest]] = nil
+  table.remove(order, oldest)
+  return true
+end
+
 local function open_file(path)
   if buffers[path] then
     buf = buffers[path]
@@ -48,14 +77,28 @@ local function open_file(path)
       say(e, 2)
       return false
     end
+    if not make_room() then return false end
     text = text:gsub("^\239\187\191", "") -- UTF-8 byte order mark
     buf = Buffer.new(path, text)
     buffers[path] = buf
     order[#order + 1] = path
   end
+  use(buf)
   err_line = nil
   mode = "code"
   return true
+end
+
+-- Next (dir 1) or previous (-1) tab
+local function switch_tab(dir)
+  if #order < 2 then say("one file open: SELECT opens more"); return end
+  local cur = 1
+  for i, p in ipairs(order) do
+    if buffers[p] == buf then cur = i end
+  end
+  buf = buffers[order[(cur - 1 + dir) % #order + 1]]
+  use(buf)
+  err_line = nil
 end
 
 local function check(b)
@@ -344,11 +387,7 @@ end
 -- --- running the game --------------------------------------------------------
 
 local function state_data()
-  local t = { "v1", cart }
-  for i = #order, 1, -1 do
-    local p = order[i]
-    if buffers[p] == buf then table.remove(order, i); table.insert(order, 1, p) end
-  end
+  local t = { "v2", cart, buf and buf.path or "" }
   for _, p in ipairs(order) do
     local b = buffers[p]
     t[#t + 1] = ("%s\t%d\t%d\t%d"):format(p, b.cy, b.cx, b.top)
@@ -359,19 +398,24 @@ end
 local function restore(data)
   local lines = {}
   for l in data:gmatch("[^\n]+") do lines[#lines + 1] = l end
-  if lines[1] ~= "v1" or not lines[2] then return false end
+  -- v1: the current file first; v2: the current file, then the tabs in order
+  local v2 = lines[1] == "v2"
+  if not (v2 or lines[1] == "v1") or not lines[2] then return false end
   if not open_cart(lines[2]) then return false end
-  local first
-  for i = #lines, 3, -1 do
+  local current = v2 and lines[3]
+  local first, cur
+  for i = v2 and 4 or 3, #lines do
     local p, y, x, top = lines[i]:match("^(.-)\t(%d+)\t(%d+)\t(%d+)$")
     if p and open_file(p) then
       local y2 = math.min(tonumber(y), #buf.lines)
       buf:set_cursor(y2, math.min(tonumber(x), #buf.lines[y2]))
       buf.top = math.min(tonumber(top), #buf.lines)
-      first = buf
+      first = first or buf
+      if p == current then cur = buf end
     end
   end
-  if first then buf = first; mode = "code" end
+  buf = cur or first
+  if buf then use(buf); mode = "code" end
   return true
 end
 
@@ -714,23 +758,58 @@ local function key_action(a)
   err_line = nil
 end
 
+-- Y is also a modifier (P11d): Y+left/right switch tabs, Y+B closes the
+-- tab, so undo (R+Y: redo) happens when Y is released without them
+local y_used = false
+local close_path -- Unsaved tab waiting for a second Y+B
+
+local function close_tab()
+  local p = buf.path
+  if buf.dirty and close_path ~= p then
+    close_path = p
+    say(p .. " not saved: Y+B again closes it", 3)
+    return
+  end
+  close_path = nil
+  drop_buffer(p)
+  say("closed " .. p)
+  if buf then use(buf) else open_dir(list.dir or "") end
+end
+
 local function update_code()
   local L, R = btn("l"), btn("r")
   if L and R then return end -- System combinations (L+R+B, ...)
   local b = buf
   local up, down, left, right = rep("up"), rep("down"), rep("left"), rep("right")
+  if btnp("y") then y_used = false end
+  if btn("y") then
+    if left or right then
+      switch_tab(left and -1 or 1)
+      y_used = true
+    end
+    if btnp("b") then
+      close_tab()
+      y_used = true
+    end
+    return
+  end
+  if btnr("y") and not y_used then
+    if R then
+      if not b:redo_step() then say("nothing to redo") end
+    else
+      actions.Undo()
+    end
+  end
   if R then
     if up then b:vertical(-ROWS, L) end
     if down then b:vertical(ROWS, L) end
     if left then b:home(L) end
     if right then b:line_end(L) end
-    if btnp("y") and not b:redo_step() then say("nothing to redo") end
   else
     if up then b:vertical(-1, L) end
     if down then b:vertical(1, L) end
     if left then b:left(L) end
     if right then b:right(L) end
-    if btnp("y") then actions.Undo() end
   end
   if rep("b") then key_action("back") end
   if R and btnp("a") then
@@ -923,6 +1002,26 @@ end
 local class_of = {}
 for k, v in pairs(lexer.colors) do class_of[v] = k end
 
+-- Tabs of the open files in the status bar (P11d): names without folders,
+-- shortened to fit, the current one on the code background
+local function draw_tabs(width)
+  local th = theme
+  local n = #order
+  local cols = width // 6
+  local each = math.max(3, cols // n - 1)
+  local x = 0
+  for _, p in ipairs(order) do
+    local b = buffers[p]
+    local name = p:match("[^/]+$") .. (b.dirty and "*" or "")
+    if #name > each then name = name:sub(1, each - 1) .. "~" end
+    local w = #name * 6 + 4
+    if b == buf then rectfill(x, 0, w, 8, th.bg) end
+    text(name, x + 2, 0, b == buf and th.status_fg or th.pos_fg)
+    x = x + w + 2
+    if x > width then break end
+  end
+end
+
 local function draw_code(b)
   b = b or buf
   local th = theme
@@ -935,10 +1034,14 @@ local function draw_code(b)
   rectfill(0, 8, 256, 184, th.bg)
   rectfill(0, 8, code_x - 2, 184, th.gutter_bg)
   rectfill(0, 0, 256, 8, th.status_bg)
-  local name = b.path .. (b.dirty and "*" or "")
   local pos = ("%d:%d"):format(b.cy, b:dcol(b.cy, b.cx) + 1)
-  text(name, 1, 0, th.status_fg)
-  text(pos, 256 - #pos * 6 - 1, 0, th.pos_fg)
+  local pos_x = 256 - #pos * 6 - 1
+  if b == buf and #order > 1 then
+    draw_tabs(pos_x - 4)
+  else
+    text(b.path .. (b.dirty and "*" or ""), 1, 0, th.status_fg)
+  end
+  text(pos, pos_x, 0, th.pos_fg)
 
   -- Current line, error line, selection
   local cr = b.cy - b.top

@@ -26,7 +26,9 @@ Buttons
   R + l/r      line start/end
   A            new line (keeps indent)
   B            backspace
-  Y / R+Y      undo / redo
+  Y / R+Y      undo / redo (on release)
+  Y + l/r      previous / next open file
+  Y + B        close the file (tab)
   X            letters / symbols
   SELECT       files of the cart
   START        this help; on a name

@@ -572,7 +572,9 @@ press **Y**, or press **Y** on the error screen to jump straight to the line of 
 | **R** + left/right | start/end of the line (start: first the indentation) |
 | **A** | new line (keeps the indentation) |
 | **B** | backspace |
-| **Y** / **R+Y** | undo / redo |
+| **Y** / **R+Y** | undo / redo (when you let go of Y) |
+| **Y** + left/right | previous / next open file (tab) |
+| **Y+B** | close the file (asks again if it is not saved) |
 | **X** | letters / symbols keyboard |
 | **R+A** | take the first suggestion |
 | **SELECT** | files of the cartridge |
@@ -587,7 +589,14 @@ and shows the stack traceback — touch a line of it to go there.
 **B** goes up a folder); **File+** and **Dir+** create a new file or folder, **Ren**
 renames (or moves, e.g. to `src/enemy.lua`) the chosen file or folder, **Del** deletes it
 (touch **Del** twice; a folder only when it is empty), **Carts** switches to another
-cartridge. Several files can be open at once; **Run** saves them all.
+cartridge.
+
+**Tabs.** Up to 5 files can be open at once; their names are tabs in the bar at the top
+(`main.lua* │ util.lua`, `*` = not saved). Hold **Y** and press left/right to switch, for
+example to copy something from one file to another. Each file keeps its cursor and its
+unsaved changes. Opening a sixth file closes the saved one you have not used for the
+longest time (a file with unsaved changes is never closed by itself). **Run** saves all
+of them, and after the game you come back to the same tabs.
 Files are saved safely: a failed write never leaves half a file. Cartridges packed as
 `.lcart` can be read but not changed. The clipboard is kept between runs.
 

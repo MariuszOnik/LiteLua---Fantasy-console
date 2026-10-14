@@ -50,12 +50,13 @@ local files = {
   ["game/src/x.lua"] = "return 1\n",
 }
 local removed, renamed
-local frame_keys, touch_xy = {}, nil
+local frame_keys, touch_xy, prev_keys = {}, nil, {}
 local drawn = 0
 local env = _G
 env.log = function(s) if DEBUG then print(s) end end
 env.btn = function(n) return frame_keys[n] == true end
-env.btnp = function(n) return frame_keys[n] == true end
+env.btnp = function(n) return frame_keys[n] == true and not prev_keys[n] end
+env.btnr = function(n) return prev_keys[n] == true and not frame_keys[n] end
 env.touch = function() if touch_xy then return touch_xy[1], touch_xy[2] end end
 for _, n in ipairs({ "cls", "rectfill", "clip" }) do env[n] = function() end end
 env.text = function(s) drawn = drawn + #s end
@@ -103,6 +104,7 @@ local f = assert(loadfile(ROOT .. "/nitrofs/system/code/main.lua", "t", env))
 f()
 env._init()
 local function frame(keys, tx, ty)
+  prev_keys = frame_keys
   frame_keys, touch_xy = keys or {}, tx and { tx, ty }
   env._update(); env._draw(0); env._draw(1)
 end
@@ -115,7 +117,7 @@ frame({ down = true }); frame({}); frame({ a = true }); frame()
 frame({}, 40, 5); frame()
 eq(files["game/main.lua"]:sub(1, 1), "q", "saved typed q")
 frame({}, 72, 5); frame()
-assert(ran and ran:match("^v1\ngame\nmain.lua\t"), "run data: " .. tostring(ran))
+assert(ran and ran:match("^v2\ngame\nmain.lua\nmain.lua\t"), "run data: " .. tostring(ran))
 
 -- Return from an error
 env.sys.system.start = { reason = "error", cart = "game", data = ran,
@@ -205,5 +207,28 @@ frame({}, 170, 5); frame()            -- Opts (4th of 5)
 frame({ down = true }); frame()       -- preview the next theme
 frame({ a = true }); frame()          -- keep it (save fails: io stub)
 frame({}, 240, 5); frame()            -- Close the help
+
+-- Tabs (P11d): two files open, Y+right switches, Y alone undoes on release
+env.sys.system.start = { reason = "edit", cart = "game" }
+f = assert(loadfile(ROOT .. "/nitrofs/system/code/main.lua", "t", env)); f()
+env._init(); frame()
+frame({ select = true }); frame()      -- files view: src/, main.lua
+frame({ a = true }); frame()           -- into src/
+frame({ down = true }); frame()        -- x.lua (after "..")
+frame({ a = true }); frame()           -- open src/x.lua: second tab
+local shown = {}
+env.text = function(s) shown[#shown + 1] = s end
+frame()
+local all = table.concat(shown, "|")
+assert(all:find("main.lua", 1, true) and all:find("x.lua", 1, true), "both tabs drawn: " .. all:sub(1, 80))
+env.text = function(s) drawn = drawn + #s end
+frame({}, 5, 70); frame()               -- type q into x.lua
+frame({ y = true }); frame({ y = true, right = true }); frame({ y = true }); frame()
+frame({}, 40, 5); frame()               -- Save (main.lua is current now)
+assert(files["game/main.lua"]:sub(1, 1) ~= "q", "q went to x.lua, not main.lua")
+frame({ y = true }); frame({ y = true, left = true }); frame() -- back to x.lua
+frame({ y = true }); frame()            -- Y alone: undo the q on release
+frame({}, 40, 5); frame()
+eq(files["game/src/x.lua"], "return 1\n", "undo in x.lua")
 
 print("all editor tests passed, drawn chars " .. drawn)

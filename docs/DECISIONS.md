@@ -981,3 +981,19 @@ osobne polecenie.
   niżej w pliku, więc Lua czytała je jako (puste) zmienne globalne i nie wczytywała słów
   ponownie. Deklaracje przeniesione wyżej; test regresji `tests/tools/editor_words_test.lua`;
   `editor_test.lua` działa w trybie ścisłym (odczyt niezdefiniowanej globalnej = błąd).
+
+## D47 (2026-10-14) — P11d: zakładki plików w edytorze
+- Na prośbę użytkownika (szybki podgląd i kopiowanie między plikami). Decyzje
+  użytkownika: zakładki w górnym pasku + Y+lewo/prawo; do 5 plików, zamykanie Y+B.
+- **Zakładki** = otwarte bufory w kolejności otwarcia; pasek stanu pokazuje nazwy bez
+  folderów (skracane `~`, `*` = niezapisany), bieżąca na tle kodu, pozycja kursora po
+  prawej. Jeden plik — sama nazwa jak dotąd.
+- **Y jako modyfikator:** Y+lewo/prawo przełącza, Y+B zamyka (niezapisany: drugie Y+B);
+  cofanie (R+Y: ponów) dzieje się przy **puszczeniu** Y, jeśli w międzyczasie nie było
+  lewo/prawo/B. Gdy Y jest trzymany, krzyżak nie przesuwa kursora.
+- **Limit 5:** otwarcie szóstego pliku zamyka zapisaną zakładkę nieużywaną najdłużej;
+  niezapisana nigdy nie znika sama (5 niezapisanych → komunikat „save first”).
+- **Powrót z gry:** dane dla `sys.system.run` w formacie `v2` (kartridż, bieżący plik,
+  zakładki w kolejności z kursorem); `v1` nadal czytany.
+- Testy: zakładki, przełączanie i cofanie przy puszczeniu Y w `editor_test.lua` (atrapa
+  `btnp`/`btnr` z poprzednią klatką); melonDS: dwie zakładki i Y+prawo.

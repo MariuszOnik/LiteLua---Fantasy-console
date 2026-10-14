@@ -11,7 +11,9 @@ local files = {
 local keys, tap = {}, nil
 log = function() end
 btn = function(n) return keys[n] == true end
-btnp = btn
+local prev = {}
+btnp = function(n) return keys[n] == true and not prev[n] end
+btnr = function(n) return prev[n] == true and not keys[n] end
 touch = function() if tap then return tap[1], tap[2] end end
 for _, n in ipairs({ "cls", "rectfill", "clip", "text" }) do _G[n] = function() end end
 textw = function(s) return #s * 6, 8 end
@@ -29,7 +31,7 @@ assert(loadfile(ROOT .. "/nitrofs/system/code/main.lua"))()
 _init()
 local suggest = require("suggest")
 local Buffer = require("buffer")
-local function frame(k, x, y) keys, tap = k or {}, x and { x, y }; _update(); _draw(0); _draw(1) end
+local function frame(k, x, y) prev = keys; keys, tap = k or {}, x and { x, y }; _update(); _draw(0); _draw(1) end
 local function q(t)
   local b = Buffer.new("x.lua", t); b:set_cursor(1, #t); suggest.scan(Buffer.new("e.lua", ""))
   local l = suggest.query(b); return l and table.concat(l, ",") or "-"
