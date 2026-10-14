@@ -1062,6 +1062,11 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
   kotwicy (`spr`/`sprx` z atlasem). Dziś da się to zrobić ręcznie przez `sub(img, x, y, w,
   h)`; docelowo atlas wczytywany przez `image()` albo osobną funkcję. Do ustalenia: format,
   narzędzie na PC do pakowania klatek, edycja kotwic w edytorze grafiki (P12).
+- **Grafika z lokalnego AI** (pomysł użytkownika, 2026-10-14): ComfyUI w `D:\AI` (Flux
+  schnell GGUF, SDXL, SD 1.5, RTX 3050 6 GB) + ewentualnie LoRA pixel-art (np.
+  „pixel-art-xl” dla SDXL — licencję sprawdzić przed użyciem obrazów w repo). Dobre do
+  teł, postaci i ekranu tytułowego; kafelki mapy lepiej rysować skryptem (siatka,
+  krawędzie). Eksperyment przy przykładowej grze do wydania 1.0, nie w P8.
 - Rozmiar kafelka (8×8, 16×16, do wyboru), liczba warstw mapy, przewijanie mapy w
   edytorze na małym ekranie — na początku P8.
 
