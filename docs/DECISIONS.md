@@ -976,3 +976,8 @@ osobne polecenie.
   niezapisany — najpierw zapis.
 - Testy: `tests/tools/editor_test.lua` (słowa, pola i sygnatury z `words.lua`, Word+,
   Opts); melonDS: podgląd motywów, Light zapisany i wczytany po ponownym starcie.
+- **Poprawka (2026-10-14, zgłoszenie użytkownika):** słowo usunięte z `words.lua` i
+  zapisane dalej się podpowiadało — `save_all` używał `WORDS` i `load_words` zadeklarowanych
+  niżej w pliku, więc Lua czytała je jako (puste) zmienne globalne i nie wczytywała słów
+  ponownie. Deklaracje przeniesione wyżej; test regresji `tests/tools/editor_words_test.lua`;
+  `editor_test.lua` działa w trybie ścisłym (odczyt niezdefiniowanej globalnej = błąd).

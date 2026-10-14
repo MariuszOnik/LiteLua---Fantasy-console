@@ -92,6 +92,12 @@ env.sys = { system = {
   run = function(c, d) ran = d end,
 } }
 env.require = require
+DEBUG = false
+-- Strict: reading an undefined global is an error (catches a local used in a
+-- function above its declaration, which Lua silently reads as a global)
+setmetatable(_G, { __index = function(_, k)
+  error("undefined global '" .. tostring(k) .. "'", 2)
+end })
 package.loaded.buffer, package.loaded.lexer = nil, nil
 local f = assert(loadfile(ROOT .. "/nitrofs/system/code/main.lua", "t", env))
 f()

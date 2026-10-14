@@ -66,6 +66,10 @@ local function check(b)
 end
 
 -- Saves the changed buffers; returns false if one could not be saved
+-- words.lua is reloaded when it is saved (D46); load_words is defined below
+local WORDS = "words.lua"
+local load_words
+
 local function save_all()
   if not info.writable then return true end
   for _, path in ipairs(order) do
@@ -101,7 +105,6 @@ end
 
 -- --- words.lua: the cart's own words for the suggestions (D46) -------------
 
-local WORDS = "words.lua"
 local words = {}              -- Entries of words.lua: "name" or { name, sig, desc }
 
 local function load_data(src, name)
@@ -111,7 +114,7 @@ local function load_data(src, name)
   return ok and type(t) == "table" and t or nil
 end
 
-local function load_words()
+function load_words()
   words = {}
   local src = S.read(cart, WORDS)
   if src then
