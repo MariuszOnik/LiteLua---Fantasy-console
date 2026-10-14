@@ -550,7 +550,9 @@ with a plain metatable, and an object takes the same memory. Making an object is
 level and reuse them (a pool) instead of making new bullets every frame. Calling the
 parent's method (`Enemy.update(self)`) is slower than an own method: in a hot loop keep it
 in a local (`local enemy_update = Enemy.update`). Everything is in the help (START on
-`class`).
+`class`). [examples/carts/shooter](examples/carts/shooter) is a small game written this
+way: `Entity` → `Player`, `Enemy` (→ `Tough`), `Bullet`, one module each in `src/`,
+objects made once and reused.
 
 Files are always given relative to the cartridge folder, with `/`: `"data/level1.txt"`.
 Absolute paths, drive names and `..` are not allowed — a game only sees its own files.
