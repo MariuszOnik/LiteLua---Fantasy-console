@@ -1151,3 +1151,9 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
 - **Pomiar (melonDS, `tools/melon.py`, licznik w kartridżu):** stuknięcia 20 ms — przed
   poprawką 7/10, po 10/10; bieg z trzymaną strzałką + stuknięcia A 30 ms — 8/8 skoków.
   `tools/melon.py` dostał `down`/`up` (trzymanie klawisza). Na konsoli — do sprawdzenia.
+- **Dźwięk w kartridżu testowym map (2026-10-14, prośba użytkownika):**
+  `tests/carts/map/make_audio.py` tworzy utwór „Grass Run” (`music/grass_run.lsong`,
+  G-dur, 140 BPM, 58 s, 4 ścieżki NES, pętla od A) i efekty `sfx/jump|coin|hurt.wav`
+  (8-bit 16 kHz, generowane kodem). Moneta z panoramą wg pozycji na ekranie, skok w wodzie
+  niżej (`pitch` 0,7). melonDS: start bez błędów; odsłuch na DSi — użytkownik (nagrania
+  WASAPI nie robiłem).

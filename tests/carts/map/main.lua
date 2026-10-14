@@ -8,6 +8,9 @@ local LEVELS = { "level1", "level2" }
 local level = 1
 local m = tilemap(LEVELS[level])
 local hero = image("hero", 16, 16)
+-- Sounds and music: tests/carts/map/make_audio.py
+local snd = { jump = sound("jump"), coin = sound("coin"), hurt = sound("hurt") }
+music("grass_run")
 local T = m.tile
 
 -- Hit box inside the 16x16 sprite
@@ -92,7 +95,7 @@ function _update()
 
   if p.climb then
     p.vy = (btn("up") and -1.2 or 0) + (btn("down") and 1.2 or 0)
-    if btnp("a") then p.climb = false; p.vy = -4 end
+    if btnp("a") then p.climb = false; p.vy = -4; sfx(snd.jump) end
   else
     local in_water = m:hit(p.x + BX, p.y + BY, BW, BH, "water", "main")
     p.vy = math.min(p.vy + (in_water and 0.15 or 0.4), in_water and 1.5 or 6)
@@ -101,6 +104,7 @@ function _update()
       p.vy = in_water and -3 or -6.2
       jump_buf, coyote = 0, 0
       jumps = jumps + 1
+      sfx(snd.jump, 0.8, 0, in_water and 0.7 or 1)
     end
   end
   jump_buf = math.max(0, jump_buf - 1)
@@ -116,9 +120,11 @@ function _update()
   if cx then
     m:set(cx, cy, 0, "main")
     coins = coins + 1
+    sfx(snd.coin, 0.8, math.max(-1, math.min(1, (cx * T - camx - 128) / 128)))  -- panned
   end
   if m:hit(p.x + BX + 2, p.y + BY + 6, BW - 4, BH - 6, "hurt", "main")
      or p.y > m.h * T then
+    sfx(snd.hurt)
     respawn()
   end
 
