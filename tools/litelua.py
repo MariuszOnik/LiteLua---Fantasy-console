@@ -5,6 +5,7 @@
 #
 #   python tools/litelua.py pack <cart folder> [out.lcart] [--store]
 #   python tools/litelua.py song check|convert|render|import ...   (.lsong, D36, D37)
+#   python tools/litelua.py map <tiled.tmj> [out.lua]              (Tiled -> map, D50)
 #
 # pack: folder -> .lcart (a ZIP with cart.lua at the top, D6). Files are
 # deflated, except already compressed ones (PNG, ...) and WAV, which are
@@ -15,6 +16,9 @@
 # Lua data into JSON and back (by the output extension), render writes an
 # approximate WAV preview, import turns a MIDI file into a chiptune
 # arrangement (--list shows its parts first).
+#
+# map: a Tiled map (JSON, .tmj) -> map/<name>.lua for tilemap() (P8). See
+# tools/tiledmap.py for what is supported.
 
 import argparse
 import pathlib
@@ -24,6 +28,7 @@ import zipfile
 import lsong
 import midi
 import midi_import
+import tiledmap
 
 STORED_EXT = {".png", ".mas", ".wav", ".lcart", ".zip"}
 
@@ -62,6 +67,11 @@ def main() -> int:
     p.add_argument("out", type=pathlib.Path, nargs="?",
                    help="output file (default: <folder name>.lcart)")
     p.add_argument("--store", action="store_true", help="do not compress")
+
+    p = sub.add_parser("map", help="Tiled map (.tmj JSON) -> LiteLua map (.lua)")
+    p.add_argument("tiled", type=pathlib.Path)
+    p.add_argument("out", type=pathlib.Path, nargs="?",
+                   help="output file (default: <name>.lua next to the input)")
 
     p = sub.add_parser("song", help=".lsong music: check, convert, render")
     ssub = p.add_subparsers(dest="song_cmd", required=True)
@@ -109,6 +119,8 @@ def main() -> int:
         return pack(args.folder, out, args.store)
     if args.cmd == "song":
         return song(args)
+    if args.cmd == "map":
+        return map_cmd(args)
     return 1
 
 
@@ -206,6 +218,22 @@ def song(args) -> int:
                                args.stereo or bool(pans), pans)
         print(f"{args.out}: {seconds:.1f} s, {args.rate} Hz, {args.bits} bit, "
               f"{'stereo' if args.stereo or args.pan else 'mono'} (approximate preview)")
+    return 0
+
+
+def map_cmd(args) -> int:
+    out = args.out or args.tiled.with_suffix(".lua")
+    try:
+        m, warn = tiledmap.convert_file(args.tiled, out)
+    except (tiledmap.TiledError, OSError, ValueError, KeyError) as e:
+        print(f"error: {args.tiled}: {e}", file=sys.stderr)
+        return 1
+    for w in warn:
+        print(f"warning: {w}")
+    names = ", ".join(f"{l['name']} ({l['tileset']})" for l in m["layers"])
+    print(f"{out}: {m['w']}x{m['h']} tiles of {m['tile']}, layers: {names}")
+    tilesets = sorted({l["tileset"] for l in m["layers"]})
+    print("put " + ", ".join(f"gfx/{t}.png" for t in tilesets) + " in the cart")
     return 0
 
 

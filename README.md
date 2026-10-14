@@ -307,6 +307,90 @@ text("GAME OVER", (256 - w) // 2, 92, 2)   -- centered
 overlay (hold **L+R** and press **X** to see the last lines). Use `text` to show text in
 the game.
 
+### Tile maps
+
+Levels are made of tiles (8, 16 or 32 pixels). A map is a file `map/<name>.lua` in the
+cartridge — only data, nothing in it runs — and the engine draws it and answers the
+collision questions, so your game code stays small.
+
+```lua
+-- map/level1.lua
+return {
+  tile = 16,
+  legend = { ["#"] = 1, d = 2, ["="] = 5, H = 6, o = 8 },
+  flags = {
+    solid = { 1, 2 },        -- or ranges: { "1-4", 9 }
+    platform = { 5 },        -- your names, up to 8 flags
+    ladder = { 6 },
+    coin = { 8 },
+  },
+  layers = {
+    { name = "main", tileset = "tiles", rows = {
+      "..........o.o.o.......",
+      ".........=======......",
+      "....H.................",
+      "....H.................",
+      "######################",
+      "dddddddddddddddddddddd",
+    } },
+  },
+}
+```
+
+- **Tilesets** are images in `gfx/` (`tileset = "tiles"` is `gfx/tiles.png`), cut into
+  tiles: tile **1** is the top left tile of the image, then to the right and down; **0** is
+  empty. A 128×64 image of 16×16 tiles holds 32 tiles.
+- **Rows** use the `legend` (one character per tile; `.` and space are empty). A layer can
+  also have its own `legend`, or give numbers instead of rows: `data = { {1,1,0}, ... }`.
+- **Layers:** up to 4, drawn in their order (for example `back`, `main`, `front`). The
+  map is as big as its biggest layer. Functions without a layer argument use the layer
+  `main` (or the first one).
+
+```lua
+local level = tilemap("level1")
+
+function _update()
+  -- Move, then step back from walls: the rectangle is the hit box
+  if level:hit(x + dx, y, 12, 16, "solid") then dx = 0 end
+  x = x + dx
+  -- Collect a coin: change the tile
+  local cx, cy = level:hit(x, y, 12, 16, "coin")
+  if cx then level:set(cx, cy, 0); coins = coins + 1 end
+end
+
+function _draw(s)
+  if s == TOP then
+    camera(x - 120, 0)      -- the camera scrolls the map
+    level:draw()
+    spr(hero, x, y)
+  end
+end
+```
+
+`level:get(tx, ty)`, `level:cell(px, py)` (pixel → tile), `level:flag(id, "ladder")` and
+`level:find(id)` (all places of a tile, e.g. markers for enemies) cover the rest. Tile
+positions start at 0. A complete small platformer with one-way platforms, ladders, water,
+spikes and coins is in `tests/carts/map`.
+
+**Making maps in Tiled.** [Tiled](https://www.mapeditor.org) is a free map editor for the
+PC. Make an *orthogonal*, not infinite map with square tiles of 8, 16 or 32 pixels, at
+most 4 tile layers, one tileset image per layer. Give tiles a boolean property (for
+example `solid` = true) or a class to make flags; they are read from the tileset of the
+layer `main`. Save as JSON (`.tmj`) and convert:
+
+```
+python tools/litelua.py map level2.tmj mygame/map/level2.lua
+```
+
+Then put the tileset PNG in `gfx/` of the cart. Object layers are skipped (use marker
+tiles and `find` for now).
+
+**Limits.** Each tile takes 2 bytes per layer of the game's memory (a 256×64 map with 2
+layers: 64 KB). The tileset is one image in video memory (128×64 with 16 colors: 4 KB).
+Only the tiles on the screen are drawn; with 8×8 tiles a full screen is about 800
+tiles per layer, and the DS draws at most about 2000 per screen, so keep 8×8 maps to two
+layers.
+
 ### Sound
 
 Put sound effects in the cartridge's `sfx/` folder as WAV files and music in `music/`:

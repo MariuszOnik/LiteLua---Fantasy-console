@@ -8,8 +8,8 @@ local COLS, ROWS = 42, 23
 local LIST_Y, ROW_H, LIST_ROWS = 24, 11, 15 -- List below its title line
 
 -- Order of the modules; others follow by name
-local ORDER = { core = 1, gfx = 2, input = 3, sound = 4, files = 5, sys = 6, lua = 7,
-                system = 8 }
+local ORDER = { core = 1, gfx = 2, map = 3, input = 4, sound = 5, files = 6, sys = 7, lua = 8,
+                system = 9 }
 
 local MANUAL = [[
 LiteLua code editor
@@ -203,7 +203,7 @@ function M.open(sys_system, word)
   if word and word ~= "" then
     for _, t in ipairs(topics) do
       for i, e in ipairs(t.entries or {}) do
-        if e.name == word or e.name:match("[^%.]+$") == word and not word:find("%.") then
+        if e.name == word or e.name:match("[^%.:]+$") == word and not word:find("%.") then
           level, topic, cursor = "entries", t, i
           return true
         end

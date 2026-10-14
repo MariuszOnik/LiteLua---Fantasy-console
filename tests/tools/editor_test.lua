@@ -65,7 +65,7 @@ env.TOP, env.BOTTOM = 0, 1
 local real_io = io
 env.io = { open = function() return nil end }
 -- The API docs as the help reads them from the ROM (api/*.lua)
-local API = { "core", "gfx", "input", "sound", "files", "sys", "lua", "system" }
+local API = { "core", "gfx", "map", "input", "sound", "files", "sys", "lua", "system" }
 for _, m in ipairs(API) do
   local f = assert(real_io.open(ROOT .. "/docs/api/" .. m .. ".lua", "rb"))
   files["@code/api/" .. m .. ".lua"] = f:read("a")
@@ -179,6 +179,9 @@ local sig, arg = suggest.signature(sb2)
 eq(sig, "rectfill(x, y, w, h, [col])", "signature"); eq(arg, 2, "argument")
 local a1, a2 = suggest.arg_range(sig, arg); eq(sig:sub(a1, a2), "y", "argument range")
 eq(sig:sub(suggest.arg_range(sig, 5)), "[col]", "optional argument")
+_, list = q("local level = tilemap(\"a\")\nlevel:dr"); eq(list[1], "draw", "map method")
+eq((suggest.signature(q("level:hit(x, "))), "map:hit(x, y, w, h, [flag], [layer]) -> tx, ty | nil",
+   "method signature")
 
 -- In the editor: type "cl" on the keyboard, R+A takes the first suggestion
 env.sys.system.start = { reason = "edit", cart = "game" }

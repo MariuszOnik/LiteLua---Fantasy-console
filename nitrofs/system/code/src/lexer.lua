@@ -21,7 +21,7 @@ end
 local builtins = {}
 for w in ([[_init _update _draw _quit TOP BOTTOM print log micros
   cls color alpha camera clip stroke pset line rect rectfill circ circfill
-  tri trifill image sub spr sprx sspr tint text textw btn btnp btnr touch
+  tri trifill image sub spr sprx sspr tint text textw tilemap btn btnp btnr touch
   sound sfx sfx_stop music music_volume sys require io os math string table
   utf8 coroutine pairs ipairs next type tostring tonumber select error
   assert pcall xpcall setmetatable getmetatable rawget rawset rawequal

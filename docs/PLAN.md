@@ -6,17 +6,20 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
-- **Droga do 1.0 (D49):** P8 mapy (tylko `platform`) → P10 lekki launcher → P19 lekka
+- **Droga do 1.0 (D49):** ~~P8 mapy~~ (zrobione, D50) → P10 lekki launcher → P19 lekka
   biblioteka `scene` → wydanie 1.0 (API, przykłady, `v1.0.0`). Wszystko inne po 1.0.
-  **Następny krok: P8** — najpierw krótko domknąć z użytkownikiem szczegóły map (rozmiar
-  kafelka, warstwy, format pliku, kolizje).
+  **Następny krok: P10** (lekki launcher w Lua, menu pauzy) — zakres w D49.
+- **Ostatnio (2026-10-14):** P8 (D50) — mapy kafelkowe: `tilemap()`, rysowanie w C,
+  kolizje przez flagi, ASCII i liczby, konwerter z Tiled (`litelua.py map`), grafika
+  testowa ze skryptu (`make_tiles.py`), kartridż `tests/carts/map` (mała platformówka).
+  Sprawdzone w melonDS; na konsoli jeszcze nie. Użytkownik ma Tiled na PC.
 - **Kierunek (2026-10-14, D48, dyskusja otwarta):** studio z zakładkami zamiast osobnych
   edytorów, sceny jako dane z obiektami ze skryptami (jak MonoBehaviour), prefaby i lekkie
   przyczepienie zamiast hierarchii, prawdziwa grafika w edytorze, grafika ładowana według
   kamery. Kolejność: **P8 → P19 → P20 → P21**. Otwarte tematy (izometria, atlasy z
   klatkami różnych rozmiarów i kotwicami, szczegóły map) — w D48; użytkownik chce jeszcze
   dopisywać, więc przed P8 wrócić do rozmowy.
-- **Ostatnio (2026-10-14):** P11d (D47) — zakładki otwartych plików w górnym pasku (do 5,
+- **Wcześniej (2026-10-14):** P11d (D47) — zakładki otwartych plików w górnym pasku (do 5,
   Y+lewo/prawo, Y+B zamyka; cofanie przy puszczeniu Y), powrót z gry do tych samych
   zakładek; poprawka P11c: `words.lua` wczytywany po zapisie. Sprawdzone w melonDS.
   Word+ tylko dopisuje linię do `words.lua` (komentarze zostają).
@@ -63,7 +66,7 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 
 ## Droga do 1.0 (D49)
 
-- [ ] **P8 — Mapy, preset `platform`** (szczegóły niżej w punktach)
+- [x] **P8 — Mapy, preset `platform`** (D50)
 - [ ] **P10 — Launcher (lekki)**: lista w Lua, Graj / Edytuj / Nowa gra, menu pauzy
 - [ ] **P19 — Biblioteka `scene` (lekka)**
 - [ ] **Wydanie 1.0**: przegląd API, 2–3 przykładowe gry (w tym platformówka), `v1.0.0`
@@ -131,7 +134,7 @@ Po 1.0: P20, P21, preset `iso`, atlasy, P12, P13, P14, P9, P15, P16, P17, P18 (d
   Dźwięki/strumienie zatrzymywane i zwalniane przy zamknięciu stanu kartridża (D14).
   Maxmod: efekty WAV, muzyka `.mas` z SD (`mmPlayMAS`), strumieniowanie WAV z SD
   (ADPCM — ewentualnie P9).
-- [ ] **P8 — Mapy kafelkowe** (odłożone za P11 — D42; **następne wg D48**): format mapy,
+- [x] **P8 — Mapy kafelkowe** (D50; odłożone za P11 — D42, zrobione wg D49): format mapy,
   `map()` w C, kolizje z kafelkami; fundament dla gry i edytora sceny. Na początku ustalić
   rozmiar kafelka, warstwy, ewentualny tryb izometryczny (D48 — otwarte tematy).
 - [ ] **P9 — Narzędzie `litelua` na PC (Python)**

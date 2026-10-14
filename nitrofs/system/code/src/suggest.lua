@@ -19,6 +19,7 @@ local MAX = 24          -- Candidates kept for the bar
 local api = {}          -- Full name ("sys.run") -> entry
 local globals = {}      -- Names without a dot: API, module tables, keywords
 local api_fields = {}   -- "sys" -> { "exit", "info", "run", ... }
+local methods, method_api = {}, {} -- "map:draw" -> "draw" (P8)
 local code_names, code_fields = {}, {} -- From the code: name -> count
 local recent, recent_n = {}, 0         -- Chosen names -> order of choice
 local cart_names, cart_fields, cart_api = {}, {}, {} -- words.lua
@@ -33,7 +34,12 @@ function M.init(modules)
     for _, e in ipairs(m.entries) do
       api[e.name] = e
       local base, field = e.name:match("^(.*)%.([%w_]+)$")
-      if base then
+      local method = e.name:match("^[%w_]+:([%w_]+)$")
+      if method then
+        -- "map:draw": suggested after any "x:" (the type of x is not known)
+        methods[#methods + 1] = method
+        method_api[method] = e
+      elseif base then
         local t = api_fields[base]
         if not t then t = {}; api_fields[base] = t end
         t[#t + 1] = field
@@ -122,9 +128,12 @@ function M.query(b)
     end
   end
 
-  local base, pre = line:match("([%a_][%w_%.]*)[%.:]([%w_]*)$")
+  local base, sep, pre = line:match("([%a_][%w_%.]*)([%.:])([%w_]*)$")
   if base then
     for _, f in ipairs(api_fields[base] or {}) do add(f, pre) end
+    if sep == ":" then
+      for _, f in ipairs(methods) do add(f, pre) end
+    end
     for _, f in ipairs(cart_fields[base] or {}) do add(f, pre) end
     local last = base:match("[%w_]+$")
     for f in pairs(code_fields[last] or {}) do add(f, pre) end
@@ -162,8 +171,9 @@ function M.signature(b)
       depth = depth + 1
     elseif c == "(" then
       if depth == 0 then
-        local name = line:sub(1, i - 1):match("([%a_][%w_%.]*)%s*$")
-        local e = name and (api[name] or cart_api[name])
+        local name = line:sub(1, i - 1):match("([%a_][%w_%.:]*)%s*$")
+        local method = name and name:match(":([%w_]+)$")
+        local e = name and (api[name] or cart_api[name] or (method and method_api[method]))
         if e and e.sig then return e.sig, arg end
         return nil
       end

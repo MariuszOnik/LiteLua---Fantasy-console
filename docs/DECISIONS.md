@@ -1093,3 +1093,45 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
   edytor kodu jest modułowy (studio go opakuje); sceny z P19 są danymi (`scenes/*.lua` —
   edytor sceny będzie je zapisywał); `image()` może dostać opcję atlasu bez zmiany
   `spr`/`sub`; `api` w `cart.lua` i wersje formatów (`lsong`, mapa) chronią stare gry.
+
+## D50 (2026-10-14) — P8: mapy kafelkowe, preset `platform`
+- Decyzje użytkownika: rozmiar kafelka do wyboru w mapie (8/16/32, domyślnie 16); format
+  ASCII z legendą **i** liczby; konwerter z Tiled w 1.0; flagi kafelków do kolizji.
+- **Plik `map/<nazwa>.lua`** (parser danych D38, nic się nie wykonuje; limity: 4 MB
+  tekstu, 64 KB stringa): `format = 1`, `mode = "platform"` (jedyny w 1.0 — szew na
+  `iso`, D48), `tile`, opcjonalnie `w`/`h` (inaczej największa warstwa), `legend`
+  (znak → numer; `.` i spacja = 0; warstwa może mieć własną), `flags = { nazwa = { id
+  lub "a-b" } }` (do 8 nazw), `layers` (1–4): `name`, `tileset` (obraz z `gfx/`, cięty na
+  kafelki `tile`×`tile`), `rows` (stringi) albo `data` (lista wierszy albo jedna lista z
+  `w`). Numer n = klatka n − 1 tilesetu, 0 = pusto; numer większy niż liczba klatek →
+  błąd przy wczytaniu.
+- **Pamięć:** nagłówek, pola wszystkich warstw (`uint16`, 2 B na pole i warstwę) i flagi
+  w **jednym userdata** — liczone do limitu gry, zwalniane przez GC; tilesety trzymane w
+  uservalue (wczytane przez `image()` zapamiętane przy rejestracji — działa cache i
+  obsługa braku VRAM, gra może nadpisać globalne `image`).
+- **API (`source/ll_map.c`):** `tilemap(name)`, `m:draw([layer])`, `m:get/set(tx, ty,
+  [id], [layer])`, `m:cell(px, py)`, `m:hit(x, y, w, h, [flag="solid"], [layer])` →
+  pierwsze pole z flagą (bez flag w mapie: każde ≠ 0), `m:flag(id, name)`, `m:find(id,
+  [layer])`, pola `w`, `h`, `tile`, `layers`. Współrzędne pól od 0 (jak klatki obrazów);
+  pole spoza mapy = 0, `set` poza mapą nic nie robi. Domyślna warstwa: `main`, inaczej
+  pierwsza. Fizyka i ruch w Lua (przykład w `tests/carts/map`: ruch po pikselu,
+  platformy przechodnie od dołu, drabiny, woda, kolce, monety).
+- **Rysowanie (`ll_gfx_tiles`):** tylko pola w widocznym prostokącie świata (kamera,
+  zoom, clip) jako jedna paczka quadów z jedną teksturą; `tint` (kolor), `alpha`. Limit
+  DS ~2048 quadów na ekran: przy 8×8 pełny ekran ≈ 825 pól na warstwę.
+- **Tiled → mapa:** `tools/tiledmap.py` + `python tools/litelua.py map <x.tmj> [out]`:
+  mapa ortogonalna, skończona, kafelki kwadratowe 8/16/32, ≤ 4 warstwy kafelków, jedna
+  grafika tilesetu na warstwę (nazwa obrazu bez `.png` = `tileset`); dane CSV albo base64
+  (bez kompresji, zlib, gzip); obrócone kafelki — ostrzeżenie (rysowane bez obrotu);
+  warstwy obiektów pomijane z ostrzeżeniem. Flagi: właściwości `bool` = true i klasa
+  kafelka, z tilesetu warstwy `main`. Wynik: wiersze liczb, flagi jako zakresy.
+- **Grafika testowa:** `tools/make_tiles.py` rysuje kodem (jak font) tileset 16×16
+  (trawa, ziemia, cegły, platforma, drabina, kolce, moneta, skrzynia, woda, kamień,
+  dekoracje) i bohatera w palecie Sweetie 16 (licencja zlib).
+- **Edytor kodu:** podpowiedzi znają metody (`level:dr` → `draw`, po każdym `x:`) i
+  sygnatury metod; START na `draw` otwiera `map:draw`; `tilemap` kolorowane jak API.
+- **Testy:** `tests/tools/test_tiledmap.py` (7 testów, fixture `tests/tools/data/level2.tmj`
+  = źródło `tests/carts/map/map/level2.lua`); `tests/carts/map` (level1 z ASCII, level2 z
+  Tiled, SELECT przełącza). melonDS (tryb DS): 30 FPS, CPU 10–12%, rysowanie 2,3–3,5 ms
+  (2 warstwy + mapa w pomniejszeniu na dolnym ekranie), VRAM 8 KB. Na konsoli — do
+  sprawdzenia.

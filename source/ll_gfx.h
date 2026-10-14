@@ -12,6 +12,8 @@
 
 #include "lua.h"
 
+#include "ll_image.h"
+
 // Sets up the 3D engine for both screens (dual30). Call once at boot, after
 // the VBlank interrupt handler is installed (ll_log_init).
 void ll_gfx_init(void);
@@ -55,6 +57,12 @@ void ll_gfx_alpha(int alpha); // 0..31
 // Draws one game frame of both screens: draw(0, ud), then draw(1, ud), each
 // followed by its VBlank. Each screen starts with the default draw state.
 void ll_gfx_frame(void (*draw)(int screen, void *ud), void *ud);
+
+// Draws the visible cells of a tile layer (P8): 'cells' is map_w x map_h
+// values, 0 = empty, n = frame n - 1 of 'img' (tile_w x tile_h frames).
+// Uses the camera, zoom, clip, alpha and tint color of the current _draw.
+void ll_gfx_tiles(const LLImage *img, const uint16_t *cells, int map_w,
+                  int map_h, int tile_w, int tile_h);
 
 // Registers the drawing functions as globals.
 void ll_gfx_register(lua_State *L);

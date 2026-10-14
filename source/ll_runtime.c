@@ -25,6 +25,7 @@
 #include "ll_image.h"
 #include "ll_input.h"
 #include "ll_log.h"
+#include "ll_map.h"
 #include "ll_mem.h"
 #include "ll_runtime.h"
 #include "ll_sandbox.h"
@@ -284,6 +285,7 @@ static void register_api(lua_State *L, const LLCart *cart)
     ll_stats_register(L);
     ll_gfx_register(L);
     ll_image_register(L);
+    ll_map_register(L, cart);
     ll_sound_register(L);
 }
 

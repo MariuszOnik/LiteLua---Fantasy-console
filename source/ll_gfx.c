@@ -921,6 +921,64 @@ static void draw_textured(const LLImage *img, int u, int v, int w, int h,
     prim_end();
 }
 
+// Tile layer of a map (P8): the cells inside the visible part of the world
+// (camera, zoom and clip) are drawn as quads of one batch with one texture.
+// Cell value 0 is empty; n is frame n - 1 of the tileset 'img'.
+void ll_gfx_tiles(const LLImage *img, const uint16_t *cells, int map_w,
+                  int map_h, int tile_w, int tile_h)
+{
+    if (img->tex == 0 || img->frames == 0 || !poly_begin(true))
+        return;
+
+    // Visible world rectangle: screen = (world - camera) * zoom
+    int32_t x1 = gs.cam_x + (int32_t)(((int64_t)gs.clip_x << 12) / gs.zoom);
+    int32_t y1 = gs.cam_y + (int32_t)(((int64_t)gs.clip_y << 12) / gs.zoom);
+    int32_t x2 = gs.cam_x + (int32_t)(((int64_t)(gs.clip_x + gs.clip_w) << 12) / gs.zoom);
+    int32_t y2 = gs.cam_y + (int32_t)(((int64_t)(gs.clip_y + gs.clip_h) << 12) / gs.zoom);
+    int tx1 = x1 < 0 ? 0 : x1 / tile_w, ty1 = y1 < 0 ? 0 : y1 / tile_h;
+    int tx2 = x2 < 0 ? -1 : x2 / tile_w, ty2 = y2 < 0 ? -1 : y2 / tile_h;
+    if (tx2 >= map_w)
+        tx2 = map_w - 1;
+    if (ty2 >= map_h)
+        ty2 = map_h - 1;
+    if (tx1 > tx2 || ty1 > ty2)
+        return;
+
+    if (gs.bound != img->tex)
+    {
+        glBindTexture(0, img->tex);
+        gs.bound = img->tex;
+    }
+    glBegin(GL_QUADS);
+    glColor(gs.tint[0]);
+    for (int ty = ty1; ty <= ty2; ty++)
+    {
+        const uint16_t *row = cells + ty * map_w;
+        int32_t qy1 = ty * tile_h * 4, qy2 = qy1 + tile_h * 4;
+        for (int tx = tx1; tx <= tx2; tx++)
+        {
+            int id = row[tx];
+            if (id == 0 || id > img->frames)
+                continue;
+            int f = id - 1;
+            int u = (img->x + (f % img->cols) * img->fw) * 16;
+            int v = (img->y + (f / img->cols) * img->fh) * 16;
+            int u2 = u + img->fw * 16, v2 = v + img->fh * 16;
+            int32_t qx1 = tx * tile_w * 4, qx2 = qx1 + tile_w * 4;
+            glTexCoord2t16(u, v);
+            glVertex3v16(VXQ(qx1), VYQ(qy1), gs.depth);
+            glTexCoord2t16(u, v2);
+            glVertex2v16(VXQ(qx1), VYQ(qy2));
+            glTexCoord2t16(u2, v2);
+            glVertex2v16(VXQ(qx2), VYQ(qy2));
+            glTexCoord2t16(u2, v);
+            glVertex2v16(VXQ(qx2), VYQ(qy1));
+        }
+    }
+    glEnd();
+    prim_end();
+}
+
 // Axis-aligned sprite at x, y (pixels) with size dw x dh (pixels)
 static void draw_rect_textured(const LLImage *img, int u, int v, int w, int h,
                                int x, int y, int dw, int dh, bool fx, bool fy)
