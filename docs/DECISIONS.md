@@ -1224,3 +1224,9 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
 - Przykład: `tests/carts/map` — „Save position” / „Load position” (`save/pos.txt`: poziom
   i pozycja). melonDS: zapis → ruch → odczyt przywraca pozycję. Na konsoli — do
   sprawdzenia.
+- **Słowa kluczowe w pomocy (2026-10-14, pytanie użytkownika):** START na `function`,
+  `local`, `for`… nie miał dokąd prowadzić. Nowy moduł `docs/api/keywords.lua` („Lua
+  keywords”, `kind = "keyword"`, 22 słowa z opisem i przykładem) — w pomocy edytora i w
+  `docs/API.md`. Kolor słów kluczowych w kodzie bez zmian (lekser ma pierwszeństwo).
+  Przy okazji: Y, który otwiera edytor z launchera albo ekranu błędu, nie cofa już
+  zmiany po puszczeniu.

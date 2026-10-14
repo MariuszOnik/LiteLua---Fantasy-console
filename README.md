@@ -753,8 +753,8 @@ screen shows each theme while you choose; **A** keeps it for all cartridges.
 text as [docs/API.md](docs/API.md): choose a topic (Up/Down, **A**), then a function to
 see its arguments, description and example on the top screen (Left/Right scrolls a long
 page, **B** goes back). **Copy ex** copies the example: **Paste** puts it in your code.
-Press **START** with the cursor on a name like `rectfill` or `sys.run` to open its page
-directly.
+Press **START** with the cursor on a name like `rectfill` or `sys.run`, or on a Lua keyword
+like `for` or `local`, to open its page directly.
 
 ## System carts: launcher and editors
 

@@ -17,7 +17,7 @@ return {
   entries = {
     {
       name = "btn",          -- to, co podpowiada edytor (np. "gfx.spr" dla pól tabel)
-      kind = "function",     -- function | callback | const | table | field
+      kind = "function",     -- function | callback | const | table | field | keyword
       sig = "btn(name) -> boolean",      -- jedna linia, mieści się w ~40 znakach
       args = { { "name", "string", "opis" } },   -- opcjonalne
       ret = { { "boolean", "opis" } },           -- opcjonalne
