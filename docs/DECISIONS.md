@@ -1036,11 +1036,25 @@ Ustalone z użytkownikiem jako **kierunek**; szczegóły będą jeszcze dopisywa
 - **Kolejność:** P8 (mapy w silniku) → P19 (biblioteka `scene`) → P20 (studio z
   zakładkami: Kod, Pliki) → P21 (zakładka Scena). P10 (launcher) i reszta — do ustalenia.
 
+- **Presety trybu mapy** (dopisane 2026-10-14, pomysł użytkownika): nie dowolna kamera,
+  tylko kilka gotowych trybów — **platform** (rzut z boku/z góry, kafelki np. 16×16 lub
+  8×8), **iso** (romb podłogi np. 32×16, rzut 2:1, grafika pola 32×N z kotwicą na dole
+  rombu) i **own** (C trzyma tylko dane mapy, Lua rysuje sama). Ciężka praca w C:
+  wybór widocznych pól, kolejność rysowania (w iso przejście mapy „od tyłu do przodu” jak
+  w OpenXcom/UFODS — bez ogólnego sortowania), rysowanie podłogi/ścian/obiektów, dotyk →
+  pole. Lua dostaje **haki** (zawartość pola, własne rysowanie wyjątków), nie wywołanie na
+  każde pole. Obiekty przypisane do pól trzyma C. Preset to też **umowa na grafikę**
+  (wymiary, rzut, kotwica) — jak w edytorach typu Tiled. Iso v1 upraszcza obiekt w
+  przejściu między polami (należy do pola docelowego; drobne artefakty przy ścianach);
+  maski jak w UFODS — później albo w trybie own.
+- **Edytor używa tego samego renderera** (`map()` w C) co gra; mapa w pamięci C (numery
+  pól), nie w tabelach Lua — edytor zmienia pojedyncze pola. VRAM w edytorze: tileset +
+  arkusze typów obiektów przy kamerze + font. Dostępne tekstury: 256 KB (D28, dwa ekrany
+  3D), mniej niż 700 KB w UFODS.
+
 **Otwarte tematy (do dyskusji, niczego jeszcze nie przesądzają):**
-- **Gry izometryczne** (pomysł użytkownika): mapa w rzucie izometrycznym (kafelki w
-  romb, kolejność rysowania po głębokości, przeliczanie ekran ↔ kratka), może jako tryb
-  mapy w P8 albo w bibliotece `scene`; edytor sceny musiałby umieć stawiać kafelki i
-  obiekty na siatce izometrycznej.
+- **Izometria:** kierunek ustalony wyżej (preset **iso**); szczegóły (wysokość pól /
+  piętra, ściany jako osobne części pola, przejścia między polami) — przy jej wdrażaniu.
 - **Arkusze animacji z klatkami różnych rozmiarów** (pomysł użytkownika): np. arkusz
   512×512, w którym klatki mają własne prostokąty i **punkty zaczepienia (kotwice)**, a
   nie stałą siatkę 64×64. Potrzebny opis atlasu (plik danych obok PNG, np. `hero.atlas.lua`
