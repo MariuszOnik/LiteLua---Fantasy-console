@@ -1,0 +1,91 @@
+-- LiteLua song (.lsong v1, docs/LSONG.md)
+return {
+  lsong = 1,
+  title = "Victory",
+  author = "Claude (Runedeck, LiteLua example)",
+  comment = "License: zlib, like LiteLua.",
+  tempo = 150,
+  ppq = 24,
+  meter = { 4, 4 },
+  profile = "nes",
+  instruments = {
+    lead = {
+      type = "pulse",
+      duty = 0.25,
+      volume = 0.7,
+      env = { 1, 0.95, 0.9, 0.85, 0.8, 0.75 },
+      release = { 0.4, 0.2, 0.1 },
+      vibrato = {depth=0.15, rate=6, delay=12},
+    },
+    chord_maj = {
+      type = "pulse",
+      duty = 0.125,
+      volume = 0.3,
+      env = { 1, 0.85, 0.7, 0.6, 0.5 },
+      arp = { 0, 4, 7 },
+    },
+    chord_min = {
+      type = "pulse",
+      duty = 0.125,
+      volume = 0.3,
+      env = { 1, 0.85, 0.7, 0.6, 0.5 },
+      arp = { 0, 3, 7 },
+    },
+    bass = {type="triangle", volume=0.9},
+    kick = {
+      type = "noise",
+      env = { 1, 0.75, 0.45, 0.2, 0 },
+    },
+    snare = {
+      type = "noise",
+      volume = 0.8,
+      env = { 1, 0.85, 0.65, 0.45, 0.3, 0.15, 0 },
+    },
+    hat = {
+      type = "noise",
+      mode = "short",
+      volume = 0.4,
+      env = { 1, 0.4, 0 },
+    },
+    crash = {
+      type = "noise",
+      volume = 0.6,
+      env = { 1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.45, 0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05, 0 },
+    },
+    drums = {
+      type = "kit",
+      drums = {
+        {p=36, i="kick", to=32}, {p=38, i="snare", to=64}, {p=42, i="hat", to=104},
+        {p=49, i="crash", to=96},
+      },
+    },
+  },
+  tracks = {
+    {name="lead", instrument="lead"}, {name="chords", instrument="chord_maj"},
+    {name="bass", instrument="bass"}, {name="drums", instrument="drums"},
+  },
+  patterns = {
+    win = {
+      length = 192,
+      notes = {
+        lead = {
+          {t=0, d=10, p=72}, {t=12, d=10, p=76}, {t=24, d=10, p=79}, {t=36, d=34, p=84},
+          {t=96, d=10, p=81}, {t=108, d=10, p=83}, {t=120, d=70, p=84},
+        },
+        chords = {
+          {t=0, d=90, p=60}, {t=96, d=22, p=55}, {t=120, d=66, p=60},
+        },
+        bass = {
+          {t=0, d=46, p=48}, {t=48, d=46, p=43}, {t=96, d=22, p=43}, {t=120, d=66, p=48},
+        },
+        drums = {
+          {t=0, d=6, p=36}, {t=72, d=6, p=38}, {t=84, d=6, p=38}, {t=120, d=6, p=49},
+        },
+      },
+    },
+  },
+  playlist = {
+    {pattern="win"},
+  },
+  loop = false,
+}

@@ -46,7 +46,7 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - `docs/api/*.lua` — dokumentacja API Lua (źródło dla edytora na DS i `docs/API.md`, D12);
   aktualizuj w każdym punkcie zmieniającym API, potem `python tools/apidoc.py`
 - `assets/` — zasoby generowane do podglądu/edycji (np. `font6x8.png` z `tools/make_font.py`)
-- `examples/carts/` — przykładowe gry (np. `starcatch`); `build.ps1` kopiuje je na kartę emulatora
+- `examples/carts/` — przykładowe gry (np. `starcatch`, `runedeck` — karciany roguelike, grafika z AI przez `tools/cardart.py` + ComfyUI); `build.ps1` kopiuje je na kartę emulatora
 - `examples/songs/` — przykładowe utwory `.lsong` (D36, `docs/LSONG.md`)
 - `tools/` — skrypty PC (Python): `litelua.py` (`pack` → `.lcart`, `song check|convert|render` — D36, reszta w P9), `lsong.py` (format `.lsong`), `midi.py` + `midi_import.py` (import MIDI, D37), `apidoc.py`, `make_font.py` (font 6×8), `make_tiles.py` (grafika testowa map), `tiledmap.py` (Tiled → mapa, `litelua.py map`, D50), `melon.py` (sterowanie melonDS w testach: klawisze, dotyk, zrzuty)
 - `tests/carts/` — kartridże testowe (`bench` — benchmark VM, D19; `files` — piaskownica, D20; `sound` — P7; `song` — utwory `.lsong` na żywo, D41; `edit` — edytor kodu; `map` — mapy kafelkowe, D50; `oop` — pomiar klas/middleclass, D54); `build.ps1` kopiuje je na kartę emulatora

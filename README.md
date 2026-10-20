@@ -148,6 +148,10 @@ and copy `mygame.lcart` to `litelua/carts/` — easier to share.
 game: catch falling stars on the top screen, score and touch control on the bottom
 screen, a module in `src/`, particles that make no garbage, a saved high score. Copy it to
 `litelua/carts/` to play it, or use it as a starting point.
+[examples/carts/runedeck](examples/carts/runedeck) is a bigger one: a deck-building
+roguelike with both screens, touch and button control, game data in plain Lua tables,
+chiptune music and sound effects made by a script (`make_audio.py`) and art made with a
+local image AI and converted for the DS by `tools/cardart.py`.
 
 ## Writing a game
 
