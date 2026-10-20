@@ -49,11 +49,12 @@ return {
 
   -- Dungeon floors, top to bottom: how many monsters, which groups they
   -- are (one is picked for each), and on the last floor the boss.
+  -- items: treasures lying on the floor (monsters drop more)
   floors = {
-    { monsters = 4, groups = { { "goblin" }, { "slime" } } },
-    { monsters = 5, groups = { { "goblin" }, { "slime" }, { "archer" }, { "goblin", "goblin" } } },
-    { monsters = 5, groups = { { "goblin", "archer" }, { "slime", "goblin" }, { "archer" } } },
-    { monsters = 6, groups = { { "archer", "archer" }, { "slime", "slime" }, { "goblin", "goblin", "goblin" } } },
-    { monsters = 4, groups = { { "goblin", "archer" }, { "slime", "archer" } }, boss = { "ogre" } },
+    { monsters = 4, items = 4, groups = { { "goblin" }, { "slime" } } },
+    { monsters = 5, items = 3, groups = { { "goblin" }, { "slime" }, { "archer" }, { "goblin", "goblin" } } },
+    { monsters = 5, items = 3, groups = { { "goblin", "archer" }, { "slime", "goblin" }, { "archer" } } },
+    { monsters = 6, items = 3, groups = { { "archer", "archer" }, { "slime", "slime" }, { "goblin", "goblin", "goblin" } } },
+    { monsters = 4, items = 3, groups = { { "goblin", "archer" }, { "slime", "archer" } }, boss = { "ogre" } },
   },
 }

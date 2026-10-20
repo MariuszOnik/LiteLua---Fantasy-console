@@ -1,11 +1,13 @@
 -- Fight scene: drawing and input of a card battle (rules in battle.lua).
 -- Top screen: enemies and what they will do. Bottom screen: your hand.
 -- Stylus: tap a card to pick it, tap again (or a target button) to play.
--- Buttons: left/right pick, A play, B cancel, START end turn.
+-- Buttons: left/right pick, A play, B cancel, START end turn, Y potion.
 -- main.lua calls F.enter(), then F.update() / F.draw() until F.result is
--- set: "won" or "lost".
+-- set: "won" or "lost". F.enter_pick() shows only the "pick 1 of 3 cards"
+-- screen (a scroll); then F.result is "picked" and F.picked the card or nil.
 
 local B = require("battle")
+local G = require("gear")
 local U = require("ui")
 
 local F = {}
@@ -15,7 +17,7 @@ local state
 local sel           -- selected hand slot or nil
 local targeting     -- true while choosing an enemy for the selected card
 local steps, step_t -- enemy turn: list of actions and the frame counter
-local rewards       -- the 3 card ids after a won fight
+local rewards       -- the 3 card ids of a scroll
 local popups = {}   -- floating numbers: { x, y, text, col, t }
 local label         -- shown in the top right corner, e.g. "Floor 2"
 
@@ -39,6 +41,7 @@ local function enemy_x(i, n) return 256 * i // (n + 1) end
 local ENEMY_FEET = 150
 
 local END_BTN = { x = 194, y = 4, w = 58, h = 16 }
+local POT_BTN = { x = 194, y = 24, w = 58, h = 16 }
 
 -- Target buttons over the hand, one per living enemy
 local function target_buttons()
@@ -92,6 +95,11 @@ function F.enter(group, hp_scale, text_)
   B.events, popups = {}, {}
   fight_music()
   state, sel, targeting, label, F.result = "fight", nil, false, text_, nil
+  F.mode = "fight"
+end
+
+function F.enter_pick()
+  rewards, state, sel, F.result, F.mode = B.rewards(), "reward", nil, nil, "pick"
 end
 
 local function after_action()
@@ -102,11 +110,7 @@ local function after_action()
     F.result = "lost"
   elseif r == "won" then
     music("victory", false)
-    if B.enemies[1].def.boss then
-      F.result = "won"
-    else
-      rewards, state = B.rewards(), "reward"
-    end
+    F.result = "won"
   end
 end
 
@@ -135,8 +139,15 @@ local function end_turn()
 end
 
 local function finish(card)
-  if card then B.add_card(card) end
-  F.result = "won"
+  F.picked, F.result = card, "picked"
+end
+
+local function drink()
+  local i = G.potion_slot()
+  if not i then return play("deny") end
+  local n = G.drink(i)
+  popups[#popups + 1] = { x = 30, y = 30, s = BOTTOM, text = "+" .. n, col = 0x60ff60, t = 0 }
+  play("buff")
 end
 
 -- Input -------------------------------------------------------------------
@@ -144,6 +155,7 @@ end
 local function fight_input()
   local n = #B.hand
   if btnp("start") then return end_turn() end
+  if btnp("y") then return drink() end
   if btnp("b") then sel, targeting = nil, false end
   if n > 0 and (btnp("left") or btnp("right")) then
     targeting = false
@@ -164,6 +176,7 @@ local function fight_input()
   local tx, ty = touch()
   if not tx then return end
   if inside(tx, ty, END_BTN.x, END_BTN.y, END_BTN.w, END_BTN.h) then return end_turn() end
+  if inside(tx, ty, POT_BTN.x, POT_BTN.y, POT_BTN.w, POT_BTN.h) then return drink() end
   if targeting then
     for _, b in ipairs(target_buttons()) do
       if inside(tx, ty, b.x, b.y, b.w, b.h) then return try_play(sel, b.i) end
@@ -191,6 +204,12 @@ local REWARD_Y = 60
 local SKIP_BTN = { x = 98, y = 150, w = 60, h = 18 }
 
 local function reward_input()
+  if btnp("left") or btnp("right") then
+    sel = ((sel or 2) - 1 + (btnp("left") and -1 or 1)) % 3 + 1
+    play("pick", 0.5)
+  end
+  if btnp("a") and sel then return finish(rewards[sel]) end
+  if btnp("b") then return finish() end
   if not btnp("touch") then return end
   local tx, ty = touch()
   if not tx then return end
@@ -290,6 +309,12 @@ end
 
 local function draw_top()
   cls(BG_TOP)
+  if F.mode == "pick" then
+    U.center("Scroll of Cards", 70, GOLD)
+    U.center("Pick a card to learn.", 86, 0xffffff)
+    U.center("It joins your deck for good.", 98, 0xa09080)
+    return
+  end
   rectfill(0, ENEMY_FEET, 256, 42, 0x2a2236)
   local p = B.player
   text("HP " .. p.hp .. "/" .. p.max, 4, 4, 0xff8080)
@@ -332,9 +357,9 @@ end
 local function draw_bottom()
   cls(BG_BOT)
   if state == "reward" then
-    text("Add one card to your deck:", 50, 30, GOLD)
+    U.center("Learn one card:", 30, GOLD)
     for k, id in ipairs(rewards) do
-      F.draw_card(id, reward_x(k), REWARD_Y)
+      F.draw_card(id, reward_x(k), REWARD_Y - (k == sel and 8 or 0))
       local c = B.card(id)
       for j, l in ipairs(wrap(c.text, 10)) do
         text(l, reward_x(k) - 6, REWARD_Y + CARD_H + 2 + (j - 1) * 8, 0xd0d0d0)
@@ -352,6 +377,8 @@ local function draw_bottom()
   text(status_text(p.st), 34, 16, 0xd0a0ff)
   text("Deck " .. #B.draw_pile .. "  Used " .. #B.discard, 4, 114, 0x908070)
   button(END_BTN, state == "enemy" and "..." or "End turn", state == "enemy" and 0x303030 or 0x6a3020)
+  local pots = G.potions()
+  button(POT_BTN, "Potion " .. pots, pots > 0 and 0x6a2040 or 0x303030)
 
   -- details of the selected card
   if sel and B.hand[sel] then

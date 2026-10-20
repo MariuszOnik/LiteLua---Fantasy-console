@@ -3,7 +3,8 @@
   python tools/cardart.py gen CART [names...]   images from the "art" prompts
   python tools/cardart.py convert CART          raw images -> CART/gfx/*.png
 
-CART is a cart folder with src/cards.lua and src/enemies.lua (pure data,
+CART is a cart folder with src/cards.lua, src/enemies.lua and optionally
+src/items.lua (icons, saved as gfx/i_<item>.png; all pure data,
 read with the parser of tools/lsong.py). Raw images go to
 assets/<cart>/raw/ (not in git), DS images to CART/gfx/, and a preview
 sheet (x3, on a mock card) to assets/<cart>/preview.png.
@@ -27,10 +28,12 @@ STYLE = {
             "outline, flat colors, plain flat white background",
     "enemy": "pixel art, {}, fantasy game monster sprite, single character centered, "
              "bold dark outline, flat colors, plain flat white background",
+    "item": "pixel art, {}, fantasy rpg inventory item icon, single object centered, "
+            "bold dark outline, flat colors, plain flat white background",
 }
 NEG = ("text, letters, watermark, frame, border, signature, blurry, shadow, "
        "multiple objects, scenery, landscape, gradient background")
-SIZES = {"card": (40, 34)}  # enemies: their "size" field, square
+SIZES = {"card": (40, 34), "item": (32, 32)}  # enemies: their "size" field
 COLORS = 15                  # + index 0 transparent = a 16-color palette
 BG_TOL = 60                  # background distance (sum of |dR|+|dG|+|dB|)
 
@@ -43,6 +46,11 @@ def load_cart(cart):
     for k, v in data("cards.lua").items():
         if isinstance(v, dict) and "art" in v:
             jobs[k] = ("card", v["art"], SIZES["card"])
+    items = os.path.join(cart, "src", "items.lua")
+    if os.path.exists(items):
+        for k, v in data("items.lua").items():
+            if isinstance(v, dict) and "art" in v:
+                jobs["i_" + k] = ("item", v["art"], SIZES["item"])
     for k, v in data("enemies.lua").items():
         if isinstance(v, dict) and "art" in v:
             s = v.get("size", 64)

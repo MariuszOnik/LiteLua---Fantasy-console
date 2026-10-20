@@ -1,11 +1,13 @@
 -- Explore scene: the ASCII dungeon on the top screen, log and a touch pad
 -- on the bottom one. Rules of the map are in dungeon.lua.
--- D-pad (held = repeat) or the touch pad moves, A / the pad center waits.
+-- D-pad (held = repeat) or the touch pad moves, A / the pad center waits,
+-- X / the Bag button opens the bag. Walking onto an item picks it up.
 -- main.lua calls X.update(); it returns "fight", monster when a fight
--- starts, "floor" when the player took the stairs.
+-- starts, "floor" when the player took the stairs, "bag".
 
 local D = require("dungeon")
 local B = require("battle")
+local G = require("gear")
 local U = require("ui")
 
 local X = {}
@@ -39,6 +41,8 @@ local function cell(x, y)
     if m then return m.glyph, m.col end
   end
   if not D.seen[y][x] then return " " end
+  local it = D.item_at(x, y)
+  if it then return it.glyph, vis and it.col or 0x605040 end
   local t = D.map[y][x]
   return t, TILE_COL[t][vis and 1 or 2]
 end
@@ -77,11 +81,22 @@ local function act(dx, dy)
   end
   X.dirty()
   if res == "stairs" then return "floor" end
+  if res == "item" then
+    local name = G.item(m.id).name
+    if G.pickup(m.id) then
+      D.remove_item(m)
+      X.say("You pick up: " .. name .. ".")
+      U.play("pick")
+    else
+      X.say("Bag full. " .. name .. " stays here.")
+    end
+  end
   m = D.monsters_turn()
   if m then return "fight", m end
 end
 
 local PAD = { x = 152, y = 92, s = 30 }   -- 3x3 touch pad, cell size s
+local BAG_BTN = { x = 4, y = 150, w = 64, h = 22 }
 local DIRS = { { 0, -1, 1, 0 }, { -1, 0, 0, 1 }, { 1, 0, 2, 1 }, { 0, 1, 1, 2 }, { 0, 0, 1, 1 } }
 
 function X.update()
@@ -96,6 +111,7 @@ function X.update()
     end
   end
   if btnp("a") then pressed = true end
+  if btnp("x") or U.tapped(BAG_BTN) then return "bag" end
   if btnp("touch") then
     local tx, ty = touch()
     for _, d in ipairs(DIRS) do
@@ -144,9 +160,9 @@ local function draw_bottom()
   trifill(cx - 22, cy - 6, cx - 22, cy + 6, cx - 30, cy, GOLD)
   trifill(cx + 22, cy - 6, cx + 22, cy + 6, cx + 30, cy, GOLD)
   text("z", cx - 3, cy - 4, GOLD)
-  text("@ you  > stairs", 4, 158, 0x908878)
-  text("letters: monsters", 4, 168, 0x908878)
-  text("A / z: wait", 4, 178, 0x908878)
+  U.button(BAG_BTN, "Bag (X)", 0x4a3a28)
+  text(#G.bag .. "/" .. G.BAG_MAX .. " items", 4, 178, 0x908878)
+  text("z/A: wait", 76, 158, 0x908878)
 end
 
 function X.draw(surface)

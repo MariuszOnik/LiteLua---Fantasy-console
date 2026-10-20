@@ -3,16 +3,21 @@
 --   src/cards.lua, src/enemies.lua  game data (also read by tools/cardart.py)
 --   src/battle.lua                  battle rules, no drawing
 --   src/dungeon.lua                 the map: rooms, field of view, monsters
---   src/explore.lua, src/fight.lua  the two scenes (drawing and input)
+--   src/items.lua, src/gear.lua     items, equipment and the deck they make
+--   src/explore.lua, src/fight.lua, src/bag.lua  the scenes (drawing, input)
 --   src/ui.lua                      colors, images, sounds, buttons
 
 local B = require("battle")
+local G = require("gear")
 local D = require("dungeon")
 local X = require("explore")
 local F = require("fight")
+local K = require("bag")
 local U = require("ui")
 
-local scene        -- "explore", "fight", "over"
+local DROP_CHANCE = 60   -- % of won fights that leave an item
+
+local scene        -- "explore", "fight", "bag", "pick" (scroll), "over"
 local foe          -- the map monster being fought
 local won          -- true when the run ended with the boss beaten
 
@@ -30,6 +35,7 @@ end
 
 local function new_run()
   B.new_run()
+  G.new_run()
   X.clear_log()
   enter_floor(1)
   scene = "explore"
@@ -56,6 +62,28 @@ function _update()
       start_fight(m)
     elseif res == "floor" then
       enter_floor(D.floor + 1)
+    elseif res == "bag" then
+      K.enter()
+      scene = "bag"
+    end
+  elseif scene == "bag" then
+    local res, i = K.update()
+    if res == "close" then
+      X.dirty()
+      scene = "explore"
+    elseif res == "read" then
+      G.drop(i)
+      F.enter_pick()
+      scene = "pick"
+    end
+  elseif scene == "pick" then
+    F.update()
+    if F.result == "picked" then
+      if F.picked then
+        G.learn(F.picked)
+        X.say("You learn " .. B.card(F.picked).name .. ".")
+      end
+      scene = "bag"
     end
   elseif scene == "fight" then
     F.update()
@@ -67,6 +95,10 @@ function _update()
         scene, won = "over", true
       else
         X.say("You won. HP " .. B.player.hp .. "/" .. B.player.max .. ".")
+        if math.random(100) <= DROP_CHANCE and not D.item_at(foe.x, foe.y) then
+          D.add_item(foe.x, foe.y, G.roll_loot(D.floor))
+          X.say("It dropped something.")
+        end
         X.dirty()
         music()
         scene = "explore"
@@ -80,8 +112,10 @@ end
 function _draw(surface)
   if scene == "explore" then
     X.draw(surface)
-  elseif scene == "fight" then
+  elseif scene == "fight" or scene == "pick" then
     F.draw(surface)
+  elseif scene == "bag" then
+    K.draw(surface)
   elseif surface == TOP then
     cls(U.BG_TOP)
     U.center(won and "THE OGRE CHIEF FALLS!" or "YOU DIED", 80, U.GOLD)

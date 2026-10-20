@@ -1,6 +1,7 @@
 -- Dungeon floor: rooms and corridors, field of view, monsters on the map.
 -- No drawing here; main.lua draws D.map / D.seen / D.monsters.
 local ENEMIES = require("enemies")
+local G = require("gear")
 
 local D = {}
 
@@ -50,6 +51,22 @@ end
 function D.monster_at(x, y)
   for _, m in ipairs(D.monsters) do
     if m.x == x and m.y == y then return m end
+  end
+end
+
+local GLYPH = { weapon = ")", armor = "[", shield = "]", charm = '"', potion = "!", scroll = "?" }
+local GLYPH_COL = { weapon = 0xc0c8e0, armor = 0xc0c8e0, shield = 0xc0c8e0, charm = 0xffd040,
+                    potion = 0xff5070, scroll = 0xf0e0b0 }
+
+-- Puts item id on the map at x, y
+function D.add_item(x, y, id)
+  local slot = G.item(id).slot
+  D.items[#D.items + 1] = { x = x, y = y, id = id, glyph = GLYPH[slot], col = GLYPH_COL[slot] }
+end
+
+function D.remove_item(it)
+  for i, o in ipairs(D.items) do
+    if o == it then table.remove(D.items, i) return end
   end
 end
 
@@ -112,6 +129,11 @@ function D.generate(n)
         glyph = #group > 1 and def.glyph:upper() or def.glyph, col = def.color }
     end
   end
+  -- treasures anywhere but the first room
+  for _ = 1, spec.items or 0 do
+    local x, y = spot(rooms[math.random(2, #rooms)])
+    if x then D.add_item(x, y, G.roll_loot(n)) end
+  end
   D.update_view()
 end
 
@@ -149,7 +171,7 @@ function D.walkable(x, y)
 end
 
 -- Player tries to step by dx, dy. Returns "fight", m (bumped a monster),
--- "stairs", "moved" or nil (wall).
+-- "stairs", "item", it (stands on an item), "moved" or nil (wall).
 function D.step(dx, dy)
   local x, y = D.px + dx, D.py + dy
   local m = D.monster_at(x, y)
@@ -158,6 +180,8 @@ function D.step(dx, dy)
   D.px, D.py = x, y
   D.update_view()
   if D.map[y][x] == ">" then return "stairs" end
+  local it = D.item_at(x, y)
+  if it then return "item", it end
   return "moved"
 end
 

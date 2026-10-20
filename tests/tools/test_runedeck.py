@@ -62,14 +62,38 @@ local function bot_turn()
 end
 
 local D = require("dungeon")
+local G = require("gear")
 
--- Fights every monster group of every floor, in map order
+-- Takes an item: better gear is worn, scrolls teach their first card
+local function take(id)
+  local it = G.item(id)
+  if it.slot == "scroll" then
+    G.learn(B.rewards()[1])
+  elseif it.slot == "potion" then
+    G.pickup(id)
+  else
+    local worn = G.equip[it.slot]
+    if not worn or G.item(worn).tier < it.tier then
+      if G.pickup(id) then G.wear(#G.bag) end
+    end
+  end
+end
+
+local function drink_if_low()
+  while B.player.hp < B.player.max * 0.5 and G.potion_slot() do G.drink(G.potion_slot()) end
+end
+
+-- Fights every monster group of every floor, in map order, and picks up
+-- all items (those on the floor first, drops after each fight)
 function run_once()
   B.new_run()
+  G.new_run()
   for floor = 1, D.floors_total() do
     D.generate(floor)
     if floor > 1 then B.heal_part(0.3) end
+    for _, it in ipairs(D.items) do take(it.id) end
     for _, m in ipairs(D.monsters) do
+      drink_if_low()
       B.start_fight(m.group, D.hp_scale())
       local turns = 0
       while B.result() == "fight" do
@@ -81,7 +105,7 @@ function run_once()
       end
       B.events = {}
       if B.result() == "lost" then return false, floor end
-      if not m.boss then B.add_card(B.rewards()[1]) end
+      if not m.boss and math.random(100) <= 60 then take(G.roll_loot(floor)) end
     end
   end
   return true, D.floors_total()
@@ -176,10 +200,27 @@ class RunedeckTest(unittest.TestCase):
         run(keys("start"))
         for _ in range(40):
             drawn = run(keys())
-        self.assertIn("Skip", list(drawn.values()))
-        drawn = run(keys("touch"), 120, 155)      # the Skip button
         self.assertIn("You won. HP 60/60.", list(drawn.values()))
         self.assertEqual(lua.eval('#require("dungeon").monsters'), 0)
+        # the bag: wear an axe from the bag, the deck changes
+        lua.execute('local G = require("gear"); G.pickup("battle_axe")')
+        drawn = run(keys("x"))
+        self.assertIn("Your deck: 10 cards", list(drawn.values()))
+        run(keys("down"))                          # worn weapon -> bag slot 1
+        run(keys("right"))                         # bag slot 2: the axe
+        drawn = run(keys("a"))
+        self.assertIn("Battle Axe.", list(drawn.values()))
+        self.assertIn("2x Cleave", list(drawn.values()))
+        # a scroll: read it, learn the first card
+        lua.execute('require("gear").pickup("scroll")')
+        n_before = lua.eval('#require("battle").player.deck')
+        # choose the scroll with the stylus: bag box 3 is at x 84, y 72
+        run(keys("touch"), 90, 80)
+        drawn = run(keys("a"))
+        self.assertIn("Learn one card:", list(drawn.values()))
+        run(keys("right"))
+        drawn = run(keys("a"))
+        self.assertEqual(lua.eval('#require("battle").player.deck'), n_before + 1)
 
 
 STUBS = r"""
