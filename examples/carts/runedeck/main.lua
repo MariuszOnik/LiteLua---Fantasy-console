@@ -5,6 +5,7 @@
 --   src/dungeon.lua                 the map: rooms, field of view, monsters
 --   src/items.lua, src/gear.lua     items, equipment and the deck they make
 --   src/explore.lua, src/fight.lua, src/bag.lua  the scenes (drawing, input)
+--   src/title.lua, src/save.lua     title screen, seed, saving the run
 --   src/ui.lua                      colors, images, sounds, buttons
 
 local B = require("battle")
@@ -13,32 +14,69 @@ local D = require("dungeon")
 local X = require("explore")
 local F = require("fight")
 local K = require("bag")
+local T = require("title")
+local S = require("save")
 local U = require("ui")
 
 local DROP_CHANCE = 60   -- % of won fights that leave an item
 
-local scene        -- "explore", "fight", "bag", "pick" (scroll), "over"
+local scene        -- "title", "explore", "fight", "bag", "pick" (scroll), "over"
 local foe          -- the map monster being fought
 local won          -- true when the run ended with the boss beaten
+local seed         -- of this run: the same seed makes the same floors
+
+-- The floor comes from the seed alone, everything after it is random again
+local function make_floor(n)
+  math.randomseed(seed * 8 + n)
+  D.generate(n)
+  math.randomseed(micros())
+  X.dirty()
+end
+
+local function save_run()
+  S.save({ seed = seed, floor = D.floor, hp = B.player.hp,
+           equip = G.equip, bag = G.bag, learned = G.learned })
+end
 
 local function enter_floor(n)
-  D.generate(n)
-  X.dirty()
+  make_floor(n)
   X.say(n == 1 and "You enter the ruins." or ("You go down to floor " .. n .. "."))
   if n > 1 then
     local h = B.heal_part(0.3)
     if h > 0 then X.say("You rest on the stairs: +" .. h .. " HP.") end
   end
   if D.last then X.say("Something big waits here...") end
-  music()
+  save_run()
+  music("explore")
 end
 
-local function new_run()
+local function new_run(s)
+  seed = s
   B.new_run()
   G.new_run()
   X.clear_log()
+  X.say("Seed " .. seed .. ".")
   enter_floor(1)
   scene = "explore"
+end
+
+local function continue_run(run)
+  seed = run.seed
+  B.new_run()
+  G.new_run()
+  G.equip, G.bag, G.learned = run.equip or {}, run.bag or {}, run.learned or {}
+  G.rebuild()
+  B.player.hp = math.max(1, math.min(B.player.max, run.hp or B.player.max))
+  X.clear_log()
+  make_floor(run.floor)
+  X.say("Floor " .. run.floor .. " again. Seed " .. seed .. ".")
+  music("explore")
+  scene = "explore"
+end
+
+local function to_title()
+  T.enter(S.load())
+  scene = "title"
 end
 
 local function start_fight(m)
@@ -52,11 +90,18 @@ end
 
 function _init()
   math.randomseed(micros())
-  new_run()
+  to_title()
 end
 
 function _update()
-  if scene == "explore" then
+  if scene == "title" then
+    local res, s = T.update()
+    if res == "continue" then
+      continue_run(S.load())
+    elseif res == "new" then
+      new_run(s)
+    end
+  elseif scene == "explore" then
     local res, m = X.update()
     if res == "fight" then
       start_fight(m)
@@ -89,10 +134,12 @@ function _update()
     F.update()
     if F.result == "lost" then
       scene, won = "over", false
+      S.clear()
     elseif F.result == "won" then
       D.remove_monster(foe)
       if foe.boss then
         scene, won = "over", true
+        S.clear()
       else
         X.say("You won. HP " .. B.player.hp .. "/" .. B.player.max .. ".")
         if math.random(100) <= DROP_CHANCE and not D.item_at(foe.x, foe.y) then
@@ -100,17 +147,19 @@ function _update()
           X.say("It dropped something.")
         end
         X.dirty()
-        music()
+        music("explore")
         scene = "explore"
       end
     end
   elseif scene == "over" then
-    if btnp("a") or btnp("touch") then new_run() end
+    if btnp("a") or btnp("touch") then to_title() end
   end
 end
 
 function _draw(surface)
-  if scene == "explore" then
+  if scene == "title" then
+    T.draw(surface)
+  elseif scene == "explore" then
     X.draw(surface)
   elseif scene == "fight" or scene == "pick" then
     F.draw(surface)
@@ -120,8 +169,9 @@ function _draw(surface)
     cls(U.BG_TOP)
     U.center(won and "THE OGRE CHIEF FALLS!" or "YOU DIED", 80, U.GOLD)
     U.center(won and "You won the run." or ("on floor " .. D.floor .. " of " .. D.floors_total()), 96, 0xffffff)
+    U.center("Seed " .. seed, 112, 0xa09080)
   else
     cls(U.BG_BOT)
-    U.center("Tap or press A for a new run", 90, U.GOLD)
+    U.center("Tap or press A", 90, U.GOLD)
   end
 end

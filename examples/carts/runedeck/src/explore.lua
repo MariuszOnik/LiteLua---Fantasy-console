@@ -33,12 +33,17 @@ local TILE_COL = {
   [">"] = { 0xffd040, 0x806820 },
 }
 
+-- Monsters that do not hunt the player are drawn darker
+local function dim(c)
+  return ((c >> 16 & 255) * 5 // 10) << 16 | ((c >> 8 & 255) * 5 // 10) << 8 | (c & 255) * 5 // 10
+end
+
 local function cell(x, y)
   if x == D.px and y == D.py then return "@", 0xffffff end
   local vis = D.vis[y][x]
   if vis then
     local m = D.monster_at(x, y)
-    if m then return m.glyph, m.col end
+    if m then return m.glyph, (m.state == "hunt" or m.boss) and m.col or dim(m.col) end
   end
   if not D.seen[y][x] then return " " end
   local it = D.item_at(x, y)
@@ -92,6 +97,9 @@ local function act(dx, dy)
     end
   end
   m = D.monsters_turn()
+  for _, n in ipairs(D.noticed) do
+    X.say(B.enemy_name(n.group[1]) .. " notices you!")
+  end
   if m then return "fight", m end
 end
 
@@ -163,6 +171,7 @@ local function draw_bottom()
   U.button(BAG_BTN, "Bag (X)", 0x4a3a28)
   text(#G.bag .. "/" .. G.BAG_MAX .. " items", 4, 178, 0x908878)
   text("z/A: wait", 76, 158, 0x908878)
+  text("dark = unaware", 76, 168, 0x908878)
 end
 
 function X.draw(surface)

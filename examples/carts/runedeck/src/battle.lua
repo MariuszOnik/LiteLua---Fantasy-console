@@ -136,7 +136,14 @@ local function run_fx(fx, self, target, foes, card)
       if card and card.exec and target.hp * 2 <= target.max then n = n * 2 end
       for _ = 1, f[3] or 1 do attack(self, target, n) end
     elseif op == "dmg_all" then
-      for _, e in ipairs(foes) do attack(self, e, f[2]) end
+      for _ = 1, f[3] or 1 do
+        for _, e in ipairs(foes) do attack(self, e, f[2]) end
+      end
+    elseif op == "pierce" then
+      local block = target.block
+      target.block = 0
+      attack(self, target, f[2])
+      target.block = block
     elseif op == "dmg_block" then
       attack(self, target, self.block)
     elseif op == "block" then

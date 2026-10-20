@@ -113,7 +113,7 @@ function D.generate(n)
   if D.last then
     -- the boss waits in the last room instead of stairs
     D.monsters[#D.monsters + 1] = { x = sx, y = sy, group = spec.boss, boss = true,
-      glyph = ENEMIES[spec.boss[1]].glyph, col = ENEMIES[spec.boss[1]].color }
+      glyph = ENEMIES[spec.boss[1]].glyph, col = ENEMIES[spec.boss[1]].color, state = "guard" }
   else
     D.map[sy][sx] = ">"
   end
@@ -125,8 +125,10 @@ function D.generate(n)
     if x then
       local group = spec.groups[math.random(#spec.groups)]
       local def = ENEMIES[group[1]]
+      -- most sleep, the rest wander; none knows where the player is yet
       D.monsters[#D.monsters + 1] = { x = x, y = y, group = group,
-        glyph = #group > 1 and def.glyph:upper() or def.glyph, col = def.color }
+        glyph = #group > 1 and def.glyph:upper() or def.glyph, col = def.color,
+        state = math.random(100) <= 60 and "sleep" or "wander", slow = def.slow, lost = 0 }
     end
   end
   -- treasures anywhere but the first room
@@ -185,27 +187,63 @@ function D.step(dx, dy)
   return "moved"
 end
 
--- Monsters that see the player walk towards them. Returns a monster that
--- reached the player (a fight starts), or nil.
+-- Monster states: "sleep" (notices the player only right next to it, or
+-- by chance 2 steps away), "wander" (walks around, notices the player in
+-- sight up to NOTICE steps away), "hunt" (walks to the player; after LOSE
+-- turns without seeing them it wanders again), "guard" (the boss: waits).
+local NOTICE, LOSE = 4, 6
+D.noticed = {}  -- monsters that noticed the player this turn (for the log)
+
+local function step_to(m, tx, ty)
+  local dx, dy = tx - m.x, ty - m.y
+  local sx, sy = (dx > 0 and 1 or dx < 0 and -1 or 0), (dy > 0 and 1 or dy < 0 and -1 or 0)
+  local tries = math.abs(dx) >= math.abs(dy) and { { sx, 0 }, { 0, sy } } or { { 0, sy }, { sx, 0 } }
+  for _, t in ipairs(tries) do
+    local nx, ny = m.x + t[1], m.y + t[2]
+    if (t[1] ~= 0 or t[2] ~= 0) and D.walkable(nx, ny) and not D.monster_at(nx, ny)
+       and not (nx == D.px and ny == D.py) then
+      m.x, m.y = nx, ny
+      return true
+    end
+  end
+end
+
+local DIRS4 = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }
+
+-- Monsters act after each player turn. Returns a monster that reached the
+-- player (a fight starts), or nil.
 function D.monsters_turn()
+  D.noticed = {}
+  D.turn = (D.turn or 0) + 1
   for _, m in ipairs(D.monsters) do
-    if D.vis[m.y][m.x] and not m.boss then
-      local dx, dy = D.px - m.x, D.py - m.y
-      if math.abs(dx) + math.abs(dy) == 1 then return m end
-      -- try the longer axis first, then the other one
-      local sx, sy = (dx > 0 and 1 or dx < 0 and -1 or 0), (dy > 0 and 1 or dy < 0 and -1 or 0)
-      local tries = math.abs(dx) >= math.abs(dy) and { { sx, 0 }, { 0, sy } } or { { 0, sy }, { sx, 0 } }
-      for _, t in ipairs(tries) do
-        local nx, ny = m.x + t[1], m.y + t[2]
-        if (t[1] ~= 0 or t[2] ~= 0) and D.walkable(nx, ny) and not D.monster_at(nx, ny)
-           and not (nx == D.px and ny == D.py) then
-          m.x, m.y = nx, ny
-          break
+    local dx, dy = D.px - m.x, D.py - m.y
+    local dist = math.max(math.abs(dx), math.abs(dy))
+    local sees = D.vis[m.y][m.x]          -- sight works both ways
+    if m.state == "guard" then
+      if dist == 1 and dx * dy == 0 then return m end
+    else
+      if m.state ~= "hunt" and sees then
+        local wakes = dist <= 1
+          or (m.state == "wander" and dist <= NOTICE)
+          or (m.state == "sleep" and dist <= 2 and math.random(100) <= 30)
+        if wakes then
+          m.state, m.lost = "hunt", 0
+          D.noticed[#D.noticed + 1] = m
         end
       end
-    elseif m.boss and D.vis[m.y][m.x] then
-      local dx, dy = D.px - m.x, D.py - m.y
-      if math.abs(dx) + math.abs(dy) == 1 then return m end
+      if m.state == "hunt" then
+        if sees then m.lost = 0 else m.lost = m.lost + 1 end
+        if m.lost > LOSE then m.state = "wander" end
+      end
+      if not (m.slow and D.turn % 2 == 0) then
+        if m.state == "hunt" then
+          if math.abs(dx) + math.abs(dy) == 1 then return m end
+          step_to(m, D.px, D.py)
+        elseif m.state == "wander" and math.random(100) <= 50 then
+          local d = DIRS4[math.random(4)]
+          step_to(m, m.x + d[1], m.y + d[2])
+        end
+      end
     end
   end
 end

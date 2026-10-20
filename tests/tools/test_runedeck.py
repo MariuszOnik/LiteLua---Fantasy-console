@@ -188,7 +188,10 @@ class RunedeckTest(unittest.TestCase):
         keys = lambda *k: lua.table_from({n: True for n in k})
         g._init()
         drawn = run(keys())
+        self.assertIn("New run", list(drawn.values()))
+        drawn = run(keys("a"))                     # title: New run
         self.assertIn("You enter the ruins.", list(drawn.values()))
+        self.assertIn("return", lua.eval('saves["save/run.lua"] or ""'))
         # put a monster right of the player and walk into it
         lua.execute("""local D = require("dungeon")
           D.map[D.py][D.px + 1] = "."
@@ -221,6 +224,29 @@ class RunedeckTest(unittest.TestCase):
         run(keys("right"))
         drawn = run(keys("a"))
         self.assertEqual(lua.eval('#require("battle").player.deck'), n_before + 1)
+        # the save of floor 1 continues with the gear worn at that moment
+        g._init()
+        drawn = run(keys())
+        self.assertIn("Continue: floor 1", list(drawn.values()))
+        drawn = run(keys("a"))
+        self.assertIn("Floor 1 again.", " ".join(str(v) for v in drawn.values()))
+        self.assertEqual(lua.eval('#require("battle").player.deck'), 10)
+
+    def test_seed_makes_same_floor(self):
+        lua = lua54.LuaRuntime()
+        lua.execute(f'package.path = "{SRC}/?.lua;" .. package.path')
+        f = lua.eval("""function(seed, n)
+          local D = require("dungeon")
+          math.randomseed(seed * 8 + n)
+          D.generate(n)
+          local rows = {}
+          for y = 1, D.H do rows[y] = table.concat(D.map[y]) end
+          for _, m in ipairs(D.monsters) do rows[#rows + 1] = m.x .. "," .. m.y .. m.glyph end
+          for _, it in ipairs(D.items) do rows[#rows + 1] = it.x .. "," .. it.y .. it.id end
+          return table.concat(rows, "/")
+        end""")
+        self.assertEqual(f(123456, 3), f(123456, 3))
+        self.assertNotEqual(f(123456, 3), f(654321, 3))
 
 
 STUBS = r"""
@@ -234,6 +260,20 @@ function textw(s) return #s * 6, 8 end
 function micros() return 1 end
 function image() error("no art in tests") end
 function sound(n) return n end
+-- save/ files live in memory
+saves = {}
+local real_open = io.open
+io.open = function(path, mode)
+  if path:sub(1, 5) ~= "save/" then return real_open(path, mode) end
+  if (mode or "r"):sub(1, 1) == "w" then
+    local buf = {}
+    return { write = function(self, s) buf[#buf + 1] = s end,
+             close = function() saves[path] = table.concat(buf) end }
+  end
+  if not saves[path] then return nil end
+  return { read = function() return saves[path] end, close = function() end }
+end
+os.remove = function(path) saves[path] = nil return true end
 for _, f in ipairs({ "cls", "rect", "rectfill", "circ", "circfill", "line", "trifill",
                      "spr", "alpha", "sfx", "music" }) do _G[f] = function() end end
 """

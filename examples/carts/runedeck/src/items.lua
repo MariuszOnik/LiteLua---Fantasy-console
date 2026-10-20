@@ -34,6 +34,31 @@ return {
     cards = { "execute", "execute", "crush", "slash", "slash" },
     art = "a black executioner axe with a red glowing edge",
   },
+  rapier = {
+    name = "Rapier", slot = "weapon", tier = 1,
+    cards = { "parry", "parry", "parry", "jab", "slash" },
+    art = "a thin elegant rapier with a gold hand guard",
+  },
+  spear = {
+    name = "Spear", slot = "weapon", tier = 2,
+    cards = { "pierce", "pierce", "pierce", "jab", "slash" },
+    art = "a long wooden spear with a steel tip",
+  },
+  holy_mace = {
+    name = "Holy Mace", slot = "weapon", tier = 2,
+    cards = { "smite", "smite", "slash", "slash", "crush" },
+    art = "a golden flanged mace glowing with holy light",
+  },
+  plague_mace = {
+    name = "Plague Mace", slot = "weapon", tier = 3,
+    cards = { "plague", "plague", "venom", "slash", "slash" },
+    art = "a rusty spiked mace with green mist",
+  },
+  storm_blade = {
+    name = "Storm Blade", slot = "weapon", tier = 3,
+    cards = { "whirl", "whirl", "cleave", "slash", "slash" },
+    art = "a curved sword crackling with blue lightning",
+  },
 
   -- Armor
   leather_vest = {
@@ -55,6 +80,11 @@ return {
     name = "Plate Armor", slot = "armor", tier = 3, hp = 10,
     cards = { "bulwark", "bulwark", "guard", "guard" },
     art = "a heavy steel plate armor breastplate",
+  },
+  rune_mail = {
+    name = "Rune Mail", slot = "armor", tier = 3, hp = 5,
+    cards = { "fortify", "fortify", "guard", "guard" },
+    art = "a dark chain mail armor with glowing blue runes",
   },
 
   -- Shields
@@ -99,6 +129,21 @@ return {
     name = "Thief's Ring", slot = "charm", tier = 1,
     cards = { "disarm", "jab" },
     art = "a silver ring with a black stone",
+  },
+  vampire_fang = {
+    name = "Vampire Fang", slot = "charm", tier = 2,
+    cards = { "leech", "leech" },
+    art = "a white vampire fang pendant on a red cord",
+  },
+  war_horn = {
+    name = "War Horn", slot = "charm", tier = 1,
+    cards = { "cry" },
+    art = "a small curved bone war horn",
+  },
+  focus_band = {
+    name = "Focus Band", slot = "charm", tier = 2,
+    cards = { "focus", "focus" },
+    art = "a blue headband with a gem",
   },
 
   -- Used up

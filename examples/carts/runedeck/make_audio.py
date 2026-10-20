@@ -3,6 +3,7 @@
 #
 # Makes the music and sound effects of Runedeck, so the cart needs no third
 # party files:
+#   music/explore.lsong  A minor, slow and quiet (walking the dungeon)
 #   music/battle.lsong   A minor, dark and driving (normal fights)
 #   music/boss.lsong     D minor, faster (the Ogre Chief)
 #   music/victory.lsong  short fanfare, plays once
@@ -189,6 +190,40 @@ def boss():
                  {"pattern": "fight"}], lead_duty=0.5)
 
 
+def explore():
+    """Slow arpeggios and a sparse melody; a soft hat keeps the pulse"""
+    prog = ("Am", "F", "Dm", "E", "Am", "F", "G", "E")
+    arps = []
+    for b, ch in enumerate(prog):
+        root = ROOT[ch]
+        third = 3 if ch.endswith("m") else 4
+        for k, off in enumerate((0, 7, 12, third + 12, 12, 7)):
+            arps.append({"t": b * BAR + k * 16, "d": 14, "p": root + off})
+    lead = melody(
+        [(None, 48), ("E5", 24), ("C5", 24)],
+        [("A4", 72), (None, 24)],
+        [(None, 48), ("F5", 24), ("E5", 24)],
+        [("D5", 48), ("B4", 48)],
+        [(None, 48), ("E5", 24), ("A5", 24)],
+        [("G5", 24), ("F5", 24), ("E5", 48)],
+        [("D5", 48), ("B4", 24), ("D5", 24)],
+        [("E5", 72), (None, 24)],
+        gap=4,
+    )
+    bass = [{"t": b * BAR, "d": 90, "p": ROOT[ch] - 12 if ROOT[ch] - 12 <= 52 else ROOT[ch] - 24}
+            for b, ch in enumerate(prog)]
+    hats = [{"t": b * BAR + t, "d": 6, "p": HAT} for b in range(8) for t in (24, 72)]
+    s_ = song("Torchlight", 84, {"walk": {"length": 8 * BAR, "notes": {
+        "lead": lead, "chords": arps, "bass": bass, "drums": hats}}},
+        [{"pattern": "walk"}], loop=1, lead_duty=0.5)
+    pluck = {"type": "pulse", "duty": 0.125, "volume": 0.3, "env": [1, 0.7, 0.5, 0.35, 0.25, 0.15, 0.1, 0]}
+    s_["instruments"]["chord_maj"] = pluck
+    s_["instruments"]["lead"]["volume"] = 0.5
+    s_["instruments"]["hat"]["volume"] = 0.2
+    del s_["instruments"]["chord_min"]
+    return s_
+
+
 def victory():
     lead = melody(
         [("C5", 12), ("E5", 12), ("G5", 12), ("C6", 36), (None, 24)],
@@ -294,7 +329,8 @@ def make_sfx():
 def main():
     out = HERE / "music"
     out.mkdir(exist_ok=True)
-    for name, fn in (("battle", battle), ("boss", boss), ("victory", victory), ("defeat", defeat)):
+    for name, fn in (("explore", explore), ("battle", battle), ("boss", boss),
+                     ("victory", victory), ("defeat", defeat)):
         (out / (name + ".lsong")).write_text(lsong.to_lua(fn()), encoding="utf-8")
         print("music/" + name + ".lsong")
     print("sfx:", ", ".join(make_sfx()))

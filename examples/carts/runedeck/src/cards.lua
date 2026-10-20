@@ -4,7 +4,8 @@
 -- Effects ("fx") run in order. Each is a list: { op, args... }
 --   { "dmg", n }          deal n to the target (strength, weak, vulnerable apply)
 --   { "dmg", n, times }   deal n, times times
---   { "dmg_all", n }      deal n to every enemy
+--   { "dmg_all", n }      deal n to every enemy ({ "dmg_all", n, times })
+--   { "pierce", n }       deal n, ignoring block
 --   { "dmg_block" }       deal damage equal to your block
 --   { "block", n }        gain n block
 --   { "draw", n }         draw n cards
@@ -107,6 +108,66 @@ return {
     text = "Deal 8. Double if foe at half HP.",
     fx = { { "dmg", 8 } },
     art = "a black executioner axe with a glowing red edge",
+  },
+  parry = {
+    name = "Parry", cost = 1, kind = "attack", target = true,
+    text = "Block 4. Deal 4.",
+    fx = { { "block", 4 }, { "dmg", 4 } },
+    art = "a thin rapier blade deflecting sparks",
+  },
+  whirl = {
+    name = "Whirlwind", cost = 2, kind = "attack",
+    text = "Deal 4 to all, twice.",
+    fx = { { "dmg_all", 4, 2 } },
+    art = "a sword spinning in a blue whirlwind",
+  },
+  leech = {
+    name = "Leech", cost = 1, kind = "attack", target = true,
+    text = "Deal 5. Heal 3.",
+    fx = { { "dmg", 5 }, { "hp", 3 } },
+    art = "a vampire fang dripping a red drop",
+  },
+  focus = {
+    name = "Focus", cost = 1, kind = "skill",
+    text = "Draw 2.",
+    fx = { { "draw", 2 } },
+    art = "a glowing blue eye inside a triangle",
+  },
+  plague = {
+    name = "Plague Strike", cost = 2, kind = "attack", target = true,
+    text = "Deal 6. Poison 6.",
+    fx = { { "dmg", 6 }, { "apply", "poison", 6 } },
+    art = "a rusty mace covered in green plague mist",
+  },
+  shatter = {
+    name = "Shatter", cost = 1, kind = "skill",
+    text = "Vulnerable 2 to all.",
+    fx = { { "apply_all", "vuln", 2 } },
+    art = "a cracked crystal breaking into shards",
+  },
+  cry = {
+    name = "Battle Cry", cost = 1, kind = "skill",
+    text = "Strength +1. Block 4.",
+    fx = { { "self", "str", 1 }, { "block", 4 } },
+    art = "a war horn with sound waves",
+  },
+  smite = {
+    name = "Smite", cost = 2, kind = "attack", target = true,
+    text = "Deal 14.",
+    fx = { { "dmg", 14 } },
+    art = "a golden holy mace with a bright light burst",
+  },
+  pierce = {
+    name = "Pierce", cost = 1, kind = "attack", target = true,
+    text = "Deal 7, ignores Block.",
+    fx = { { "pierce", 7 } },
+    art = "a long steel spear tip thrusting forward",
+  },
+  fortify = {
+    name = "Fortify", cost = 2, kind = "skill",
+    text = "Block 9. Draw 1.",
+    fx = { { "block", 9 }, { "draw", 1 } },
+    art = "a stone wall with a glowing blue rune",
   },
 
   -- Deck at the start of a run
