@@ -61,23 +61,61 @@ local function bot_turn()
   end
 end
 
+local D = require("dungeon")
+
+-- Fights every monster group of every floor, in map order
 function run_once()
   B.new_run()
-  while true do
-    B.start_fight()
-    local turns = 0
-    while B.result() == "fight" do
-      turns = turns + 1
-      if turns > 60 then error("fight " .. B.fight_no .. " never ends") end
-      bot_turn()
-      if B.result() ~= "fight" then break end
-      for _, step in ipairs(B.end_turn()) do step() end
+  for floor = 1, D.floors_total() do
+    D.generate(floor)
+    if floor > 1 then B.heal_part(0.3) end
+    for _, m in ipairs(D.monsters) do
+      B.start_fight(m.group, D.hp_scale())
+      local turns = 0
+      while B.result() == "fight" do
+        turns = turns + 1
+        if turns > 60 then error("fight on floor " .. floor .. " never ends") end
+        bot_turn()
+        if B.result() ~= "fight" then break end
+        for _, step in ipairs(B.end_turn()) do step() end
+      end
+      B.events = {}
+      if B.result() == "lost" then return false, floor end
+      if not m.boss then B.add_card(B.rewards()[1]) end
     end
-    B.events = {}
-    if B.result() == "lost" then return false, B.fight_no end
-    if B.fight_no == B.fights_total() then return true, B.fight_no end
-    B.add_card(B.rewards()[1])
   end
+  return true, D.floors_total()
+end
+
+-- Flood fill from the player: stairs and every monster must be reachable
+function check_floor(n)
+  D.generate(n)
+  local seen, stack, reach = {}, { { D.px, D.py } }, 0
+  while #stack > 0 do
+    local x, y = table.unpack(table.remove(stack))
+    local k = y * 100 + x
+    if not seen[k] and D.walkable(x, y) then
+      seen[k] = true
+      reach = reach + 1
+      for _, d in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
+        stack[#stack + 1] = { x + d[1], y + d[2] }
+      end
+    end
+  end
+  for _, m in ipairs(D.monsters) do
+    if not seen[m.y * 100 + m.x] then error("monster not reachable on floor " .. n) end
+  end
+  local stairs = 0
+  for y = 1, D.H do
+    for x = 1, D.W do
+      if D.map[y][x] == ">" then
+        stairs = stairs + 1
+        if not seen[y * 100 + x] then error("stairs not reachable on floor " .. n) end
+      end
+    end
+  end
+  if stairs ~= (D.last and 0 or 1) then error("floor " .. n .. " has " .. stairs .. " stairs") end
+  return #D.monsters
 end
 """
 
@@ -95,9 +133,69 @@ class RunedeckTest(unittest.TestCase):
             won, fight = run_once()
             wins += bool(won)
             reached[fight] = reached.get(fight, 0) + 1
-        print(f"\nrunedeck bot: {wins}/{runs} wins, died at fight: "
+        print(f"\nrunedeck bot: {wins}/{runs} wins, last floor: "
               + ", ".join(f"{k}:{v}" for k, v in sorted(reached.items())))
         self.assertGreater(sum(reached.values()), 0)
+
+    def test_floors(self):
+        lua = lua54.LuaRuntime()
+        lua.execute(f'package.path = "{SRC}/?.lua;" .. package.path')
+        lua.execute(BOT)
+        lua.execute("math.randomseed(2)")
+        check = lua.globals().check_floor
+        for _ in range(100):
+            for n in range(1, 6):
+                self.assertGreater(check(n), 0)
+
+    def test_main_flow(self):
+        """main.lua with a fake API: walk into a monster, win, back on the map"""
+        lua = lua54.LuaRuntime()
+        cart = os.path.dirname(SRC)
+        lua.execute(f'package.path = "{SRC}/?.lua;" .. package.path')
+        lua.execute(STUBS)
+        lua.execute(f'dofile("{cart}/main.lua")')
+        g = lua.globals()
+        run = lua.eval("""function(keys, tx, ty)
+          pressed, touch_x, touch_y = keys, tx, ty
+          _update(); drawn = {}; _draw(TOP); _draw(BOTTOM)
+          pressed, touch_x, touch_y = {}, nil, nil
+          return drawn
+        end""")
+        keys = lambda *k: lua.table_from({n: True for n in k})
+        g._init()
+        drawn = run(keys())
+        self.assertIn("You enter the ruins.", list(drawn.values()))
+        # put a monster right of the player and walk into it
+        lua.execute("""local D = require("dungeon")
+          D.map[D.py][D.px + 1] = "."
+          D.monsters = { { x = D.px + 1, y = D.py, group = { "goblin" }, glyph = "g", col = 0 } }""")
+        drawn = run(keys("right"))
+        self.assertIn("End turn", list(drawn.values()))
+        # the goblin dies; after the enemy turn the reward screen comes
+        lua.execute('require("battle").enemies[1].hp = 0')
+        run(keys("start"))
+        for _ in range(40):
+            drawn = run(keys())
+        self.assertIn("Skip", list(drawn.values()))
+        drawn = run(keys("touch"), 120, 155)      # the Skip button
+        self.assertIn("You won. HP 60/60.", list(drawn.values()))
+        self.assertEqual(lua.eval('#require("dungeon").monsters'), 0)
+
+
+STUBS = r"""
+TOP, BOTTOM = 0, 1
+pressed, drawn = {}, {}
+function btnp(k) return pressed[k] == true end
+function btn(k) return pressed[k] == true end
+function touch() return touch_x, touch_y end
+function text(s) drawn[#drawn + 1] = s end
+function textw(s) return #s * 6, 8 end
+function micros() return 1 end
+function image() error("no art in tests") end
+function sound(n) return n end
+for _, f in ipairs({ "cls", "rect", "rectfill", "circ", "circfill", "line", "trifill",
+                     "spr", "alpha", "sfx", "music" }) do _G[f] = function() end end
+"""
 
 
 if __name__ == "__main__":

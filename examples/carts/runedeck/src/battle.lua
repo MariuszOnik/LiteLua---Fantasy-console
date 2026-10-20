@@ -32,10 +32,7 @@ function B.new_run()
   p.deck = {}
   for i, id in ipairs(CARDS.starter) do p.deck[i] = id end
   B.player = p
-  B.fight_no = 0
 end
-
-function B.fights_total() return #ENEMIES.fights end
 
 -- Fight -------------------------------------------------------------------
 
@@ -50,15 +47,15 @@ local function choose_move(e)
   end
 end
 
-function B.start_fight()
-  B.fight_no = B.fight_no + 1
+-- group: list of enemy ids; hp_scale: enemy HP multiplier (deeper = more)
+function B.start_fight(group, hp_scale)
   local p = B.player
   p.block = 0
   p.st = fighter(1).st
   B.enemies = {}
-  for i, id in ipairs(ENEMIES.fights[B.fight_no]) do
+  for i, id in ipairs(group) do
     local def = ENEMIES[id]
-    local e = fighter(def.hp)
+    local e = fighter(math.floor(def.hp * (hp_scale or 1)))
     e.id, e.def, e.move = id, def, 0
     choose_move(e)
     B.enemies[i] = e
@@ -176,6 +173,16 @@ function B.start_turn()
 end
 
 function B.card(id) return CARDS[id] end
+
+function B.enemy_name(id) return ENEMIES[id].name end
+
+-- Heals the player by a part of max HP; returns how much
+function B.heal_part(part)
+  local p = B.player
+  local n = math.min(p.max - p.hp, math.floor(p.max * part))
+  p.hp = p.hp + n
+  return n
+end
 
 -- Can the card in hand slot i be played now?
 function B.playable(i)
