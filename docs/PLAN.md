@@ -6,6 +6,9 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 `P<n>: …`. Decyzje: `docs/DECISIONS.md`.
 
 ## Gdzie skończyliśmy
+- **Przerwa na grę (2026-10-20):** robimy `examples/carts/runedeck` (roguelike z lochem
+  ASCII i walką kartami, grafika z lokalnego AI). **Jutro zacznij od
+  `examples/carts/runedeck/NEXT.md`** — stan, narzędzia i lista do zrobienia.
 - **Droga do 1.0 (D49):** ~~P8 mapy~~ (D50) → ~~P10 lekki launcher~~ (D52) → P19 lekka
   biblioteka `scene` → wydanie 1.0 (API, przykłady, `v1.0.0`). Wszystko inne po 1.0.
   **Następny krok: P19** — zakres w **D55** (najpierw biblioteka `class` + pomiar na
