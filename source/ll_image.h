@@ -6,6 +6,7 @@
 #define LL_IMAGE_H__
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "lua.h"
 
@@ -19,6 +20,8 @@ typedef struct {
     int cols, frames; // Frame grid
     bool owner;       // Frees the texture when collected (views do not)
     unsigned vram;    // Bytes of texture + palette memory (owner only)
+    bool anchored;    // anchor() set: spr/sprx place this point at x, y
+    int32_t ax, ay;   // Anchor as a fraction of the frame size, 1/4096
 } LLImage;
 
 // Sets up the texture VRAM banks. Call once after the 3D engine is set up.
@@ -28,7 +31,7 @@ void ll_image_init(void);
 // starts. 'cart' is used to load files (NULL: images cannot be loaded).
 void ll_image_reset(const LLCart *cart);
 
-// Registers image() and sub().
+// Registers image(), sub() and anchor().
 void ll_image_register(lua_State *L);
 
 // Checks that argument 'idx' is an image.

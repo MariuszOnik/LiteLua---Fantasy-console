@@ -989,7 +989,20 @@ static void draw_rect_textured(const LLImage *img, int u, int v, int w, int h,
     draw_textured(img, u, v, w, h, cx, cy, fx, fy);
 }
 
-// spr(img, x, y, [frame], [flip])
+// Anchor of an image (1/4096 of the frame size) with the flip applied: a
+// flipped image mirrors around its anchor. 'def' is used without anchor().
+static void anchor_of(const LLImage *img, bool fx, bool fy, int32_t def,
+                      int32_t *ax, int32_t *ay)
+{
+    *ax = img->anchored ? img->ax : def;
+    *ay = img->anchored ? img->ay : def;
+    if (img->anchored && fx)
+        *ax = 4096 - *ax;
+    if (img->anchored && fy)
+        *ay = 4096 - *ay;
+}
+
+// spr(img, x, y, [frame], [flip]): top left at x, y, or the anchor
 static int l_spr(lua_State *L)
 {
     LLImage *img = ll_image_check(L, 1);
@@ -1000,12 +1013,21 @@ static int l_spr(lua_State *L)
 
     int u, v, w, h;
     ll_image_frame(L, img, frame, &u, &v, &w, &h);
+    if (img->anchored)
+    {
+        // Whole pixels, so anchored sprites stay as sharp as plain ones
+        int32_t ax, ay;
+        anchor_of(img, fx, fy, 0, &ax, &ay);
+        x -= (int)(((int64_t)ax * w + 2048) >> 12);
+        y -= (int)(((int64_t)ay * h + 2048) >> 12);
+    }
     draw_rect_textured(img, u, v, w, h, x, y, w, h, fx, fy);
     return 0;
 }
 
-// sprx(img, x, y, [frame], [angle], [sx], [sy], [flip]): x, y is the center;
-// angle in degrees, clockwise; sx, sy scale (sy defaults to sx)
+// sprx(img, x, y, [frame], [angle], [sx], [sy], [flip]): x, y is the center
+// (or the anchor), which is also the pivot; angle in degrees, clockwise;
+// sx, sy scale (sy defaults to sx)
 static int l_sprx(lua_State *L)
 {
     LLImage *img = ll_image_check(L, 1);
@@ -1020,17 +1042,21 @@ static int l_sprx(lua_State *L)
     int u, v, w, h;
     ll_image_frame(L, img, frame, &u, &v, &w, &h);
 
-    // Corners around the center in quarter pixels, rotated with the DS
+    // Corners around the pivot in quarter pixels, rotated with the DS
     // sine table (32768 per turn, 4.12 results)
-    int hw = (int)(w * sx * 2), hh = (int)(h * sy * 2); // Half size * 4
+    int dw = (int)(w * sx * 4), dh = (int)(h * sy * 4); // Drawn size * 4
+    int32_t ax, ay;
+    anchor_of(img, fx, fy, 2048, &ax, &ay);
+    int lx1 = -(int)(((int64_t)ax * dw) >> 12), ly1 = -(int)(((int64_t)ay * dh) >> 12);
+    const int lxs[4] = { lx1, lx1 + dw, lx1 + dw, lx1 };
+    const int lys[4] = { ly1, ly1, ly1 + dh, ly1 + dh };
     int a = (int)(angle * (32768.0f / 360.0f));
     int c = cosLerp(a), s = sinLerp(a);
     int32_t ox = (int32_t)(x * 4 + 0.5f), oy = (int32_t)(y * 4 + 0.5f);
-    static const int8_t sxs[4] = { -1, 1, 1, -1 }, sys[4] = { -1, -1, 1, 1 };
     int32_t cx[4], cy[4];
     for (int i = 0; i < 4; i++)
     {
-        int lx = sxs[i] * hw, ly = sys[i] * hh;
+        int lx = lxs[i], ly = lys[i];
         cx[i] = ox + ((lx * c - ly * s) >> 12);
         cy[i] = oy + ((lx * s + ly * c) >> 12);
     }

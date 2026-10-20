@@ -568,7 +568,7 @@ Loads gfx/<name>.png of the cart into video memory. With a frame size the image 
 | `fw` | integer | frame width (optional) |
 | `fh` | integer | frame height, default fw |
 
-Returns: image — the image; fields w, h (frame size) and frames
+Returns: image — the image; fields w, h (frame size), frames, and ax, ay (anchor, nil without one)
 
 Example:
 
@@ -606,19 +606,44 @@ door = sub(tiles, 32, 0, 16, 24)
 spr(door, 100, 80)
 ```
 
+### `anchor`
+
+```lua
+anchor(img, [ax], [ay]) -> img
+```
+
+Sets the point of the image that spr and sprx put at x, y. ax, ay are fractions of the frame size, not pixels, so (0.5, 1) is the feet of any character. sprx also rotates and scales around it. A flipped image mirrors around its anchor. Without an anchor spr uses the top left corner and sprx the center. The pixels and size of the image do not change. image(name) returns the same image every time, so its anchor is shared; sub() makes an image with its own anchor.
+
+| Argument | Type | Description |
+|---|---|---|
+| `img` | image | image to set the anchor of |
+| `ax` | number | fraction of the frame width: 0 left, 0.5 middle, 1 right; nil removes the anchor |
+| `ay` | number | fraction of the frame height: 0 top, 0.5 middle, 1 bottom; default ax |
+
+Returns: image — the same image; fields ax, ay show the anchor
+
+Example:
+
+```lua
+hero = anchor(image("hero", 16, 24), 0.5, 1)
+spr(hero, x, ground_y)        -- feet on the ground
+sword = anchor(image("sword"), 0.5, 0.9)
+sprx(sword, hx, hy, 0, angle) -- swings around the handle
+```
+
 ### `spr`
 
 ```lua
 spr(img, x, y, [frame], [flip])
 ```
 
-Draws an image (or one frame of it) with its top left corner at x, y.
+Draws an image (or one frame of it) with its top left corner at x, y, or its anchor if it has one (see anchor).
 
 | Argument | Type | Description |
 |---|---|---|
 | `img` | image | image to draw |
-| `x` | number | left |
-| `y` | number | top |
+| `x` | number | left (or anchor x) |
+| `y` | number | top (or anchor y) |
 | `frame` | integer | frame number from 0, default 0 |
 | `flip` | string | "x", "y" or "xy" to mirror |
 
@@ -635,13 +660,13 @@ spr(walk, x, y, 0, "x")  -- facing left
 sprx(img, x, y, [frame], [angle], [sx], [sy], [flip])
 ```
 
-Draws an image rotated and scaled around its center x, y. Positions can have fractions.
+Draws an image rotated and scaled around its center x, y, or around its anchor if it has one (see anchor). Positions can have fractions.
 
 | Argument | Type | Description |
 |---|---|---|
 | `img` | image | image to draw |
-| `x` | number | center x |
-| `y` | number | center y |
+| `x` | number | center (or anchor) x |
+| `y` | number | center (or anchor) y |
 | `frame` | integer | frame number from 0, default 0 |
 | `angle` | number | rotation in degrees, clockwise, default 0 |
 | `sx` | number | horizontal scale, default 1 |

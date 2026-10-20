@@ -38,6 +38,16 @@ check("missing image", not ok and err:find("gfx/missing.png", 1, true), err)
 ok, err = pcall(sub, hero, 8, 8, 16, 16)
 check("sub outside", not ok, err)
 
+-- Anchors: own images (sub), so the cached hero stays without one
+local tl = sub(hero, 0, 0, 16, 16)
+local mid = anchor(sub(hero, 0, 0, 16, 16), 0.5)
+local feet = anchor(sub(chars, 0, 0, 64, 16, 16, 16), 0.5, 1)
+check("anchor none", tl.ax == nil and hero.ax == nil)
+check("anchor set", mid.ax == 0.5 and mid.ay == 0.5 and feet.ay == 1)
+check("anchor own", sub(mid, 0, 0, 8, 8).ax == nil)
+local tmp = anchor(sub(hero, 0, 0, 16, 16), 1, 0)
+check("anchor off", anchor(tmp) == tmp and tmp.ax == nil)
+
 -- VRAM: big.png takes all 256 KB, so it cannot load next to the others
 ok, err = pcall(image, "big")
 check("out of VRAM", not ok and err:find("video memory", 1, true), err)
@@ -94,6 +104,20 @@ local function scene()
   alpha(0.5)
   sprx(hero, 100, 140, 0, 0, 3)
   alpha()
+
+  -- Anchors: the red cross is x, y of each call
+  local function cross(x, y)
+    line(x - 3, y, x + 3, y, 2)
+    line(x, y - 3, x, y + 3, 2)
+  end
+  spr(tl, 10, 172)
+  spr(mid, 40, 180)
+  spr(feet, 66, 188, t // 8 % 4)
+  spr(feet, 86, 188, t // 8 % 4, "x")
+  sprx(feet, 116, 188, 0, math.sin(t / 20) * 30)
+  for _, x in ipairs({ 10, 40, 66, 86, 116 }) do
+    cross(x, x == 10 and 172 or x == 40 and 180 or 188)
+  end
 
   -- Zoom: a 2x view in a clipped window
   rect(140, 112, 112, 76, 12)

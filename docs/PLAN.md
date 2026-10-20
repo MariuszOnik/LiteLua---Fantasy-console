@@ -13,6 +13,9 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   użytkownikiem (format sceny, nazwy haków).
 - **Po 1.0 w kolejce (prośba użytkownika):** P17 biblioteka przydatnego kodu (pula,
   cząsteczki, ścieżki — jako wzorcowy kod) i P16 mini poradnik „jak kodować”.
+- **Poprawka (2026-10-20, D56):** `anchor(img, ax, ay)` — kotwica obrazu w ułamkach
+  klatki dla `spr`/`sprx` (obrót wokół niej, flip wokół niej), `img.ax/ay`. Test w
+  `tests/carts/sprites`, sprawdzone w melonDS; na konsoli jeszcze nie.
 - **Ostatnio (2026-10-14):** przykład `examples/carts/shooter` (middleclass, moduły,
   pule). P10 (D52) — launcher `@launcher` w Lua (lista, opis z
   `cart.lua`, Play/Edit/New, nowa gra z klawiatury i szablonu, pamięć pozycji), menu

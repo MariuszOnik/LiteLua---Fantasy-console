@@ -1300,3 +1300,21 @@ Propozycja agenta po pomiarach D54, użytkownik za („czy to kiepski pomysł?�
 - **Po 1.0 (P21):** edytor sceny — zaznaczanie obiektu, panel komponentów („Add
   component” z listy skryptów, edycja `props`), „Edit script” → zakładka Kod. Format z P19
   bez zmian.
+
+## D56 (2026-10-20) — Kotwica obrazu: `anchor(img, ax, ay)`
+Propozycja użytkownika: kotwica (punkt zaczepienia) dla `spr`, w ułamkach 0–1, domyślnie
+(0, 0), bez zmiany starych wywołań. Argumenty 4 i 5 `spr` są zajęte (`frame`, `flip`),
+więc agent zaproponował A (`ax, ay` na końcu `spr`) albo B (kotwica jako cecha obrazu);
+użytkownik wybrał **B, jako funkcję**.
+- **`anchor(img, ax, [ay]) -> img`**: `ay` domyślnie `ax`, `anchor(img)` usuwa kotwicę.
+  Wartości to **ułamki rozmiaru klatki, nie piksele**, więc (0.5, 1) to stopy postaci
+  przy każdym rozmiarze obrazu. Odczyt przez `img.ax`, `img.ay` (`nil` bez kotwicy).
+  Obraz nie zmienia pikseli ani rozmiaru, dochodzą tylko dwie liczby (1/4096 w C).
+- **`spr`**: kotwica w x, y, przesunięcie zaokrąglone do całych pikseli (ostrość jak
+  bez kotwicy). **`sprx`**: kotwica jest też środkiem obrotu i skali. Bez kotwicy jak
+  dotąd: `spr` lewy górny róg, `sprx` środek, więc stare gry działają bez zmian.
+- **Flip odbija wokół kotwicy** (np. postać z kotwicą 0.3, 1 patrząca w lewo stoi w tym
+  samym miejscu). `sspr` i kafelki map bez kotwicy.
+- Kotwica należy do obiektu obrazu: `image(name)` zwraca zawsze ten sam obraz (wspólna
+  kotwica), widoki z `sub()` i `image(name, fw, fh)` mają własną i nie dziedziczą jej.
+- Pasuje do atlasów z D48 (kotwica na klatkę): kotwica obrazu będzie wtedy domyślną.

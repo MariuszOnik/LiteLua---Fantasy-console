@@ -15,6 +15,7 @@
 // by sub() or frame grids share it and keep the owner alive. All textures
 // belong to the cart's Lua state (D14).
 
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -241,6 +242,7 @@ static LLImage *push_view(lua_State *L, int parent, const LLImage *src)
     view->owner = false;
     view->vram = 0;
     view->fw = view->fh = view->cols = view->frames = 0;
+    view->anchored = false; // A view has its own anchor
     lua_pushvalue(L, parent);
     lua_setiuservalue(L, -2, 1); // Keeps the owner (and texture) alive
     return view;
@@ -359,6 +361,31 @@ static int l_sub(lua_State *L)
     return 1;
 }
 
+// Fraction to 1/4096, rounded
+static int32_t to_fixed(lua_Number n)
+{
+    return (int32_t)floorf(n * 4096.0f + 0.5f);
+}
+
+// anchor(img, ax, [ay]) -> img: the point of every frame (fractions of the
+// frame size) that spr and sprx place at x, y. anchor(img) removes it.
+static int l_anchor(lua_State *L)
+{
+    LLImage *img = ll_image_check(L, 1);
+    if (lua_isnoneornil(L, 2))
+        img->anchored = false;
+    else
+    {
+        lua_Number ax = luaL_checknumber(L, 2);
+        lua_Number ay = luaL_optnumber(L, 3, ax);
+        img->anchored = true;
+        img->ax = to_fixed(ax);
+        img->ay = to_fixed(ay);
+    }
+    lua_settop(L, 1);
+    return 1;
+}
+
 static int image_gc(lua_State *L)
 {
     LLImage *img = luaL_checkudata(L, 1, IMAGE_MT);
@@ -372,7 +399,7 @@ static int image_gc(lua_State *L)
     return 0;
 }
 
-// img.w, img.h, img.frames
+// img.w, img.h, img.frames, img.ax, img.ay (nil without an anchor)
 static int image_index(lua_State *L)
 {
     LLImage *img = luaL_checkudata(L, 1, IMAGE_MT);
@@ -383,6 +410,10 @@ static int image_index(lua_State *L)
         lua_pushinteger(L, img->fh ? img->fh : img->h);
     else if (strcmp(key, "frames") == 0)
         lua_pushinteger(L, img->frames ? img->frames : 1);
+    else if (img->anchored && strcmp(key, "ax") == 0)
+        lua_pushnumber(L, img->ax / (lua_Number)4096);
+    else if (img->anchored && strcmp(key, "ay") == 0)
+        lua_pushnumber(L, img->ay / (lua_Number)4096);
     else
         lua_pushnil(L);
     return 1;
@@ -418,4 +449,5 @@ void ll_image_register(lua_State *L)
 
     lua_register(L, "image", l_image);
     lua_register(L, "sub", l_sub);
+    lua_register(L, "anchor", l_anchor);
 }

@@ -311,6 +311,24 @@ end
 
 `img.w`, `img.h` and `img.frames` give the frame size and the number of frames.
 
+**Anchor.** `anchor(img, ax, ay)` picks the point of the image that lands at `x, y`. `ax` and
+`ay` are **fractions of the frame size, not pixels**: `0, 0` is the top left corner, `0.5,
+0.5` the middle, `0.5, 1` the bottom middle (a character's feet, whatever the image size).
+`sprx` also rotates and scales around the anchor, and flipping mirrors around it. Without
+an anchor `spr` uses the top left corner and `sprx` the center, as above. The pixels and
+size of the image stay the same.
+
+```lua
+hero = anchor(image("hero", 16, 24), 0.5, 1)  -- returns the image
+spr(hero, x, ground_y)                         -- feet on the ground, also flipped
+sprx(sword, hx, hy, 0, angle)                  -- with anchor(sword, 0.5, 0.9): swings around the handle
+print(hero.ax, hero.ay)                        -- 0.5  1 (nil without an anchor)
+anchor(hero)                                   -- removes it
+```
+
+`image("hero")` returns the same image every time, so its anchor is shared by everything
+that draws it; `sub()` (or `image(name, fw, fh)`) makes a new image with its own anchor.
+
 **Which PNG to use.** The DS has 256 KB of video memory for images. LiteLua picks the
 format from the PNG:
 
