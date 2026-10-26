@@ -16,6 +16,11 @@ local f32 = num.f32
 
 local grid = {}
 local N = 102
+
+-- Called now and then in long computations (path search, the computer's choices). Does
+-- nothing; a screen running the computer's turn in a coroutine sets it to yield when its
+-- time slice is over, so the display keeps moving (H11).
+function grid.tick() end
 grid.SIZE = N
 grid.SCENE_W, grid.SCENE_H = 1180, 1024
 
@@ -270,7 +275,10 @@ function grid.reachable(field, stacks, m)
   local start = m.x * N + m.y
   dist[start] = 0
   local heap = { { 0, start } }
+  local ticks = 0
   while #heap > 0 do
+    ticks = ticks + 1
+    if ticks & 31 == 0 then grid.tick() end
     local c, k = heap_pop(heap)
     if c <= dist[k] then
       out[k] = c

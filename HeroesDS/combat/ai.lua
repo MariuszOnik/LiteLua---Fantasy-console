@@ -121,6 +121,7 @@ function ai.best_spell(b, u)
   local best
   for _, key in ipairs(casting.castable(b, u)) do
     for _, o in ipairs(targets_of(b, key, u)) do
+      grid.tick()
       local v = ai.spell_value(b, key, u, o)
       if v > (best and best.value or 0) then
         best = { spell = key, target = o.target, x = o.x, y = o.y, value = v }

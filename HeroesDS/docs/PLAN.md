@@ -21,13 +21,20 @@ jedyne API dla ekranu), `magic` (rdzeń czarów), `abilities` (zdolności jako h
 **Następny krok: C4 — kartridż walki ze stubami grafiki** (H6, H8): dolny ekran = całe pole
 w skali 3/16 (prostokąty / romby zamiast sprite'ów), dotyk = wybór celu / ruchu, dwa
 dotknięcia (podgląd + potwierdzenie), lupa ×2 na L/R; górny = aktywny oddział, podgląd
-obrażeń, kolejka, dziennik; komputer gra jedną stroną (`ai.run`). Dane reguł do kartridża:
-`make_rules.py` bez opisów (`help`) — do ustalenia. **Najpierw pomiar szybkości na DS**
-(melonDS i DSi): `battle:reachable`, tura `ai.act`, cała bitwa komputer–komputer — na PC
-średnia tura AI 4–17 ms, najgorsza do 61 ms (`COMBAT.md` §11, C3f); jeśli na DS za wolno,
-przyspieszyć (zajętość raz na turę, mniej kandydatów dla czarów obszarowych, krótsze
-szukanie drogi „na 12 tur”). Potem H3 (konwerter grafiki) i H4 (makieta pola bitwy z
-prawdziwymi sprite'ami).
+obrażeń, kolejka, dziennik; komputer gra jedną stroną (`ai.run`), tura komputera w korutynie
+z klepsydrą (H11, `grid.tick`).
+
+**C4a (pomiar) zrobiony — za wolno, najpierw przyspieszyć silnik.** Kartridż
+`carts/c4bench` (`python HeroesDS/tools/make_c4bench.py` kopiuje silnik + reguły bez opisów,
+liczy wynik na PC do `data/pc.lua` i wrzuca na kartę melonDS). melonDS (DS 67 MHz):
+wczytanie kodu 625 ms + reguł 365 ms, 356 KB; **jedno `reachable` średnio 3,2 s (najgorzej
+6,9 s, ×380 względem PC)**; bitwa #1: tura AI średnio 7,3 s, najgorsza 22 s, z tego 97% to
+szukanie drogi (czary 80 ms). Stan końcowy bitwy = PC bit w bit (float32 OK). Najdłuższy
+kawałek bez `grid.tick` 7,3 s — pętle po wszystkich osiągalnych polach (`attack_positions`
+dla każdego wroga, „najbliższe pole” w `ai.act`, `step_toward` „na 12 tur”). Do zrobienia:
+szybszy `grid.reachable` (tablice zamiast tablic-krotek w kopcu, wielokrotne użycie tablic,
+mniej pól), jedno `reachable` na turę, `attack_positions` tylko wokół celu, tick w tych
+pętlach; potem pomiar na DSi (×2 szybszy procesor).
 
 **Przeczytaj najpierw:** `docs/DECISIONS.md` (H1–H10), `docs/COMBAT.md` (architektura walki, §11 — stan C3),
 `docs/MECHANICS.md` (zasady walki 1:1, §1–14), `docs/DS_GRAPHICS.md` (pamięć wideo, style,

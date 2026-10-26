@@ -83,3 +83,11 @@ ostrzelany zawsze odpowiada stanem sprzed strzału. Przełącznik `battle.dead_s
 - Ruch z przedmiotów w punktach ruchu (100 = 1 pole siatki; 300 = „+1” na ekranie) —
   homm4-mac dzieli przez 300, co przeczy Taktyce (+1 na ekranie = 3 pola). Obrona
   bohatera z przedmiotów osobno wręcz i przed strzałami (pola `melee` / `ranged`).
+
+## H11 (2026-10-26) — Tura komputera w korutynie, ekran żyje (klepsydra)
+- Nie walczymy o to, by tura komputera mieściła się w klatce. Ekran woła `ai.act` w
+  korutynie; silnik w długich pętlach (szukanie drogi, ocena czarów) woła `grid.tick()`,
+  które ekran ustawia na `yield` po zużyciu plasterka czasu (~20 ms), więc klepsydra /
+  „Tura przeciwnika…” się animuje. Na PC i w testach `grid.tick` nic nie robi.
+- Kilka sekund tury komputera na DS jest do przyjęcia (decyzja użytkownika); kilkanaście
+  już nie — wtedy przyspieszamy silnik (pomiar C4a).
