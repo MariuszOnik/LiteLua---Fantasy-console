@@ -12,16 +12,20 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
 **Stan:** tor A (grafika) do H2 włącznie, tor B: C1 (mechanika) i **C2 (projekt walki,
 `docs/COMBAT.md`, zaakceptowany)** zamknięte, **C3a zrobione** — `HeroesDS/combat/`:
 `num` (float32 jak oryginał — `f32`), `rng`, `grid` (pole, droga ze strefami kontroli),
-`stats`, `damage`; testy `tests/combat_test.lua` (17 przypadków, przez `lupa`).
+`stats`, `damage`; testy `tests/combat_test.lua` (17 przypadków, przez `lupa`). **C3b
+zrobione** — `combat/battle.lua` (rozstawienie, rundy, kolejka, morale, ruch, wręcz,
+kontratak, strzał, obrona, koniec, zdarzenia, powtórki), testy `tests/battle_test.lua`
+(15 przypadków). Otwarte do decyzji: przełącznik `battle.dead_strike_back` (`COMBAT.md` §11).
 Ustalone w C2: pole bitwy na dolnym ekranie (H6), dzielenie obrony przez Walkę wręcz /
 Łucznictwo liczymy (H7), całe pole w skali 3/16 + lupa ×2 na L/R (H8).
 
-**Następny krok: C3b** — `combat/battle.lua`: stan bitwy, rozstawienie (tabela `deploy`
-z `Battle.swift`), rundy i kolejka (morale, czekanie), ruch, wręcz z kontratakiem, strzał
-z odpowiedzią, obrona, koniec bitwy, zdarzenia, `options()`/`act()`/`preview()`, powtórka
-ziarno + polecenia → suma kontrolna (`COMBAT.md` §5–8, §11). Źródło: `Battle.swift`
-(`attack`, `meleeExchange`, `together`, `volley`, `shoot`, `startRound`, `checkMorale`,
-`endAction`). Potem C3c–C3f, C4 (kartridż ze stubami grafiki), H4 (makieta pola bitwy).
+**Następny krok: C3c** — zdolności jednostek (`MECHANICS.md` §12) jako hooki w
+`battle.hooks`: dodatkowe cele (hydra, cerber, zionięcie, `area_effect`), efekty po ciosie
+w kolejności exe (trucizna, tarcza ognia, ogłuszenie, starzenie, ślepota, pożeranie,
+hipnoza, spętanie, błyskawica, zamrożenie, wampir), kamienne spojrzenie, strach, początek
+tury (regeneracja, trucizna), odrodzenie feniksa. Źródło: `Battle.swift` (`aftermath`,
+`extraTargets`, `startOfTurn`, `handleDeaths`, `fears`). Potem C3d (bohater, umiejętności,
+artefakty), C3e (czary), C3f (AI), C4 (kartridż + pomiar szybkości szukania drogi na DS).
 
 **Przeczytaj najpierw:** `docs/DECISIONS.md` (H1–H8), `docs/COMBAT.md` (architektura walki),
 `docs/MECHANICS.md` (zasady walki 1:1, §1–14), `docs/DS_GRAPHICS.md` (pamięć wideo, style,
@@ -37,7 +41,7 @@ pomiary DSi), `docs/FORMATS.md`.
   Tylko czytamy (nie uruchamiamy pobranego kodu — blokada auto mode); tabele zbudowane
   w kodzie exe są już przeniesione do `tools/exe_tables.py` i `tools/creature_abilities.py`.
 
-**Testy:** `python -m unittest discover -s HeroesDS/tests` (32 testy Pythona, w tym `test_combat` = 17 przypadków w Lua przez `lupa`; dane syntetyczne, `real_creatures` także na `extracted/rules/creatures.lua`, gdy jest).
+**Testy:** `python -m unittest discover -s HeroesDS/tests` (33 testy Pythona, w tym `test_combat`: 17 + 15 przypadków w Lua przez `lupa`; dane syntetyczne, `real_creatures` także na `extracted/rules/creatures.lua`, gdy jest).
 
 **Konsola / emulator:** kartridże HeroesDS w `HeroesDS/carts/` (grafika generowana lokalnie);
 melonDS: `tools/melon.py` (w skrypcie `tap 28 178` = Play w launcherze — klawisze bywają

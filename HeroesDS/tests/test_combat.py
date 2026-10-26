@@ -12,16 +12,23 @@ except ImportError:
     lua54 = None
 
 HEROES = pathlib.Path(__file__).resolve().parents[1]
-TEST = pathlib.Path(__file__).with_name("combat_test.lua")
+HERE = pathlib.Path(__file__).parent
+
+
+def run_lua(name):
+    # A fresh Lua state per file: the modules keep their switches (battle.dead_strike_back)
+    rt = lua54.LuaRuntime()
+    run = rt.eval("function(path, root) return assert(loadfile(path))(root) end")
+    return run(str(HERE / name), HEROES.as_posix())
 
 
 @unittest.skipIf(lua54 is None, "lupa (Lua 5.4 for Python) is not installed")
 class CombatTest(unittest.TestCase):
     def test_rules(self):
-        rt = lua54.LuaRuntime()
-        run = rt.eval("function(path, root) return assert(loadfile(path))(root) end")
-        count = run(str(TEST), HEROES.as_posix())
-        self.assertGreater(count, 10)
+        self.assertGreater(run_lua("combat_test.lua"), 10)
+
+    def test_battle(self):
+        self.assertGreater(run_lua("battle_test.lua"), 10)
 
 
 if __name__ == "__main__":

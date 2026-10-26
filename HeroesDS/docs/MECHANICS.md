@@ -179,7 +179,9 @@ mur (oblężenie) → Stone Gaze → **szczęście celu** → ograniczenie do PW
 
 Bohater to jednostka na polu bitwy (oddział 1 istoty) — szczegóły w §13.
 - PW = `10 × poziom + 90`; obrażenia `(16L − 16)/10 + 16` … `(24L − 24)/10 + 24`
-  (dzielenie całkowite); Speed 6 (exe, `Combat.swift`).
+  (dzielenie całkowite); Speed 6 (exe, `Combat.swift`); ruch **24** pola + premie przedmiotów,
+  rozmiar z modelu bohatera (domyślnie 4); w armii bohaterowie zajmują pierwsze sloty
+  (homm4-mac `CombatScreen.swift`).
 - Atak i obrona z umiejętności — §13.2. Pociski: 12 z Łucznictwem, 24 na poziomie arcymistrza;
   bohater nie ma kary wręcz. Bohater-mag strzela „magicznym pociskiem” zamiast strzały.
 

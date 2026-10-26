@@ -50,7 +50,7 @@ function stats.hero(name, level, skills, size)
     dmg_lo = (16 * level - 16) // 10 + 16, dmg_hi = (24 * level - 24) // 10 + 24,
     attack = HERO_MELEE[sk("combat")], ranged_attack = HERO_RANGED[archery],
     defense = HERO_DEFENSE[sk("toughness")],
-    speed = 6, move = 0, size = size or 3,
+    speed = 6, move = 24, size = size or 4,   -- move: 24 + items (homm4-mac CombatScreen)
     shots = archery == 0 and 0 or (archery == 5 and 24 or 12),
     level = 0, alignment = "", xp = 0,
     magic_resistance = 0, spell_points = 0, spell_power = 0,

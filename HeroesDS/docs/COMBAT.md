@@ -129,7 +129,7 @@ local opts = battle:options()      -- for the active stack
 -- opts.shoot:  { [target_id] = divisor }, opts.spells: { [spell] = { targets, area } }
 -- opts.wait, opts.defend: bool
 
-local events = battle:act{ type = "melee", target = 7, x = 40, y = 52 }
+local events = battle:act{ type = "melee", target = 7, x = 40, y = 52 }   -- x, y optional
 -- types: move{x,y} · melee{target,x,y} · shoot{target} · cast{spell,target | x,y}
 --        wait · defend · (later: retreat, surrender, auto)
 local hint = battle:preview{ type = "melee", target = 7, x = 40, y = 52 }
@@ -251,8 +251,21 @@ dziennik ostatnich zdarzeń; przy czarach — lista z kosztem i opis.
   `teleport`, `zoc`, koszty) — wylicza go bitwa ze statystyk, siatka nie zna zasad.
   Szukanie drogi sprawdza zajętość leniwie (tylko odwiedzane pola); czas na DS do
   zmierzenia w C4.
-- **C3b** — `battle`: rundy, kolejka, morale, ruch, wręcz, kontratak, strzał, czekanie,
-  obrona, koniec bitwy, zdarzenia, powtórki.
+- **C3b ✅** — `battle`: rozstawienie (tabela z exe, szyki luźny/zwarty/kwadrat), morale
+  armii i strat, rundy i kolejka (morale, czekanie, utrata tury), ruch (też „w stronę” celu
+  dalej niż tura), wręcz z kontratakiem (jednocześnie / pierwsze uderzenie / blok / wiele
+  ciosów, wybór strony ataku `x, y` albo najtańsza), strzał z odpowiedzią, obrona, koniec
+  bitwy (też po 60 rundach), zdarzenia, `options` / `act` / `preview` / `queue` /
+  `attack_positions` / `checksum`; testy `tests/battle_test.lua` (powtórka z ziarna daje tę
+  samą sumę kontrolną). Hooki dla C3c–C3e: `battle.hooks` (`start_of_turn`,
+  `extra_targets`, `aftermath`, `on_death`, `fears`).
+  - **Przełącznik `battle.dead_strike_back`** (domyślnie `true`, zgodnie z §8): zabity cel
+    i tak oddaje cios. `false` = jak homm4-mac bez czasów animacji: cios atakującego ląduje
+    pierwszy, zabity nie oddaje.
+  - **Wydajność (do C4)**: na PC zasięg ruchu na turę (ruch 27, rozmiar 4) = 7 ms, szukanie
+    na 12 tur (atak na daleki cel) = 21 ms. DS jest wielokrotnie wolniejszy — zmierzyć;
+    w razie potrzeby: mapa zajętości liczona raz na turę (sumy prefiksowe zamiast
+    `fits`/`overlaps` po kwadracie), kopiec bez tabel na węzeł, krótszy zasięg „12 tur”.
 - **C3c** — zdolności (§12) jako hooki.
 - **C3d** — bohater, umiejętności, artefakty (§13).
 - **C3e** — czary i efekty (§14).
