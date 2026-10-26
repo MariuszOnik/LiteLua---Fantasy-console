@@ -4,7 +4,9 @@ The image record layout follows the notes in tools/h4sprite.py of
 Anbrose/homm4-mac (MIT License, (c) 2026 Anton Ozhigin); this is our own code.
 
 Image record (little endian):
-  palette  u16 npal, u16 1, u16 speed, u8 0, (npal-1) x BGR    index 0 = transparent
+  palette  u16 npal, u16 1, u16 depth?, u8 0, (npal-1) x BGR  index 0 = transparent
+           (depth? is 24 or 16 in frames, 8 in shadows; not the frame rate,
+           which comes from combat_actor / adv_actor, see h4actor.py)
   image    u16 len + name ("frame 002 004", "shadow 001", "base_frame", ...)
            u8 kind          4 = full image, 1 = delta over base_frame, 0 = empty
            u32 left, top, right, bottom                          box on the canvas
@@ -14,7 +16,7 @@ Image record (little endian):
                             then ceil((pixels+4)/64) summary nibbles (skipped)
 
 actor_sequence files wrap the records in:
-  header   u16 2, u16 kind (3 adds 6 bytes), u16 image count
+  header   u16 2, u16 kind, [kind 3: u16 1, i32 -1], u16 image count
   trailer  i32 origin x, i32 origin y, u16 n, n x (u16 len + name, u16 type)
 
 The numbers in an image name list the animation frames that show it, so

@@ -15,10 +15,18 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   `python HeroesDS/tools/h4d.py HeroesDS/Data/heroes4.h4r actor_sequence.bandit.combat.melee.sw.h4d HeroesDS/extracted/x`.
   Parsuje wszystkie 14449 `actor_sequence` ze wszystkich archiwów (liczba obrazów
   zgodna z nagłówkiem). Wynik zgodny z H4ResHelper (bandit.stand.e: 6 obrazów, 5 klatek).
-- **Następny krok: H1c** — meta sekwencji: co znaczy pole „speed” w palecie (klatki: 24/16,
-  cienie: 8 — raczej nie prędkość; H4ResHelper pokazuje Speed 100), skąd czas klatek,
-  nagłówek typu 3 (+6 bajtów: 4449 plików — jeźdźcy/strzelcy?), które kierunki istnieją
-  (walka bandyty: melee ma 8, die/fidget 4 ukośne), `combat_actor.*` i `adv_actor.*`.
+- **H1c ✅** opisy jednostek `tools/h4actor.py` (`combat_actor` i `adv_actor`):
+  `python HeroesDS/tools/h4actor.py HeroesDS/Data/heroes4.h4r combat_actor.bandit.h4d`.
+  Wszystkie 348 plików (168 combat, 180 adv) czytają się co do bajtu. Daje: listę
+  animacji, fps, klatkę trafienia, sekwencję dla każdego z 8 kierunków, rozmiar na siatce
+  walki (1–7 pól), wysokość, dystanse chodu, punkty wylotu pocisków, przesunięcia.
+- **Następny krok: H1d** — `docs/FORMATS.md`: opis formatów `.h4r`, `.h4d`
+  (actor_sequence), `combat_actor`, `adv_actor` własnymi słowami (dziś są w docstringach
+  `tools/*.py`). Potem H2 (możliwości LiteLua) / C1 (mechanika).
+- Otwarte w formatach: znaczenie `hit_frame` (bandyta melee: 6, a ostrze spada
+  w klatkach 8–9 — może liczone od 0 albo z wyprzedzeniem na flinch), trzecie pole
+  nagłówka palety (24/16/8 — nie fps), sekwencje bohaterów (`hero`: 199 odwołań do
+  nieistniejących nazw — inne nazewnictwo), kilka jednostek z dodatków bez sekwencji.
 - Pobrany kod z sieci (`ref/`) — nie uruchamiamy go (blokada auto mode); czytamy opis
   i piszemy własny.
 - Pracujemy małymi krokami: jeden podpunkt = test na PC + lokalny commit + ta sekcja.
@@ -31,8 +39,10 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
 - Animacje jednostki (np. `bandit`): mapa przygody = `actor_sequence.bandit.<anim>.<kier>`
   (stand, walk, prewalk, postwalk, attack, fidget; 8 kierunków); walka =
   `actor_sequence.bandit.combat.<anim>.<kier>` (base_frame, wait, fidget, walk, melee,
-  melee_up, flinch, die, …; często tylko 4 kierunki ukośne — reszta przez odbicie?).
-  Do tego `combat_actor.bandit.h4d` i `adv_actor.bandit.h4d` (meta jednostki, do zbadania).
+  melee_up, flinch, die, …; część tylko w 4 kierunkach ukośnych).
+  `combat_actor.<x>` / `adv_actor.<x>` mówią, która sekwencja gra w którym z 8 kierunków
+  — brakujący kierunek wskazuje najbliższy narysowany (bandit die: e → se), bez odbić.
+- Czas klatek: fps z `combat_actor`/`adv_actor` (walka zwykle 9–10, wait 5; mapa 10).
 - Klatki animacji bywają współdzielone: nazwa obrazu „frame 002 004” = obraz klatek 2 i 4
   (cienie tak samo: „shadow 002 004”). Klatki 8-bit z paletą ≤255 kolorów + alfa 4 bity,
   cienie 1 kolor + alfa. Pozycje na płótnie 800×600, origin zwykle (−361, −347).
@@ -49,8 +59,7 @@ Folder w repo LuaDS (H1), wykluczenia w `.gitignore`, plan i decyzje.
 - **H1 — Formaty.** Wynik: `docs/FORMATS.md`.
   - **H1a ✅** czytnik `.h4r` (gzip w środku, aliasy) + testy.
   - **H1b ✅** dekoder obrazów `.h4d` → PNG (klatki, cienie, alfa) + testy.
-  - **H1c** meta sekwencji: kolejność i czas klatek, origin, kierunki (które są odbiciami),
-    `combat_actor` / `adv_actor`.
+  - **H1c ✅** `combat_actor` / `adv_actor`: animacje, fps, kierunki, rozmiar, dystanse.
   - **H1d** `docs/FORMATS.md` — opis formatów własnymi słowami.
 - **H2 — Możliwości LiteLua.** Sprite'y, palety, rozmiary tekstur, budżet VRAM/RAM na
   dwie duże animacje na górnym ekranie, ładowanie/zwalnianie w locie. Braki → osobny punkt
