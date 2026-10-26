@@ -1,6 +1,7 @@
--- A test of the C4 battle cart (HeroesDS/carts/c4) on a PC: LiteLua's API is faked, the
--- player's turns are played by touches (defend, and once the hero's Magic Arrow from the
--- spell book), then Y lets the computer finish the battle. Run by test_combat.py through
+-- A test of the C4 battle cart (HeroesDS/carts/c4) on a PC: LiteLua's API is faked. The
+-- set-up menu is used by touches (the hero panel: type, level, an artifact; a stack added),
+-- the player's turns are played by touches (defend, and once a spell from the book on an
+-- enemy), then Y lets the computer finish the battle. Run by test_combat.py through
 -- lupa; needs extracted/rules (make_rules.py). Argument: the HeroesDS folder.
 
 local root = ...
@@ -57,6 +58,25 @@ local function tap(x, y)
   input.touch = nil
   frame()
 end
+-- --- the set-up menu -----------------------------------------------------------------------
+tap(10, 28)                                   -- the hero row: the panel
+tap(240, 52)                                  -- type: the next one
+tap(240, 74)                                  -- level + 1
+tap(20, 100)                                  -- + an artifact: the list
+tap(100, 20 + 4 * 18 + 8)                     -- the fifth one
+tap(220, 4)                                   -- OK
+tap(20, 40 + 3 * 20 + 5)                      -- + a stack: the list
+tap(100, 20 + 2 * 18 + 8)                     -- the third creature
+tap(220, 4)                                   -- Walka!
+assert(B, "the battle did not start")
+local hero
+for _, u in ipairs(B.units) do if u.side == 0 and u.is_hero then hero = u end end
+assert(hero and hero.hero.level == 9, "the hero's level")
+assert(#hero.hero.artifacts == 1, "the hero's artifact")
+local mine = 0
+for _, u in ipairs(B.units) do if u.side == 0 and not u.is_hero then mine = mine + 1 end end
+assert(mine == 4, "four stacks: " .. mine)
+
 local function centre(u) return view.to_screen(u.x + u.size / 2, u.y + u.size / 2) end
 local function spell_name(key) return B.spells[key] and B.spells[key].name or key end
 
@@ -67,30 +87,42 @@ for _ = 1, 400 do
   if B.finished then break end
   local u = B:current()
   if B:side_of(u) == 0 then
-    if u.caster and not cast_done then
+    if u.caster and not cast_done and next(casting.options(B, u)) then
       local keys = {}
       for key in pairs(casting.options(B, u)) do keys[#keys + 1] = key end
       table.sort(keys, function(a, c) return spell_name(a) < spell_name(c) end)
-      local row
-      for i, k in ipairs(keys) do if k == "magic arrow" then row = i end end
-      assert(row, "no Magic Arrow in the book")
-      local mana = u.spell_points
-      tap(247, 20)                              -- the book
-      tap(100, 20 + (row - 1) * 16 + 8)         -- Magic Arrow
-      local enemy
-      for _, e in ipairs(B.units) do if e.side == 1 and e.count > 0 and not e.is_hero then enemy = e break end end
-      local x, y = centre(enemy)
-      tap(x, y)                                 -- the target: the preview
-      assert(u.spell_points == mana, "cast on the first touch")
-      tap(x, y)                                 -- the same again: cast
-      assert(u.spell_points < mana, "Magic Arrow was not cast")
-      cast_done = true
+      -- a spell aimed at a stack that can hit an enemy now
+      local row, enemy
+      for i, k in ipairs(keys) do
+        if not row and casting.aim(B, k) == "unit" then
+          for _, e in ipairs(B.units) do
+            if not row and e.side == 1 and e.count > 0
+                and casting.check(B, u, { type = "cast", spell = k, target = e.id }) then
+              row, enemy = i, e
+            end
+          end
+        end
+      end
+      if row then
+        local mana = u.spell_points
+        tap(247, 20)                            -- the book
+        while row > 10 do tap(225, 140); row = row - 10 end   -- scrolled
+        tap(100, 20 + (row - 1) * 16 + 8)       -- the spell
+        local x, y = centre(enemy)
+        tap(x, y)                               -- the target: the preview
+        assert(u.spell_points == mana, "cast on the first touch")
+        tap(x, y)                               -- the same again: cast
+        assert(u.spell_points < mana, "the spell was not cast")
+        cast_done = true
+      else
+        tap(8, 68)
+      end
     else
       tap(8, 68)                                -- defend
     end
   end
 end
-assert(cast_done or B.finished, "the hero never had a turn")
+assert(cast_done or B.finished, "the hero never cast")
 
 -- --- the computer finishes -----------------------------------------------------------------
 input.pressed = { y = true }

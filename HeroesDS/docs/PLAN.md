@@ -53,6 +53,13 @@ bez kompresji). `src/sprites.lua` (leniwe wczytywanie, zwalnianie po ~10 s), `sr
 dźwięki ciosu / strzału / wzdrygnięcia / śmierci / czaru (potwierdzone nagraniem wyjścia
 melonDS, loopback `soundcard`); zabity gra tylko śmierć i znika.
 
+**Menu walki testowej (tymczasowe):** `src/menu.lua` przed bitwą i po niej: dla każdej strony
+bohater (brak / typ szkoła × rola — 17 modeli `hero.<szkoła>_<rola>_male`, poziom 1–30, do 6
+artefaktów z 248) i do 6 oddziałów (stwór z listy 74, liczba krokiem 1/10/100); górny ekran:
+statystyki stwora / działanie artefaktu; zapis w `save/army.txt`. `src/setup.lua`: typ
+bohatera → umiejętności (rosną z poziomem) i czary szkoły; bitwa przez `heroes.build`
+(premie armii, artefakty). Księga czarów przewijana (mag zna do ~40 czarów).
+
 **Następny krok:** dalsza gra na DSi i poprawki z rozgrywki; potem H3 (konwerter grafiki) i H4 (pole z prawdziwymi sprite'ami) — albo
 decyzja o innym polu walki, jeśli sterowanie na drobnej siatce się nie sprawdzi.
 

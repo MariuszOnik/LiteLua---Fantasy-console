@@ -28,8 +28,9 @@ STATES = ("wait", "walk", "melee", "flinch", "die")
 DIRS = ("e", "n", "ne", "nw", "s", "se", "sw", "w")
 SCALE = 0.1875
 STYLE = "test2"   # tools/styles.json, tuned by the user in style_tuner.py
-# the heroes of src/setup.lua
-HERO_ACTORS = ("hero.life_fighter_male", "hero.death_mage_female")
+# the hero types of src/setup.lua (school x role)
+HERO_ACTORS = tuple(f"hero.{s}_{r}_male" for s in ("life", "order", "death", "chaos", "nature", "might")
+                    for r in ("fighter", "archer", "mage") if (s, r) != ("might", "mage"))
 
 
 def file_name(actor):
@@ -168,7 +169,7 @@ def main(argv):
     p.add_argument("--lcart", help="also pack the cart into this .lcart file")
     a = p.parse_args(argv[1:])
     cartkit.copy_engine(CART)
-    cartkit.copy_rules(CART)
+    cartkit.copy_rules(CART, ("creatures.lua", "spells.lua", "artifacts.lua"))
     write_style()
     if a.gfx:
         make_gfx(a.force)

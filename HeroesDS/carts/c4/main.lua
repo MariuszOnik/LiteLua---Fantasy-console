@@ -8,7 +8,8 @@
 -- side 1 in a coroutine, yielding at grid.tick() every SLICE us, so the hourglass turns.
 -- Events are shown one by one: stacks walk their path, hits show their damage.
 -- Top screen: round, the active stack, the selection with its preview, the turn order,
--- the log. Y: the computer plays your side too. X after the end: a new battle.
+-- the log. Y: the computer plays your side too. Before a battle and after it (X or a
+-- touch): the set-up menu (src/menu.lua) — which stacks fight, how many.
 
 local stats = require("combat.stats")
 local battle = require("combat.battle")
@@ -20,6 +21,7 @@ local view = require("view")
 local sprites = require("sprites")
 local fx = require("fx")
 local setup = require("setup")
+local menu = require("menu")
 abilities.install(battle)
 casting.install(battle)
 
@@ -28,9 +30,12 @@ local SLICE = 20000      -- us of the computer's work per frame
 
 local creatures = dofile("data/creatures.lua")
 local spells = dofile("data/spells.lua")
+local artifacts = dofile("data/artifacts.lua")
+local data = { creatures = creatures, spells = spells, artifacts = artifacts }
 if pathgrid then grid.shape() end
 
 local seed = 1
+local mode = "menu"   -- "menu" (the set-up) or "battle"
 local b           -- the battle
 local opts        -- the human's options this turn (Battle:options), nil = to make
 local dots        -- move dots of this turn
@@ -289,7 +294,7 @@ local function reset_turn()
 end
 
 local function new_battle()
-  b = setup.battle(seed, creatures, spells)
+  b = setup.battle(seed, data, menu.config())
   reset_turn()
   job, anim, queue, popups, acting, dying, effects = nil, nil, {}, {}, {}, {}, {}
   log_lines = {}
@@ -471,13 +476,20 @@ local function open_book()
   local list = {}
   for key in pairs(opts.spells) do list[#list + 1] = key end
   table.sort(list, function(a, c) return spell_name(a) < spell_name(c) end)
-  book = { list = list }
+  book = { list = list, top = 1 }
   sel, aiming = nil, nil
 end
 
+local BOOK_ROWS = 10
+
 local function book_touch(px, py)
-  local i = (py - 20) // 16 + 1
-  local key = book.list[i]
+  if #book.list > BOOK_ROWS and px >= 214 and px < 238 and py >= 20 then   -- the arrows
+    local step = py < 100 and -BOOK_ROWS or BOOK_ROWS
+    book.top = math.max(1, math.min(#book.list - BOOK_ROWS + 1, book.top + step))
+    return
+  end
+  local i = (py - 20) // 16
+  local key = i >= 0 and i < BOOK_ROWS and book.list[book.top + i]
   book = nil
   if not key or px < 20 or px > 236 then return end
   local aim = opts.spells[key].aim
@@ -519,7 +531,7 @@ end
 
 -- --- frames --------------------------------------------------------------------------------
 
-new_battle()
+menu.init(creatures, artifacts, setup.default(seed, creatures))
 
 function _update()
   frame = frame + 1
@@ -529,6 +541,14 @@ function _update()
   local pressed = tx and not touching
   touching = tx ~= nil
   if tx then cursor = nil end
+  if mode == "menu" then
+    if menu.update(tx, ty, pressed) == "start" then
+      mode = "battle"
+      seed = seed + 1
+      new_battle()
+    end
+    return
+  end
   magnifier(tx, ty)
   dpad()
 
@@ -539,7 +559,7 @@ function _update()
   end
   if showing() then return end
   if b.finished then
-    if btnp("x") or pressed then seed = seed + 1; new_battle() end
+    if btnp("x") or pressed then mode = "menu" end
     return
   end
   if not human_turn() then
@@ -632,7 +652,7 @@ local function draw_top()
   local u = b:current()
   if b.finished then
     text(b.winner == 0 and "ZWYCIĘSTWO" or "PORAŻKA", 2, 2, b.winner == 0 and 5 or 2)
-    text("X lub dotyk: nowa bitwa", 2, 12, 13)
+    text("X lub dotyk: ustawienia nowej bitwy", 2, 12, 13)
   else
     text(("Runda %d"):format(b.round), 2, 2, 13)
     if not HUMAN[0] then text("auto (Y)", 60, 2, 14) end
@@ -665,11 +685,21 @@ local function draw_book()
   rectfill(18, 2, 220, 188, 0)
   rect(18, 2, 220, 188, 13)
   text("Księga czarów (B: zamknij)", 24, 6, 4)
-  for i, key in ipairs(book.list) do
-    local y = 20 + (i - 1) * 16
-    text(spell_name(key), 24, y + 4, 12)
-    text(tostring(opts.spells[key].cost), 214, y + 4, 10)
-    line(20, y + 15, 235, y + 15, 15)
+  local scroll = #book.list > BOOK_ROWS
+  for i = 0, BOOK_ROWS - 1 do
+    local key = book.list[book.top + i]
+    if key then
+      local y = 20 + i * 16
+      local n = spell_name(key)
+      if utf8.len(n) > 26 then n = n:sub(1, utf8.offset(n, 27) - 1) end
+      text(n, 24, y + 4, 12)
+      text(tostring(opts.spells[key].cost), scroll and 192 or 214, y + 4, 10)
+      line(20, y + 15, scroll and 211 or 235, y + 15, 15)
+    end
+  end
+  if scroll then
+    rect(214, 20, 22, 78, 13); text("^", 222, 55, 12)
+    rect(214, 100, 22, 78, 13); text("v", 222, 135, 12)
   end
 end
 
@@ -724,5 +754,9 @@ local function draw_bottom()
 end
 
 function _draw(screen)
+  if mode == "menu" then
+    if screen == TOP then menu.draw_top() else menu.draw_bottom() end
+    return
+  end
   if screen == TOP then draw_top() else draw_bottom() end
 end
