@@ -3,8 +3,10 @@ original game and copies the cart to the emulator SD card.
 
   python HeroesDS/tools/make_h2b.py [--sd D:\\Programowanie\\sdcard]
 
-gfx/ and data/ of the cart are made from the game files, so they stay out of
-git (.gitignore); only main.lua and cart.lua are ours.
+The cart shows a duel, bandit (ne) vs black dragon (sw), in three styles
+(h4atlas.STYLES), each unit with its own scale. gfx/ and data/ of the cart are
+made from the game files, so they stay out of git (.gitignore); only main.lua
+and cart.lua are ours.
 """
 import argparse
 import os
@@ -19,14 +21,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 CART = os.path.join(HERE, "..", "carts", "h2b")
 DATA = os.path.join(HERE, "..", "Data")
 
-# The duel: bandit bottom left facing ne, bandit top right facing sw (a black
-# dragon does not fit next to anything at scale 0.5 - DS_GRAPHICS.md)
-DUEL = [("bandit", s, d) for d in ("ne", "sw") for s in ("wait", "melee", "flinch")]
-# Extra atlases only for the load-time measurement: (actor, state, dir, colors, name)
-BENCH = [("black dragon", "melee", "sw", 255, None),
-         ("black dragon", "melee", "sw", 15, "black_dragon_melee_sw_16c"),
-         ("bandit", "melee", "sw", 15, "bandit_melee_sw_16c"),
-         ("black dragon", "walk", "sw", 255, "black_dragon_walk_sw")]
+STATES = ("wait", "melee", "flinch")
+# unit: (actor, direction, scale per style)
+UNITS = {"bandit": ("bandit", "ne", {"current": 0.5, "smooth": 0.5, "oldschool": 0.375}),
+         "dragon": ("black dragon", "sw", {"current": 0.35, "smooth": 0.35, "oldschool": 0.3})}
+STYLE_ORDER = ("oldschool", "smooth", "current")
 
 
 def main(argv):
@@ -36,17 +35,17 @@ def main(argv):
     lib = h4r.Library(DATA)
     for sub in ("gfx", "data"):
         shutil.rmtree(os.path.join(CART, sub), ignore_errors=True)
-    names = []
-    jobs = [(actor, st, d, 255, None) for actor, st, d in DUEL] + BENCH
-    for actor, st, d, colors, name in jobs:
-        atlas, shadow, meta = h4atlas.convert(lib, actor, st, d, 0.5, colors)
-        name = name or f"{actor}_{st}_{d}".replace(" ", "_")
-        h4atlas.write(CART, name, atlas, shadow, meta)
-        names.append(name)
-        print(f"  {name}: {len(meta['frames'])} frames, {atlas.width}x{atlas.height}"
-              + (f", shadow {shadow.width}x{shadow.height}" if shadow else ""))
-    with open(os.path.join(CART, "data", "list.lua"), "w") as f:
-        f.write("return " + h4atlas.lua(names) + "\n")
+    for style in STYLE_ORDER:
+        for unit, (actor, d, scales) in UNITS.items():
+            for st in STATES:
+                atlas, shadow, meta = h4atlas.convert(lib, actor, st, d, scales[style], style=style)
+                name = f"{style}_{unit}_{st}"
+                h4atlas.write(CART, name, atlas, shadow, meta)
+                bpp = 4 if len(atlas.getpalette()) // 3 <= 16 else 8
+                print(f"  {name}: {len(meta['frames'])} frames, {atlas.width}x{atlas.height} {bpp} bpp"
+                      + (f", shadow {shadow.width}x{shadow.height}" if shadow else ""))
+    with open(os.path.join(CART, "data", "styles.lua"), "w") as f:
+        f.write("return " + h4atlas.lua(list(STYLE_ORDER)) + "\n")
     if a.sd and os.path.isdir(a.sd):
         dest = os.path.join(a.sd, "litelua", "carts", "h2b")
         shutil.rmtree(dest, ignore_errors=True)

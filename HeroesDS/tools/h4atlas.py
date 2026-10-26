@@ -2,7 +2,8 @@
 an atlas PNG with a palette, a shadow atlas PNG (1 color) and a Lua meta file.
 
   python h4atlas.py <Data dir> <actor> <state> <dir> <out_dir> [--scale 0.5]
-                    [--colors 255] [--kind combat|adv] [--name NAME]
+                    [--style current|smooth|oldschool] [--colors N]
+                    [--kind combat|adv] [--name NAME]
 
   python h4atlas.py HeroesDS/Data bandit melee sw out --scale 0.5
 
@@ -19,15 +20,21 @@ Meta (Lua table):
   srects, sframes                         the same for the shadow (0 = none);
                                           the shadow atlas is szoom times smaller:
                                           draw w * szoom x h * szoom (sspr)
+  salpha                                  alpha() to draw the shadow with
 
-LiteLua has no per-pixel alpha (D10): frame alpha is cut at 50 %, shadows keep
-only their shape and are meant to be drawn with alpha() (DS_GRAPHICS.md).
+LiteLua has no per-pixel alpha (D10), so a style (--style) decides how the soft
+edges and shadows of the game look: "current" cuts alpha at 50 % and keeps
+half-size shadows, "smooth" blends edges with a ground color and dithers
+shadows, "oldschool" is 16 colors with more contrast and a 1 px outline
+(DS_GRAPHICS.md).
 """
 import argparse
 import os
 import sys
 
-from PIL import Image
+from dataclasses import dataclass
+
+from PIL import Image, ImageEnhance, ImageFilter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import h4actor  # noqa: E402
@@ -76,15 +83,87 @@ def frame_images(seq, prefix):
     return keys, images
 
 
-def scaled(img, box, pivot, scale, cut):
-    """Scales an RGBA image placed at box; returns (img, ox, oy) relative to pivot."""
+@dataclass
+class Style:
+    """How frames and shadows are turned into DS images (DS_GRAPHICS.md)."""
+    colors: int = 255              # Palette size of the frame atlas (15 -> 4 bpp)
+    edge: str = "cut"              # "cut": alpha >= alpha_cut opaque; "matte": edge
+                                   # pixels blended with `ground`, alpha >= 40 opaque
+    alpha_cut: int = 128
+    ground: tuple = (112, 104, 66) # Battlefield-like dirt for "matte"
+    contrast: float = 1.0
+    saturation: float = 1.0
+    sharpen: bool = False
+    outline: tuple = None          # RGB of a 1 px outline, or None
+    shadow: str = "half"           # "half": half size, drawn enlarged; "dither":
+                                   # full size checkerboard
+    shadow_alpha: float = 0.45     # alpha() to draw the shadow with
+
+
+STYLES = {
+    "current": Style(),
+    "smooth": Style(edge="matte", shadow="dither", shadow_alpha=0.6),
+    "oldschool": Style(colors=15, alpha_cut=110, contrast=1.35, saturation=1.3, sharpen=True,
+                       outline=(24, 16, 12), shadow="dither", shadow_alpha=0.6),
+}
+
+
+def resize(img, scale):
     w = max(1, round(img.width * scale))
     h = max(1, round(img.height * scale))
     if (w, h) != img.size:
         img = img.convert("RGBa").resize((w, h), Image.LANCZOS).convert("RGBA")
-    alpha = img.getchannel("A").point(lambda a: 255 if a >= cut else 0)
-    img.putalpha(alpha)
-    bb = alpha.getbbox()
+    return img
+
+
+def finish_frame(img, style):
+    """Scaled RGBA frame -> RGBA with alpha 0/255 in the given style."""
+    if style.contrast != 1 or style.saturation != 1 or style.sharpen:
+        alpha = img.getchannel("A")
+        rgb = img.convert("RGB")
+        rgb = ImageEnhance.Contrast(rgb).enhance(style.contrast)
+        rgb = ImageEnhance.Color(rgb).enhance(style.saturation)
+        if style.sharpen:
+            rgb = rgb.filter(ImageFilter.UnsharpMask(radius=1, percent=60, threshold=2))
+        img = rgb.convert("RGBA")
+        img.putalpha(alpha)
+    if style.edge == "matte":
+        g = style.ground
+        px = []
+        for r, gr, b, a in pixels(img):
+            k = a / 255
+            px.append((round(r * k + g[0] * (1 - k)), round(gr * k + g[1] * (1 - k)),
+                       round(b * k + g[2] * (1 - k)), 255) if a >= 40 else (0, 0, 0, 0))
+        img.putdata(px)
+    else:
+        img.putalpha(img.getchannel("A").point(lambda a: 255 if a >= style.alpha_cut else 0))
+    return img
+
+
+def finish_shadow(img, style):
+    """Scaled RGBA shadow -> black with alpha 0/255 (solid or checkerboard)."""
+    w = img.width
+    dither = style.shadow == "dither"
+    img.putdata([(0, 0, 0, 255) if a >= 48 and (not dither or (i % w + i // w) % 2 == 0) else (0, 0, 0, 0)
+                 for i, (*_, a) in enumerate(pixels(img))])
+    return img
+
+
+def add_outline(img, color):
+    """Returns the image 1 px bigger on every side with an outline around opaque pixels."""
+    big = Image.new("RGBA", (img.width + 2, img.height + 2))
+    big.paste(img, (1, 1))
+    ring = Image.new("RGBA", big.size, tuple(color) + (255,))
+    ring.putalpha(big.getchannel("A").filter(ImageFilter.MaxFilter(3)).point(lambda v: 255 if v else 0))
+    ring.alpha_composite(big)
+    return ring
+
+
+def scaled(img, box, pivot, scale, finish):
+    """Scales an RGBA image placed at box and finishes it; returns (img, ox, oy)
+    relative to pivot, cropped to the opaque pixels (img None when empty)."""
+    img = finish(resize(img, scale))
+    bb = img.getchannel("A").getbbox()
     ox = round((box[0] - pivot[0]) * scale)
     oy = round((box[1] - pivot[1]) * scale)
     if not bb:
@@ -142,23 +221,35 @@ def build_atlas(pieces, colors):
     return to_palette(atlas, colors), pos
 
 
-def convert(lib, actor, state, direction, scale=0.5, colors=255, kind="combat", shadow_zoom=2):
+def convert(lib, actor, state, direction, scale=0.5, colors=None, kind="combat", style="current"):
     """Returns (atlas, shadow_atlas or None, meta dict without the image names).
 
-    Shadows are stored shadow_zoom times smaller and drawn enlarged (they are
-    soft and see-through anyway); their ox, oy are in screen pixels like the
-    frames', their w, h in atlas pixels."""
+    style: a name from STYLES or a Style; colors overrides its palette size.
+    "half" shadows are stored 2x smaller and drawn enlarged; their ox, oy are
+    in screen pixels like the frames', their w, h in atlas pixels."""
+    style = STYLES[style] if isinstance(style, str) else style
+    colors = colors or style.colors
+    shadow_zoom = 2 if style.shadow == "half" else 1
     seq_name, st, act = sequence_name(lib, actor, state, direction, kind)
     seq = h4d.parse(lib.read(f"actor_sequence.{seq_name}.h4d"))
     dx, dy = act.get("draw_offset", (0, 0))
     pivot = (-seq.origin[0] - dx, -seq.origin[1] - dy)
-    meta = dict(sequence=seq_name, fps=st["fps"], hit=st["hit_frame"], scale=scale, szoom=shadow_zoom)
+    meta = dict(sequence=seq_name, fps=st["fps"], hit=st["hit_frame"], scale=scale, szoom=shadow_zoom,
+                salpha=style.shadow_alpha)
     result = {}
-    for prefix, cut, zoom in (("frame", 128, 1), ("shadow", 48, shadow_zoom)):
+    for prefix, zoom in (("frame", 1), ("shadow", shadow_zoom)):
         keys, images = frame_images(seq, prefix)
         rects, pieces, index = [], [], {}
+        if prefix == "frame":
+            def finish(i):
+                return finish_frame(i, style)
+        else:
+            def finish(i):
+                return finish_shadow(i, style)
         for key, (img, box) in images.items():
-            piece, ox, oy = scaled(img, box, pivot, scale / zoom, cut)
+            piece, ox, oy = scaled(img, box, pivot, scale / zoom, finish)
+            if piece and prefix == "frame" and style.outline:
+                piece, ox, oy = add_outline(piece, style.outline), ox - 1, oy - 1
             ox, oy = ox * zoom, oy * zoom
             if piece:
                 index[key] = len(pieces) + 1
@@ -169,8 +260,6 @@ def convert(lib, actor, state, direction, scale=0.5, colors=255, kind="combat", 
             result[prefix] = (None, [], frames)
             continue
         if prefix == "shadow":
-            for p in pieces:
-                p.putdata([(0, 0, 0, a) for *_, a in pixels(p)])
             atlas, pos = build_atlas(pieces, 1)
         else:
             atlas, pos = build_atlas(pieces, colors)
@@ -215,12 +304,13 @@ def main(argv):
     p.add_argument("data"), p.add_argument("actor"), p.add_argument("state"), p.add_argument("dir")
     p.add_argument("out")
     p.add_argument("--scale", type=float, default=0.5)
-    p.add_argument("--colors", type=int, default=255)
+    p.add_argument("--colors", type=int)
+    p.add_argument("--style", default="current", choices=sorted(STYLES))
     p.add_argument("--kind", default="combat", choices=("combat", "adv"))
     p.add_argument("--name")
     a = p.parse_args(argv[1:])
     lib = h4r.Library(a.data)
-    atlas, shadow, meta = convert(lib, a.actor, a.state, a.dir, a.scale, a.colors, a.kind)
+    atlas, shadow, meta = convert(lib, a.actor, a.state, a.dir, a.scale, a.colors, a.kind, a.style)
     name = a.name or f"{a.actor}_{a.state}_{a.dir}".replace(" ", "_")
     write(a.out, name, atlas, shadow, meta)
     print(f"{name}: {len(meta['frames'])} frames, atlas {atlas.width}x{atlas.height}"

@@ -1,18 +1,20 @@
--- HeroesDS H2b: can LiteLua load and animate Heroes IV units?
--- 1. Load time and video memory of every atlas in data/list.lua.
--- 2. Load/free cycles of atlases of different sizes: does video memory come
---    back each time (no leak, no fragmentation errors)?
--- 3. A duel on the top screen: bandit (ne) vs bandit (sw). Only "wait" stays
---    loaded; an attack loads the attacker's melee and the defender's flinch
---    (the stall is shown), and frees the previous ones.
--- The duel starts at once; X runs the measurement step by step (one load per
--- frame, as a coroutine), so the screens keep showing the progress.
+-- HeroesDS H2b: can LiteLua load and animate Heroes IV units, and which look
+-- works on the DS?
+-- Top screen: a duel, bandit (bottom left, ne) vs black dragon (top right, sw),
+-- in one of three styles (L / R): oldschool, smooth, current (DS_GRAPHICS.md).
+-- Only "wait" stays loaded; an attack loads the attacker's melee and the
+-- defender's flinch (the stall is shown) and frees the previous ones.
+-- X: measure load time and video memory of the style's atlases, and
+-- load/free cycles, step by step (a coroutine), so the screens keep updating.
 -- Results on the bottom screen and in litelua/log.txt.
 
-local CYCLES = 20
-local CYCLE_SET = { "bandit_wait_ne", "bandit_melee_ne", "bandit_flinch_sw",
-                    "black_dragon_melee_sw_16c" }
-local SHADOW_ALPHA = 0.45
+local CYCLES = 10
+local UNITS = { bandit = { dir = "ne", x = 70, y = 176 },
+                dragon = { dir = "sw", x = 178, y = 112 } }
+local STATES = { "wait", "melee", "flinch" }
+
+local styles = dofile("data/styles.lua")
+local style_i = 1
 
 local out = {}
 local function say(s)
@@ -30,7 +32,7 @@ end
 -- --- animations --------------------------------------------------------------
 
 -- Loads an animation: meta from data/<name>.lua, the atlas (one sub() image
--- per rectangle) and the shadow atlas (drawn enlarged with sspr)
+-- per rectangle) and the shadow atlas (drawn with sspr, enlarged szoom times)
 local function load_anim(name)
   local a = dofile("data/" .. name .. ".lua")
   a.img = image(a.image)
@@ -45,7 +47,7 @@ local function draw_anim(a, f, x, y)
   local s = a.sframes[f]
   if a.simg and s > 0 then
     local r, z = a.srects[s], a.szoom
-    alpha(SHADOW_ALPHA)
+    alpha(a.salpha)
     sspr(a.simg, r[1], r[2], r[3], r[4], x + r[5], y + r[6], r[3] * z, r[4] * z)
     alpha()
   end
@@ -56,33 +58,40 @@ local function draw_anim(a, f, x, y)
   end
 end
 
--- --- 1 and 2: measurement -------------------------------------------------------
+local function anim_name(unit, state)
+  return styles[style_i] .. "_" .. unit .. "_" .. state
+end
+
+-- --- measurement (a coroutine) ---------------------------------------------------
 
 local function measure()
   out = {}
-  local list = dofile("data/list.lua")
   free_all()
   local base = vram()
-  say(("VRAM at start: %d KB"):format(base // 1024))
-  say("atlas                   ms   KB free")
-  for _, name in ipairs(list) do
-    local t0 = micros()
-    local a = load_anim(name)
-    local us = micros() - t0
-    local used = vram() - base
-    local info = ("  %dx%d, %d frames"):format(a.img.w, a.img.h, #a.frames)
-    a = nil
-    free_all()
-    local back = vram() == base and "ok" or ("+" .. (vram() - base) // 1024)
-    say(("%-21s %5.1f %4d %s"):format(name:sub(1, 21), us / 1000, used // 1024, back))
-    say(info)
-    coroutine.yield()
+  say(("style %s, VRAM at start %d KB"):format(styles[style_i], base // 1024))
+  say("anim              ms   KB  atlas")
+  for unit in pairs(UNITS) do
+    for _, st in ipairs(STATES) do
+      local name = anim_name(unit, st)
+      local t0 = micros()
+      local a = load_anim(name)
+      local us = micros() - t0
+      local used = vram() - base
+      local size = ("%dx%d"):format(a.img.w, a.img.h)
+      a = nil
+      free_all()
+      say(("%-15s %6.1f %4d  %s%s"):format(unit .. " " .. st, us / 1000, used // 1024, size,
+          vram() == base and "" or " LEAK"))
+      coroutine.yield()
+    end
   end
   local t0, peak, idle = micros(), 0, 0
   local progress = #out + 1 -- A line of the screen only, not logged
   for c = 1, CYCLES do
     local keep = {}
-    for i, n in ipairs(CYCLE_SET) do keep[i] = load_anim(n) end
+    for unit in pairs(UNITS) do
+      for _, st in ipairs(STATES) do keep[#keep + 1] = load_anim(anim_name(unit, st)) end
+    end
     peak = math.max(peak, vram() - base)
     keep = nil
     free_all()
@@ -92,21 +101,28 @@ local function measure()
     idle = idle + micros() - t1
   end
   out[progress] = nil
-  local us = micros() - t0 - idle
-  say(("%d cycles of %d anims: %.0f ms each"):format(CYCLES, #CYCLE_SET, us / CYCLES / 1000))
-  say(("peak %d KB, after: %s"):format(peak // 1024,
-      vram() == base and "VRAM back" or ("LEAK " .. (vram() - base) // 1024 .. " KB")))
+  say(("all 6 anims at once: %d KB, load %.0f ms"):format(peak // 1024,
+      (micros() - t0 - idle) / CYCLES / 1000))
+  say(vram() == base and "VRAM back after every cycle" or
+      ("LEAK " .. (vram() - base) // 1024 .. " KB"))
 end
 
--- --- 3: the duel ------------------------------------------------------------------
+-- --- the duel ------------------------------------------------------------------------
 
 local units
 local stall = "-"
 
-local function unit(prefix, dir, x, y)
-  return { prefix = prefix, dir = dir, x = x, y = y,
-           anims = { wait = load_anim(prefix .. "_wait_" .. dir) },
+local function new_unit(name)
+  local u = UNITS[name]
+  return { name = name, x = u.x, y = u.y, anims = { wait = load_anim(anim_name(name, "wait")) },
            state = "wait", t = 0 }
+end
+
+local function start_duel()
+  units = nil
+  free_all()
+  units = { left = new_unit("bandit"), right = new_unit("dragon") }
+  stall = ("-  VRAM %d KB"):format(vram() // 1024)
 end
 
 local function play(u, state)
@@ -124,10 +140,10 @@ local function attack(att, def)
   local t0 = micros()
   for _, u in ipairs({ att, def }) do u.anims.melee, u.anims.flinch = nil, nil end
   free_all()
-  att.anims.melee = load_anim(att.prefix .. "_melee_" .. att.dir)
-  def.anims.flinch = load_anim(def.prefix .. "_flinch_" .. def.dir)
+  att.anims.melee = load_anim(anim_name(att.name, "melee"))
+  def.anims.flinch = load_anim(anim_name(def.name, "flinch"))
   stall = ("%.0f ms, VRAM %d KB"):format((micros() - t0) / 1000, vram() // 1024)
-  print("attack: load " .. stall)
+  print(styles[style_i] .. " attack: load " .. stall)
   play(att, "melee")
   att.target = def
 end
@@ -145,13 +161,9 @@ end
 
 local job -- The measurement coroutine while it runs
 
-local function start_duel()
-  units = { left = unit("bandit", "ne", 64, 172), right = unit("bandit", "sw", 186, 92) }
-end
-
 start_duel()
-print(("duel loaded: VRAM %d KB"):format(vram() // 1024))
-out = { "X: measure load times and video memory", "(the duel is paused meanwhile)" }
+out = { "A: bandit attacks   B: dragon attacks",
+        "L / R: style        X: measure" }
 
 function _update()
   if job then
@@ -160,8 +172,12 @@ function _update()
     if coroutine.status(job) == "dead" then
       job = nil
       start_duel()
-      say(("duel loaded: VRAM %d KB"):format(vram() // 1024))
     end
+    return
+  end
+  if btnp("l") or btnp("r") then
+    style_i = (style_i + (btnp("r") and 0 or -2)) % #styles + 1 -- 1-based wrap
+    start_duel()
     return
   end
   if btnp("a") then attack(units.left, units.right) end
@@ -186,11 +202,11 @@ function _draw(screen)
       local f, a = frame_of(u)
       draw_anim(a, math.min(f, #a.frames), u.x, u.y)
     end
-    text("A: left attacks  B: right attacks", 2, 2, 12)
-    text("load: " .. stall, 2, 182, 12)
+    text("style: " .. styles[style_i] .. "  (L/R)", 2, 2, 12)
+    text("load: " .. stall, 2, 184, 12)
   else
     cls(0)
-    text("HeroesDS H2b  X: measure again", 0, 0, 13)
-    for i, l in ipairs(out) do text(l, 0, 10 + (i - 1) * 8, 12) end
+    text("HeroesDS H2b", 0, 0, 13)
+    for i, l in ipairs(out) do text(l, 0, 10 + (i - 1) * 9, 12) end
   end
 end
