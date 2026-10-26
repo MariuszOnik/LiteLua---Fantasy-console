@@ -18,11 +18,20 @@ jedyne API dla ekranu), `magic` (rdzeń czarów), `abilities` (zdolności jako h
 (przeciwnik komputerowy). Szczegóły i podział C3a–C3f: `COMBAT.md` §11. Decyzje H6–H10
 (ekrany, dzielenie obrony, skala pola + lupa, zabity nie oddaje, reguły bohatera z opisów).
 
-**Następny krok: C4 — kartridż walki ze stubami grafiki** (H6, H8): dolny ekran = całe pole
-w skali 3/16 (prostokąty / romby zamiast sprite'ów), dotyk = wybór celu / ruchu, dwa
-dotknięcia (podgląd + potwierdzenie), lupa ×2 na L/R; górny = aktywny oddział, podgląd
-obrażeń, kolejka, dziennik; komputer gra jedną stroną (`ai.run`), tura komputera w korutynie
-z klepsydrą (H11, `grid.tick`).
+**C4b (bitwa na DS ze stubami grafiki) — zrobione.** Kartridż `carts/c4`
+(`python HeroesDS/tools/make_c4.py`; wspólne kroki w `tools/cartkit.py`): `src/view.lua`
+(skala 3/16, romby oddziałów z liczebnością, kropki zasięgu co 3 pola, droga i obrys celu),
+`src/setup.lua` (armie testowe z ziarna jak w c4bench), `main.lua` (tura gracza: dotyk
+oddziału wroga = atak / strzał z podglądem obrażeń i odwetu, dotyk ziemi = ruch na najbliższe
+osiągalne miejsce, drugi dotyk lub A = wykonaj, B = anuluj; przyciski Cz(ekaj) / Ob(rona) po
+lewej; komputer gra stroną 1 w korutynie z klepsydrą; Y = komputer gra też za gracza; górny
+ekran: runda, aktywny oddział, wybór, kolejka, dziennik po polsku). Sprawdzone w melonDS:
+podgląd, atak, ruch, autobitwa do końca.
+
+**Następny krok: C4c** — lupa ×2 na L/R (H8), krzyżak + A zamiast rysika, czary bohatera
+(Księga po prawej stronie pola, cel / obszar dotykiem), krótkie animacje zdarzeń (ruch po
+drodze, błysk trafienia, liczby obrażeń). Potem H3 (konwerter grafiki) i H4 (pole z
+prawdziwymi sprite'ami). Na DSi C4b jeszcze nie sprawdzone.
 
 **C4a (pomiar i przyspieszenie) — zrobione.** Kartridż `carts/c4bench`
 (`python HeroesDS/tools/make_c4bench.py`: silnik + reguły bez opisów, wynik PC do

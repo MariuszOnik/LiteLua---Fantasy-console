@@ -11,36 +11,14 @@ same state. src/combat and data/ are made here, so they stay out of git.
 """
 import argparse
 import os
-import re
-import shutil
 import sys
 
 import lupa.lua54 as lua54
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-HEROES = os.path.normpath(os.path.join(HERE, ".."))
-CART = os.path.join(HEROES, "carts", "c4bench")
-RULES = os.path.join(HEROES, "extracted", "rules")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import cartkit  # noqa: E402
 
-# `, help = "..."` in the generated rules (a Lua string with \-escapes)
-HELP = re.compile(r',\s*help\s*=\s*"(?:[^"\\]|\\.)*"')
-
-
-def copy_engine():
-    dest = os.path.join(CART, "src", "combat")
-    shutil.rmtree(dest, ignore_errors=True)
-    shutil.copytree(os.path.join(HEROES, "combat"), dest)
-
-
-def copy_rules():
-    os.makedirs(os.path.join(CART, "data"), exist_ok=True)
-    for name in ("creatures.lua", "spells.lua"):
-        with open(os.path.join(RULES, name), encoding="utf-8") as f:
-            text = f.read()
-        short = HELP.sub("", text)
-        with open(os.path.join(CART, "data", name), "w", encoding="utf-8", newline="\n") as f:
-            f.write(short)
-        print(f"  {name}: {len(text) // 1024} KB -> {len(short) // 1024} KB")
+CART = cartkit.cart_dir("c4bench")
 
 
 def run_pc(battles):
@@ -80,17 +58,13 @@ def lua_str(s):
 
 def main(argv):
     p = argparse.ArgumentParser()
-    p.add_argument("--sd", default=r"D:\Programowanie\sdcard")
+    p.add_argument("--sd", default=cartkit.SD)
     p.add_argument("--battles", type=int, default=12)
     a = p.parse_args(argv[1:])
-    copy_engine()
-    copy_rules()
+    cartkit.copy_engine(CART)
+    cartkit.copy_rules(CART)
     run_pc(a.battles)
-    if a.sd and os.path.isdir(a.sd):
-        dest = os.path.join(a.sd, "litelua", "carts", "c4bench")
-        shutil.rmtree(dest, ignore_errors=True)
-        shutil.copytree(CART, dest)
-        print(f"  copied -> {dest}")
+    cartkit.deploy(CART, a.sd)
     return 0
 
 
