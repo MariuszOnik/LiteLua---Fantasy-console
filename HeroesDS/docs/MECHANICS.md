@@ -327,8 +327,8 @@ Poziomy: podstawowy, zaawansowany, ekspercki, mistrzowski, arcymistrzowski (1–
 - **Łucznictwo** (`archery`): atak dystansowy **10 / 15 / 20 / 30 / 30** (bez: 7 — exe) i dzieli
   obronę celu przez **1 / 1,5 / 2 / 2 / 2**, z tymi samymi ograniczeniami.
 - **Odporność na magię** (`resistance`): **30 / 50 / 70 / 80 / 100 %** odporności bohatera.
-- **[tekst]** Dzielenie obrony wroga jest tylko w opisie gry — homm4-mac go nie liczy. Do
-  przyjęcia w C2 (zgodnie z H2 liczymy jak opis, dopóki exe nie mówi inaczej).
+- **[tekst]** Dzielenie obrony wroga jest tylko w opisie gry — homm4-mac go nie liczy.
+  Liczymy jak opis (decyzja H7), z przełącznikiem w danych.
 - Wartości ataku i obrony w exe są w dziesiątych (1,0 = 10 na ekranie) — przy liczeniu
   stosunku atak/obrona trzeba trzymać jedną skalę dla bohaterów i istot.
 
@@ -444,8 +444,9 @@ Trucizna, Wskrzeszanie szkieletów, Rozmycie · koszmar i mroczny czempion: Groz
 Ruchome piaski, Spowolnienie, Osłabienie · czarodziejka: Implozja, Masowe anulowanie,
 Wygnanie, Masowe spowolnienie. (Nazwy polskie — z `spells.lua`.)
 
-## Otwarte (do C2)
-- Dzielenie obrony wroga przez Walkę wręcz / Łucznictwo bohatera (§13.2) — tylko w opisie.
+## Otwarte (do C3)
+- ~~Dzielenie obrony wroga przez Walkę wręcz / Łucznictwo bohatera (§13.2)~~ — liczymy (H7).
+- Wymiana jednoczesna bez szczegółu „klatki trafienia” (§7) — propozycja w `COMBAT.md` §8.
 - Szczegóły pojedynczych czarów (np. Wygnanie, Poświęcenie, Męczennik, Kradzież zaklęć) —
   w `BattleSpells.swift` `cast()`, przenosić przy implementacji.
 - Zdolności tylko z opisu (§12.10), kilka nieznanych typów efektów artefaktów (§13.5).

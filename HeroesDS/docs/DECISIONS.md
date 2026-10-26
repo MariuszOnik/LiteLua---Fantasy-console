@@ -48,3 +48,22 @@ na żądanie (~90 ms w melonDS); jedna skala zamiast dwóch = połowa konwersji 
 - Propozycja dla silnika LiteLua (osobny punkt w planie LiteLua, gdy będzie potrzebna):
   zamiana ekranów (`sys.swap()` — odwrócenie `lcdMainOnTop/Bottom` w dual30); dotyk zostaje
   na fizycznie dolnym ekranie.
+
+## H6 (2026-10-26) — Pole bitwy na dolnym ekranie, informacje na górnym
+Pole bitwy jest na dolnym ekranie: cel, ruch i obszar czaru wskazuje się rysikiem (dotyk
+działa tylko tam). Górny ekran: aktywny oddział, cel z podglądem obrażeń, kolejka tur,
+dziennik, czary. Nie wymaga zmian w silniku LiteLua (`sys.swap()` z H5 niepotrzebne).
+Krzyżak + A jako alternatywa dla rysika. Szczegóły: `COMBAT.md` §9.
+
+## H7 (2026-10-26) — Walka wręcz / Łucznictwo bohatera dzielą obronę wroga
+Liczymy dzielenie naturalnej obrony celu przez Walkę wręcz / Łucznictwo bohatera tak, jak
+mówi opis w grze (`MECHANICS.md` §13.2), choć homm4-mac tego nie robi — zgodnie z H2
+(opis, dopóki exe nie pokaże inaczej). Reguła ma przełącznik w danych, żeby dało się ją
+wyłączyć bez zmian w kodzie.
+
+## H8 (2026-10-26) — Całe pole bitwy w skali 3/16, lupa ×2
+Widoczna scena H4 (1180×1024; pola siatki 102×102, których środki się w niej mieszczą)
+w skali 3/16 = 0,1875 ma 221×192 px, czyli całe pole mieści się na ekranie DS bez przewijania.
+Pole siatki to romb 6×3 px, więc dotyk wskazuje oddział lub punkt, który gra dociąga do
+najbliższego dozwolonego miejsca. Przytrzymanie L/R włącza lupę ×2 (skala 0,375) wokół
+rysika — te same atlasy powiększone `sprx`. Styl `test1` przechodzi z 0,19 na 0,1875.

@@ -9,20 +9,19 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
 
 ## Gdzie skończyliśmy (notka dla nowego czatu, 2026-10-26)
 
-**Stan:** tor A (grafika) do H2 włącznie i tor B **C1 (mechanika) zamknięte**. Kodu walki
-jeszcze nie ma — jest komplet zasad i danych.
+**Stan:** tor A (grafika) do H2 włącznie, tor B **C1 (mechanika) zamknięte**, **C2 (projekt
+walki) napisany — `docs/COMBAT.md`, czeka na akceptację użytkownika**. Kodu walki jeszcze nie ma.
+Ustalone w C2: pole bitwy na dolnym ekranie (H6), dzielenie obrony przez Walkę wręcz /
+Łucznictwo liczymy (H7), całe pole w skali 3/16 + lupa ×2 na L/R (H8).
 
-**Następny krok: C2 — projekt systemu walki** (dokument, bez kodu; do akceptacji użytkownika):
-model danych (oddział, bohater, pole bitwy 102×102, efekty czarów), kolejka tur, akcje
-(ruch, atak, strzał, czar, czekanie, obrona), zdolności i czary jako dane + hooki (H2),
-deterministyczny seed (LCG z `MECHANICS.md` §6.1), zdarzenia dla animacji. Do rozstrzygnięcia
-z użytkownikiem w C2: który ekran = pole bitwy (dotyk!), który = informacje (H5); czy liczymy
-dzielenie obrony przez Walkę wręcz/Łucznictwo (tylko w opisie gry, `MECHANICS.md` §13.2);
-skala siatki na DS (102×102 pól na 256×192). Potem C3 (silnik w czystym Lua + testy na PC,
-`lupa`), C4 (kartridż ze stubami grafiki), H4 (makieta pola bitwy w stylu `test1`).
+**Następny krok:** akceptacja `COMBAT.md` (w tym propozycja z §8: wymiana jednoczesna bez
+„klatki trafienia”), potem **C3a** — `combat/rng.lua`, `grid.lua`, `stats.lua`, `damage.lua`
++ testy przez `lupa` (podział C3a–C3f w `COMBAT.md` §11). Potem C4 (kartridż ze stubami
+grafiki), H4 (makieta pola bitwy w stylu `test1`).
 
-**Przeczytaj najpierw:** `docs/DECISIONS.md` (H1–H5), `docs/MECHANICS.md` (zasady walki 1:1,
-§1–14), `docs/DS_GRAPHICS.md` (pamięć wideo, style, pomiary DSi), `docs/FORMATS.md`.
+**Przeczytaj najpierw:** `docs/DECISIONS.md` (H1–H8), `docs/COMBAT.md` (architektura walki),
+`docs/MECHANICS.md` (zasady walki 1:1, §1–14), `docs/DS_GRAPHICS.md` (pamięć wideo, style,
+pomiary DSi), `docs/FORMATS.md`.
 
 **Dane z gry** (lokalnie, poza repo — `Data/` i `extracted/` są w `.gitignore`):
 - `python HeroesDS/tools/make_rules.py` → `extracted/rules/creatures.lua` (74 jednostki),
@@ -88,9 +87,10 @@ Folder w repo LuaDS (H1), wykluczenia w `.gitignore`, plan i decyzje.
 ### Tor B — walka (bez grafiki)
 - **C1 — Mechanika ✅** Wynik: `docs/MECHANICS.md` (C1a rdzeń, C1b-1 dane jednostek,
   C1b-2 zdolności, C1b-3 bohater i artefakty, C1c czary) + generator `tools/make_rules.py`.
-- **C2 — Projekt systemu walki.** Model danych (jednostka, oddział, pole bitwy), kolejka
-  tur, akcje, moce jako hooki, deterministyczny seed.
-- **C3 — Silnik walki w czystym Lua** + testy na PC.
+- **C2 — Projekt systemu walki** (napisany, czeka na akceptację). Wynik: `docs/COMBAT.md`,
+  decyzje H6–H8.
+- **C3 — Silnik walki w czystym Lua** + testy na PC: C3a wzory i siatka, C3b bitwa i akcje,
+  C3c zdolności, C3d bohater i artefakty, C3e czary, C3f prosty AI (`COMBAT.md` §11).
 - **C4 — Podpięcie do kartridża** ze stubami grafiki (pole bitwy + ekran informacji, H5).
 
 ### Później
