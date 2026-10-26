@@ -7,9 +7,8 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   w przeciwległych narożnikach (duże sprite'y bojowe ładowane i zwalniane w locie).
 
 ## Gdzie skończyliśmy
-H0 zrobione. Otwarte pytania przed H1/C1:
-- walka wierna zasadom H4 (wzory 1:1) czy „w stylu H4”, uproszczona pod DS?
-- kolejność: H1 i C1 na zmianę, czy najpierw jeden tor do końca?
+H0 zrobione, plan zaakceptowany. Walka: mechanika 1:1 z H4, grafika uproszczona (H2).
+Otwarte: kolejność — H1 i C1 na zmianę, czy najpierw jeden tor do końca?
 
 Szkic czytnika archiwów: `tools/h4r.py` (format opisany w docstringu; nie czyta jeszcze
 całego katalogu — błąd przy końcówce wpisu, do poprawy w H1).
