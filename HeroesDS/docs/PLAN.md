@@ -27,8 +27,13 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   `Combat.swift`, `Spells.swift`, `Tables.swift` …) z adresami w `heroes4.exe` —
   główne źródło dla C1. W nowym czacie, jeśli brak: `git clone --depth 1
   https://github.com/Anbrose/homm4-mac.git ref/homm4-mac`.
-- **Następny krok: H2** (możliwości LiteLua: sprite'y, palety, VRAM na dwie duże
-  animacje), potem C1 (mechanika walki → `docs/MECHANICS.md`).
+- **H2a ✅** analiza możliwości LiteLua i budżetu VRAM → `docs/DS_GRAPHICS.md`.
+  Wniosek: pierwsza wersja bez zmian w silniku (atlas PNG 8 bpp na animację, skala 0,5,
+  alfa progowana, cienie z `alpha()`); smok vs smok nie mieści się w VRAM (~256 KB) —
+  4 bpp / mniejsza skala / jedna animacja naraz. **Propozycja czeka na akceptację.**
+- **Następny krok: H2b** — kartridż pomiarowy: czas `image()` atlasów, VRAM, cykl
+  ładuj–zwolnij, dwie jednostki na górnym ekranie (melonDS, potem DSi).
+  Potem C1 (mechanika walki → `docs/MECHANICS.md`).
 - Mapa świata: ustalenia o terenie 2.5D zapisane w `docs/FORMATS.md` (sekcja „Ważne na później”).
 - Otwarte w formatach (`FORMATS.md`): pole `?` palety, sekwencje bohaterów.
 - Pobrany kod z sieci (`ref/`) — nie uruchamiamy go (blokada auto mode); czytamy opis
@@ -65,7 +70,7 @@ Folder w repo LuaDS (H1), wykluczenia w `.gitignore`, plan i decyzje.
   - **H1b ✅** dekoder obrazów `.h4d` → PNG (klatki, cienie, alfa) + testy.
   - **H1c ✅** `combat_actor` / `adv_actor`: animacje, fps, kierunki, rozmiar, dystanse.
   - **H1d ✅** `docs/FORMATS.md` — opis formatów własnymi słowami.
-- **H2 — Możliwości LiteLua.** Sprite'y, palety, rozmiary tekstur, budżet VRAM/RAM na
+- **H2 — Możliwości LiteLua.** (H2a ✅ analiza → `docs/DS_GRAPHICS.md`; H2b pomiar) Sprite'y, palety, rozmiary tekstur, budżet VRAM/RAM na
   dwie duże animacje na górnym ekranie, ładowanie/zwalnianie w locie. Braki → osobny punkt
   w planie LiteLua (`docs/PLAN.md` w głównym repo).
 - **H3 — Konwerter PC → LiteLua.** Profile: *mapa* (małe sprite'y, mało klatek) i *walka*
