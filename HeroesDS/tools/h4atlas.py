@@ -159,13 +159,24 @@ def add_outline(img, color):
     return ring
 
 
-def scaled(img, box, pivot, scale, finish):
+def union(boxes):
+    return (min(b[0] for b in boxes), min(b[1] for b in boxes), max(b[2] for b in boxes), max(b[3] for b in boxes))
+
+
+def scaled(img, box, canvas, pivot, scale, finish):
     """Scales an RGBA image placed at box and finishes it; returns (img, ox, oy)
-    relative to pivot, cropped to the opaque pixels (img None when empty)."""
-    img = finish(resize(img, scale))
+    relative to pivot, cropped to the opaque pixels (img None when empty).
+
+    Every image of an animation is first put on the same canvas box (the union
+    of all its boxes) and the whole canvas is scaled, so all frames get exactly
+    the same mapping and rounding: no 1 px wobble between frames, and patterns
+    made by finish (dithered shadows) line up with the ground point."""
+    full = Image.new("RGBA", (canvas[2] - canvas[0], canvas[3] - canvas[1]))
+    full.paste(img, (box[0] - canvas[0], box[1] - canvas[1]))
+    img = finish(resize(full, scale))
     bb = img.getchannel("A").getbbox()
-    ox = round((box[0] - pivot[0]) * scale)
-    oy = round((box[1] - pivot[1]) * scale)
+    ox = round((canvas[0] - pivot[0]) * scale)
+    oy = round((canvas[1] - pivot[1]) * scale)
     if not bb:
         return None, ox, oy
     return img.crop(bb), ox + bb[0], oy + bb[1]
@@ -246,8 +257,9 @@ def convert(lib, actor, state, direction, scale=0.5, colors=None, kind="combat",
         else:
             def finish(i):
                 return finish_shadow(i, style)
+        canvas = union([box for _, box in images.values()]) if images else None
         for key, (img, box) in images.items():
-            piece, ox, oy = scaled(img, box, pivot, scale / zoom, finish)
+            piece, ox, oy = scaled(img, box, canvas, pivot, scale / zoom, finish)
             if piece and prefix == "frame" and style.outline:
                 piece, ox, oy = add_outline(piece, style.outline), ox - 1, oy - 1
             ox, oy = ox * zoom, oy * zoom
