@@ -1,6 +1,6 @@
 # Projekt systemu walki (C2)
 
-Status: **projekt do akceptacji użytkownika** (2026-10-26). Zasady gry są w `MECHANICS.md`
+Status: **zaakceptowany** (2026-10-26, razem z propozycją z §8). C3a zrobione — §11. Zasady gry są w `MECHANICS.md`
 („co liczymy”); ten dokument mówi, **jak** silnik jest zbudowany. Decyzje podjęte w C2:
 H6 (ekrany), H7 (dzielenie obrony), H8 (skala pola + lupa) — `DECISIONS.md`.
 
@@ -15,22 +15,22 @@ H6 (ekrany), H7 (dzielenie obrony), H8 (skala pola + lupa) — `DECISIONS.md`.
 4. **Zasady jako dane + hooki** (H2): zdolności, czary i artefakty to wpisy w tabelach
    z funkcjami podpiętymi pod nazwane punkty silnika, a nie warunki rozsiane po kodzie.
 
-## 2. Liczby — tylko całkowite
+## 2. Liczby — całkowite, a float32 tam, gdzie oryginał
 
 LiteLua ma `LUA_32BITS` (D3): liczby zmiennoprzecinkowe są pojedynczej precyzji, a na PC
-(`lupa`) podwójnej. Gdyby wzory używały ułamków, wynik na DS mógłby się różnić od testu
-o 1 PW i powtórka by się rozjechała. Dlatego **cała mechanika liczy na liczbach
-całkowitych**:
-- **atak i obrona w dziesiątych** (jak exe, §13.2): istota 9 → 90, bohater 15 → 150;
-- mnożniki w **procentach** (`×1,25` → `125`), składane po kolei z zaokrągleniem jak
-  w exe; stosunek atak/obrona jako para licznik/mianownik, ograniczony do 1/20…20;
-- **ruch w punktach** (pole = 100, skos = 150; §2);
+(`lupa`) podwójnej. Gdyby te same wzory liczyły na różnych ułamkach, wynik na DS mógłby się
+różnić od testu o 1 PW i powtórka by się rozjechała. Dlatego:
+- **większość mechaniki liczy na liczbach całkowitych** (PW, rzuty, procenty, `//`, `>>`
+  jak w exe), wartości jak na ekranie gry (atak bandyty 9, bohatera 10–40; artefakty
+  podają premie bohatera w dziesiątych — dzielimy przy wczytaniu);
+- **tam, gdzie oryginał liczy na `Float`** (stosunek atak/obrona z mnożnikami czarów,
+  koszty ruchu 1 / 1,5 i strefy kontroli, linia strzału), liczymy na float32 — każdy wynik
+  działania przechodzi przez `num.f32()`. Na PC to zaokrąglenie do najbliższej liczby
+  float32 (`string.pack("f")`), co dla `+ − × ÷ √` daje dokładnie wynik arytmetyki float32;
+  na DS `f32` nic nie robi. Tak jest bliżej exe niż przybliżanie liczbami całkowitymi;
 - **odległości** w połówkach pól, porównywane jako kwadraty (bez `sqrt`): środek oddziału
-  = `2·x + rozmiar` (pół-pola), „odległość ≥ 40 pól” → `d² ≥ 80²` w pół-polach;
-  obszar czaru (`odległość − rozmiar/2 < promień`, §14.5) też bez pierwiastka;
-- 32 bity wystarczą: największe iloczyny (rzut × liczebność × atak) mieszczą się w 2³¹;
-  przy liczeniu procentów najpierw dzielimy, gdy iloczyn mógłby przekroczyć ~10⁹
-  (sprawdzane asercją w testach).
+  = `2·x + rozmiar` (pół-pola), „odległość ≥ 40 pól” → `(2dx)² + (2dy)² ≥ 6400`;
+  kierunki (8 sektorów po 45°) też dokładnie na liczbach całkowitych.
 
 Generator losowy (`rng.lua`, §6.1 mechaniki): `x = (x·214013 + 2531011) & 0xFFFFFFFF`,
 wynik `(x >> 16) & 0x7FFF`. Działa identycznie na 32 i 64 bitach. **Żadnego `math.random`.**
@@ -45,7 +45,8 @@ Katalog `HeroesDS/combat/` (kod nasz, zlib jak repo; reguły z `MECHANICS.md`):
 
 | plik | zawartość |
 |---|---|
-| `rng.lua` | LCG, `roll(lo, hi)`, `chance(pct)`; stan = jedna liczba |
+| `num.lua` | `f32`, zaokrąglanie jak Swift (`round` od zera), `trunc`, `clamp`, stałe float |
+| `rng.lua` | LCG, `roll(lo, hi)`; stan = jedna liczba |
 | `grid.lua` | siatka 102×102, zajętość, przeszkody, sąsiedztwo kwadratów, szukanie drogi, linia strzału, obszary |
 | `stats.lua` | statystyki pochodne oddziału: baza + bohater armii + artefakty + efekty (hook `modify_stat`) |
 | `damage.lua` | wzory §6: podstawa, atak/obrona, strzał, szczęście, blok, zadawanie obrażeń |
@@ -197,10 +198,10 @@ odegrać. Stan po `act()` jest już końcowy — animacja tylko go pokazuje.
 `left` w `damage` pozwala UI pokazywać liczebność w trakcie animacji, zanim dojdzie do
 końcowego stanu (tak robi homm4-mac).
 
-**Wymiana jednoczesna (§7, otwarte z C1)** — proponuję **nie** odwzorowywać szczegółu
-„zabity przed klatką trafienia nie zadaje obrażeń”. Wiązałby zasady z liczbą klatek
+**Wymiana jednoczesna (§7, otwarte z C1)** — **nie** odwzorowujemy szczegółu „zabity przed
+klatką trafienia nie zadaje obrażeń” (zaakceptowane). Wiązałby zasady z liczbą klatek
 i fps animacji, które na DS są uproszczone (H2, H4). Liczymy czystą wymianę jednoczesną
-z manualu (+ pierwsze uderzenie, blok). Do potwierdzenia przy akceptacji.
+z manualu (+ pierwsze uderzenie, blok).
 
 ## 9. Ekrany i sterowanie (H6, H8)
 
@@ -243,8 +244,13 @@ dziennik ostatnich zdarzeń; przy czarach — lista z kosztem i opis.
 
 ## 11. Podział C3 (propozycja)
 
-- **C3a** — `rng`, `grid` (zajętość, droga, sąsiedztwo, linia strzału), `stats`, `damage`;
-  testy wzorów.
+- **C3a ✅** — `num`, `rng`, `grid` (pole, zajętość, sąsiedztwo, droga ze strefami kontroli,
+  latanie, teleport, linia strzału), `stats` (oddział, bohater, szybkość, ruch, morale,
+  szczęście, PW), `damage` (rzut, atak/obrona, H7, dzielnik strzału, szczęście); testy
+  `tests/combat_test.lua`. `grid.reachable` dostaje opis ruchu (`budget`, `flies`,
+  `teleport`, `zoc`, koszty) — wylicza go bitwa ze statystyk, siatka nie zna zasad.
+  Szukanie drogi sprawdza zajętość leniwie (tylko odwiedzane pola); czas na DS do
+  zmierzenia w C4.
 - **C3b** — `battle`: rundy, kolejka, morale, ruch, wręcz, kontratak, strzał, czekanie,
   obrona, koniec bitwy, zdarzenia, powtórki.
 - **C3c** — zdolności (§12) jako hooki.

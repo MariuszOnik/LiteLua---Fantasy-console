@@ -33,6 +33,16 @@ C1c — czary (w tym obszarowe).
 - Jednostka zatrzymuje się tylko tam, gdzie zmieści się cały jej kwadrat.
 - Modyfikatory (szczegóły w C1c): Haste/Speed +3 szybkości i +9 pól ruchu; Slow, Fatigue,
   Bind Flyer — połowa; Aging — połowa; Binding — brak ruchu.
+- **Strefy kontroli** (exe 0x572370, szukanie drogi 0x60d610): oddział stojący obok wroga
+  płaci za każdy krok dodatkowo **¼ swojego ruchu** (×1,5 po skosie), chyba że krok idzie
+  prosto do tego wroga albo od niego (najbliższy z 8 kierunków). Latającego trzymają tylko
+  latający wrogowie; *Ignore Zones of Control* — nigdy.
+- Ruchome piaski: krok, po którym kwadrat dotyka piasków, kosztuje **połowę pełnego ruchu**
+  (min. 1 pole); fosa (oblężenie): ¼ ruchu za pole, gdy ruch > 4. Czar *Terrain Walk* znosi
+  oba koszty.
+- Krok po skosie piechura wymaga wolnego (bez przeszkód) jednego z dwóch prostych sąsiadów.
+- Pole bitwy to tylko pola, których środek leży w scenie z marginesem (24 px po bokach,
+  40 u góry, 16 u dołu) — rogi rombu 102×102 są poza nim.
 
 ## 3. Kolejność ruchów (runda)
 
@@ -329,6 +339,10 @@ Poziomy: podstawowy, zaawansowany, ekspercki, mistrzowski, arcymistrzowski (1–
 - **Odporność na magię** (`resistance`): **30 / 50 / 70 / 80 / 100 %** odporności bohatera.
 - **[tekst]** Dzielenie obrony wroga jest tylko w opisie gry — homm4-mac go nie liczy.
   Liczymy jak opis (decyzja H7), z przełącznikiem w danych.
+- **[tekst]** Opisy dodają: Walka wręcz **ekspercka** — bohater uderza przed kontratakiem
+  (pierwsze uderzenie); Łucznictwo **zaawansowane+** — pełne obrażenia mimo przeszkód
+  i murów, **eksperckie+** — także na każdą odległość, **mistrzowskie+** — strzela przed
+  odpowiedzią wroga, **arcymistrzowskie** — strzela jeszcze raz. Do sprawdzenia z exe w C3d.
 - Wartości ataku i obrony w exe są w dziesiątych (1,0 = 10 na ekranie) — przy liczeniu
   stosunku atak/obrona trzeba trzymać jedną skalę dla bohaterów i istot.
 

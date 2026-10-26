@@ -9,15 +9,19 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
 
 ## Gdzie skończyliśmy (notka dla nowego czatu, 2026-10-26)
 
-**Stan:** tor A (grafika) do H2 włącznie, tor B **C1 (mechanika) zamknięte**, **C2 (projekt
-walki) napisany — `docs/COMBAT.md`, czeka na akceptację użytkownika**. Kodu walki jeszcze nie ma.
+**Stan:** tor A (grafika) do H2 włącznie, tor B: C1 (mechanika) i **C2 (projekt walki,
+`docs/COMBAT.md`, zaakceptowany)** zamknięte, **C3a zrobione** — `HeroesDS/combat/`:
+`num` (float32 jak oryginał — `f32`), `rng`, `grid` (pole, droga ze strefami kontroli),
+`stats`, `damage`; testy `tests/combat_test.lua` (16 przypadków, przez `lupa`).
 Ustalone w C2: pole bitwy na dolnym ekranie (H6), dzielenie obrony przez Walkę wręcz /
 Łucznictwo liczymy (H7), całe pole w skali 3/16 + lupa ×2 na L/R (H8).
 
-**Następny krok:** akceptacja `COMBAT.md` (w tym propozycja z §8: wymiana jednoczesna bez
-„klatki trafienia”), potem **C3a** — `combat/rng.lua`, `grid.lua`, `stats.lua`, `damage.lua`
-+ testy przez `lupa` (podział C3a–C3f w `COMBAT.md` §11). Potem C4 (kartridż ze stubami
-grafiki), H4 (makieta pola bitwy w stylu `test1`).
+**Następny krok: C3b** — `combat/battle.lua`: stan bitwy, rozstawienie (tabela `deploy`
+z `Battle.swift`), rundy i kolejka (morale, czekanie), ruch, wręcz z kontratakiem, strzał
+z odpowiedzią, obrona, koniec bitwy, zdarzenia, `options()`/`act()`/`preview()`, powtórka
+ziarno + polecenia → suma kontrolna (`COMBAT.md` §5–8, §11). Źródło: `Battle.swift`
+(`attack`, `meleeExchange`, `together`, `volley`, `shoot`, `startRound`, `checkMorale`,
+`endAction`). Potem C3c–C3f, C4 (kartridż ze stubami grafiki), H4 (makieta pola bitwy).
 
 **Przeczytaj najpierw:** `docs/DECISIONS.md` (H1–H8), `docs/COMBAT.md` (architektura walki),
 `docs/MECHANICS.md` (zasady walki 1:1, §1–14), `docs/DS_GRAPHICS.md` (pamięć wideo, style,
@@ -33,7 +37,7 @@ pomiary DSi), `docs/FORMATS.md`.
   Tylko czytamy (nie uruchamiamy pobranego kodu — blokada auto mode); tabele zbudowane
   w kodzie exe są już przeniesione do `tools/exe_tables.py` i `tools/creature_abilities.py`.
 
-**Testy:** `python -m unittest discover -s HeroesDS/tests` (31 testów, dane syntetyczne).
+**Testy:** `python -m unittest discover -s HeroesDS/tests` (32 testy Pythona, w tym `test_combat` = 17 przypadków w Lua przez `lupa`; dane syntetyczne, `real_creatures` także na `extracted/rules/creatures.lua`, gdy jest).
 
 **Konsola / emulator:** kartridże HeroesDS w `HeroesDS/carts/` (grafika generowana lokalnie);
 melonDS: `tools/melon.py` (w skrypcie `tap 28 178` = Play w launcherze — klawisze bywają
@@ -87,8 +91,7 @@ Folder w repo LuaDS (H1), wykluczenia w `.gitignore`, plan i decyzje.
 ### Tor B — walka (bez grafiki)
 - **C1 — Mechanika ✅** Wynik: `docs/MECHANICS.md` (C1a rdzeń, C1b-1 dane jednostek,
   C1b-2 zdolności, C1b-3 bohater i artefakty, C1c czary) + generator `tools/make_rules.py`.
-- **C2 — Projekt systemu walki** (napisany, czeka na akceptację). Wynik: `docs/COMBAT.md`,
-  decyzje H6–H8.
+- **C2 — Projekt systemu walki ✅** Wynik: `docs/COMBAT.md`, decyzje H6–H8.
 - **C3 — Silnik walki w czystym Lua** + testy na PC: C3a wzory i siatka, C3b bitwa i akcje,
   C3c zdolności, C3d bohater i artefakty, C3e czary, C3f prosty AI (`COMBAT.md` §11).
 - **C4 — Podpięcie do kartridża** ze stubami grafiki (pole bitwy + ekran informacji, H5).
