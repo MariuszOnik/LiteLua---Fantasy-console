@@ -143,6 +143,7 @@ local function show(e)
     anim = { frames = math.max(6, math.min(30, n * 2)), t = 0, stack = u, pts = pts, len = n,
              clear = { u } }
     acting[u] = { state = "walk", start = frame, loop = true }
+    fx.walk(u)
   elseif e.t == "melee" or e.t == "shoot" then
     local u, t = b.units[e.stack], b.units[e.target]
     anim = { frames = 10, t = 0, clear = {}, at = {} }
@@ -276,6 +277,7 @@ local function showing()
       for _, u in ipairs(anim.clear or {}) do
         if acting[u] and acting[u].state ~= "die" then acting[u] = nil end
       end
+      if anim.stack then fx.walk_stop() end   -- a move ended
       if anim.dead then   -- its death shown: off the field
         acting[anim.dead], dying[anim.dead] = nil, nil
       end
@@ -297,6 +299,7 @@ local function new_battle()
   b = setup.battle(seed, data, menu.config())
   reset_turn()
   job, anim, queue, popups, acting, dying, effects = nil, nil, {}, {}, {}, {}, {}
+  fx.walk_stop()
   log_lines = {}
   say(("Bitwa %d"):format(seed))
   play(b:take_events())

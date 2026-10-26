@@ -89,7 +89,7 @@ def make_gfx(force, todo=None, states=STATES):
 
 def make_fx(force):
     """Missiles (as actors: walk in 8 directions), spell effects (gfx/fx, data/fx), sounds
-    (sfx/<actor>_<state>.wav, sfx/spell_<spell>.wav) and data/actors.lua: each actor's
+    (sfx/<actor>_<melee|ranged|flinch|die|walk>.wav, sfx/spell_<spell>.wav) and data/actors.lua: each actor's
     height (screen pixels at SCALE, where effects hang) and missile."""
     import h4actor
     import h4atlas
@@ -138,7 +138,7 @@ def make_fx(force):
     os.makedirs(sfx, exist_ok=True)
     made = 0
     jobs = [(f"sound.{a}.{st}.h4d", f"{file_name(a)}_{st}") for a in actors()
-            for st in ("melee", "ranged", "flinch", "die")]
+            for st in ("melee", "ranged", "flinch", "die", "walk")]
     jobs += [(f"sound.spell.{k}.h4d", f"spell_{file_name(k)}") for k in spells]
     for res, name in jobs:
         out = os.path.join(sfx, name + ".wav")

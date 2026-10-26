@@ -1,5 +1,5 @@
 -- HeroesDS C4: sounds and actor facts from the original game (tools/make_c4.py --fx).
--- Sounds: sfx/<actor>_<melee|ranged|flinch|die>.wav and sfx/spell_<spell>.wav (8-bit
+-- Sounds: sfx/<actor>_<melee|ranged|flinch|die|walk>.wav and sfx/spell_<spell>.wav (8-bit
 -- 11025 Hz: their memory counts in the Lua limit), loaded when first played, freed when
 -- not played for a while. data/actors.lua: each actor's height (screen px at 3/16, where
 -- spell effects hang) and the missile it shoots.
@@ -28,18 +28,37 @@ function fx.missile(u)
   return a and a.missile
 end
 
--- Plays sfx/<name>.wav when there is one; true if it played
-function fx.play(name, vol)
+local function get(name)
   local s = sounds[name]
   if s == nil then
     local ok, snd = pcall(sound, name)
     s = ok and snd and { snd = snd } or false
     sounds[name] = s
   end
+  if s then s.last = clock end
+  return s
+end
+
+-- Plays sfx/<name>.wav when there is one; true if it played
+function fx.play(name, vol)
+  local s = get(name)
   if not s then return false end
-  s.last = clock
   sfx(s.snd, vol or 1)
   return true
+end
+
+-- A stack's steps: its walk sound, again and again until fx.walk_stop()
+local walking   -- { s, handle, again (clock) }
+function fx.walk_stop()
+  if walking and walking.handle then sfx_stop(walking.handle) end
+  walking = nil
+end
+
+function fx.walk(u)
+  fx.walk_stop()
+  local s = get(sprites.base(fx.actor(u)) .. "_walk")
+  if not s then return end
+  walking = { s = s, handle = sfx(s.snd, 0.7), again = clock + math.max(1, (s.snd.length or 1) * 30 // 1) }
 end
 
 -- A stack's sound: "melee", "ranged" (else melee), "flinch", "die"
@@ -57,6 +76,12 @@ end
 -- Once a frame: frees the sounds not played for KEEP frames
 function fx.tick()
   clock = clock + 1
+  if walking and clock >= walking.again then   -- the walk sound again
+    local s = walking.s
+    s.last = clock
+    walking.handle = sfx(s.snd, 0.7)
+    walking.again = clock + math.max(1, (s.snd.length or 1) * 30 // 1)
+  end
   if clock % 120 ~= 0 then return end
   for name, s in pairs(sounds) do
     if s and clock - s.last > KEEP then sounds[name] = nil end
