@@ -29,8 +29,8 @@ DIRS = list(h4actor.DIRECTIONS)
 
 # Slider fields: (name, label, from, to, resolution)
 SLIDERS = [
-    ("scale", "scale", 0.15, 0.8, 0.005),
-    ("colors", "colors (15 = 16-color texture)", 2, 255, 1),
+    ("scale", "scale", 0.1, 0.6, 0.005),
+    ("colors", "colors (16-color texture)", 2, 15, 1),
     ("brightness", "brightness", 0.5, 1.6, 0.01),
     ("contrast", "contrast", 0.5, 2.0, 0.01),
     ("saturation", "saturation", 0.0, 2.0, 0.01),
@@ -39,6 +39,18 @@ SLIDERS = [
     ("vivid", "vivid colors weight", 0, 40, 1),
     ("shadow_alpha", "shadow alpha", 0.0, 1.0, 0.05),
 ]
+
+
+def ds_color(c):
+    """One 8-bit channel as the DS shows it: 5 bits (32 levels)."""
+    return (c >> 3) * 255 // 31
+
+
+def ds_colors(img):
+    """RGBA image with its colors rounded to the DS 15-bit colors."""
+    r, g, b, a = img.split()
+    r, g, b = (ch.point(ds_color) for ch in (r, g, b))
+    return Image.merge("RGBA", (r, g, b, a))
 
 
 class Tuner:
@@ -73,7 +85,8 @@ class Tuner:
         self.actor, _ = combo("unit", self.actors, "bandit", self.actor_changed)
         self.state, self.state_box = combo("animation", [], "melee", self.changed)
         self.dir, _ = combo("direction", DIRS, "sw", self.changed)
-        self.base, _ = combo("start from style", sorted(h4atlas.STYLES), "oldschool", self.load_style)
+        self.base, self.base_box = combo("preset (Reset goes back to it)", list(h4atlas.STYLES), "oldschool",
+                                         self.load_style)
         grid = ttk.Frame(left)
         grid.pack(anchor="w")
         for row_i, (name, label, lo, hi, res) in enumerate(SLIDERS):
@@ -82,6 +95,9 @@ class Tuner:
             tk.Scale(grid, from_=lo, to=hi, resolution=res, orient="horizontal", length=170,
                      variable=v, command=lambda _v: self.changed()).grid(row=row_i, column=1)
             self.vars[name] = v
+        self.full_colors = tk.BooleanVar()
+        ttk.Checkbutton(left, text="256 colors (8 bpp texture, 2x video memory)", variable=self.full_colors,
+                        command=self.changed).pack(anchor="w")
         self.dither = tk.BooleanVar()
         ttk.Checkbutton(left, text="dithered shadow (else half size)", variable=self.dither,
                         command=self.changed).pack(anchor="w")
@@ -105,7 +121,8 @@ class Tuner:
         row.pack(anchor="w", pady=4)
         self.ground_button = tk.Button(row, text="ground color", command=self.pick_ground)
         self.ground_button.pack(side="left")
-        ttk.Button(row, text="Save style", command=self.save).pack(side="left", padx=4)
+        ttk.Button(row, text="Reset", command=self.load_style).pack(side="left", padx=4)
+        ttk.Button(row, text="Save style", command=self.save).pack(side="left")
         self.info = ttk.Label(left, text="", justify="left", wraplength=250)
         self.info.pack(anchor="w", pady=6)
 
@@ -122,10 +139,13 @@ class Tuner:
 
     def load_style(self):
         st = h4atlas.STYLES[self.base.get()]
-        self.vars["scale"].set(0.375 if self.base.get() == "oldschool" else 0.5)
+        self.ground = tuple(st.ground)
+        self.vars["scale"].set(st.scale)
         for name, *_ in SLIDERS:
             if name != "scale":
                 self.vars[name].set(getattr(st, name))
+        self.full_colors.set(st.colors > 15)
+        self.vars["colors"].set(min(st.colors, 15))
         self.outline_on.set(bool(st.outline))
         if st.outline:
             self.outline_color = tuple(st.outline)
@@ -137,12 +157,12 @@ class Tuner:
     def style(self):
         g = lambda n: self.vars[n].get()  # noqa: E731
         return h4atlas.Style(
-            colors=int(g("colors")), edge="matte" if self.matte.get() else "cut",
+            colors=255 if self.full_colors.get() else int(g("colors")), edge="matte" if self.matte.get() else "cut",
             alpha_cut=int(g("alpha_cut")), ground=self.ground, brightness=round(g("brightness"), 3),
             contrast=round(g("contrast"), 3), saturation=round(g("saturation"), 3), sharpen=int(g("sharpen")),
             outline=self.outline_color if self.outline_on.get() else None,
             shadow="dither" if self.dither.get() else "half", shadow_alpha=round(g("shadow_alpha"), 2),
-            vivid=int(g("vivid")))
+            vivid=int(g("vivid")), scale=round(g("scale"), 3))
 
     # --- events -------------------------------------------------------------------
 
@@ -194,11 +214,13 @@ class Tuner:
             with open(h4atlas.STYLES_FILE, encoding="utf-8") as f:
                 data = json.load(f)
         fields_ = asdict(self.style())
-        fields_["_note"] = f"scale {self.vars['scale'].get():.3f} for {self.actor.get()}"
+        fields_["_note"] = f"tuned on {self.actor.get()} {self.state.get()} {self.dir.get()}"
         data[name] = fields_
         with open(h4atlas.STYLES_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=1)
         h4atlas.STYLES[name] = self.style()
+        self.base_box.config(values=list(h4atlas.STYLES))
+        self.base.set(name)
         self.info.config(text=self.info.cget("text") + f"\nsaved as '{name}' -> tools/styles.json")
 
     # --- conversion and drawing -----------------------------------------------------
@@ -210,17 +232,27 @@ class Tuner:
             atlas, shadow, meta = h4atlas.convert(self.lib, self.actor.get(), self.state.get(), self.dir.get(),
                                                   round(self.vars["scale"].get(), 3), style=self.style())
         except Exception as e:  # Show any problem in the window, keep running
-            self.info.config(text=f"error: {e}")
+            self.info.config(text=f"does not fit the DS: {e}", foreground="#c00000")
             return
         bpp = 4 if len(atlas.getpalette()) // 3 <= 16 else 8
         kb = atlas.width * atlas.height * bpp // 8
         skb = shadow.width * shadow.height // 2 if shadow else 0
-        self.result = (atlas.convert("RGBA"), shadow.convert("RGBA") if shadow else None, meta)
+        self.result = (ds_colors(atlas.convert("RGBA")), shadow.convert("RGBA") if shadow else None, meta)
         self.anim_frame = 0
-        self.info.config(text=(f"{meta['sequence']}\n{len(meta['frames'])} frames, {meta['fps']} fps, "
-                               f"hit {meta['hit']}\natlas {atlas.width}x{atlas.height} {bpp} bpp = {kb // 1024} KB"
-                               f"\nshadow {shadow.width}x{shadow.height} = {skb // 1024} KB" if shadow else "")
-                          + f"\nVRAM total ~{(kb + skb) // 1024} KB\nconverted in {time.time() - t0:.1f} s")
+        total = (kb + skb) // 1024
+        # One duel has ~110 KB for both units' animations (DS_GRAPHICS.md)
+        if total <= 48:
+            verdict, color = "fine for a duel", "#007000"
+        elif total <= 96:
+            verdict, color = "big: only with a small opponent", "#b06000"
+        else:
+            verdict, color = "too big for a duel (~110 KB for both units)", "#c00000"
+        text = (f"{meta['sequence']}\n{len(meta['frames'])} frames, {meta['fps']} fps, hit {meta['hit']}"
+                f"\natlas {atlas.width}x{atlas.height} {bpp} bpp = {kb // 1024} KB")
+        if shadow:
+            text += f"\nshadow {shadow.width}x{shadow.height} 4 bpp = {skb // 1024} KB"
+        text += f"\nvideo memory ~{total} KB: {verdict}\nconverted in {time.time() - t0:.1f} s"
+        self.info.config(text=text, foreground=color)
         self.redraw()
 
     def frame_image(self, n):
@@ -232,12 +264,14 @@ class Tuner:
         boxes += [(r[4], r[5], r[4] + r[2] * z, r[5] + r[3] * z) for r in meta["srects"]]
         left, top, right, bottom = h4atlas.union(boxes + [(0, 0, 0, 0)])
         left, top = left - 2, top - 2
-        img = Image.new("RGBA", (right + 2 - left, bottom + 2 - top), self.ground + (255,))
+        ground = tuple(ds_color(c) for c in self.ground)
+        img = Image.new("RGBA", (right + 2 - left, bottom + 2 - top), ground + (255,))
         s = meta["sframes"][n - 1]
         if shadow and s:
             x, y, w, h, ox, oy = meta["srects"][s - 1]
             part = shadow.crop((x, y, x + w, y + h)).resize((w * z, h * z), Image.NEAREST)
-            part.putalpha(part.getchannel("A").point(lambda a: round(a * meta["salpha"])))
+            level = round(meta["salpha"] * 31) / 31  # The DS has 32 alpha levels
+            part.putalpha(part.getchannel("A").point(lambda a: round(a * level)))
             img.alpha_composite(part, (ox - left, oy - top))
         i = meta["frames"][n - 1]
         if i:

@@ -101,13 +101,24 @@ class Style:
                                    # full size checkerboard
     shadow_alpha: float = 0.45     # alpha() to draw the shadow with
     vivid: int = 12                # Extra weight of saturated colors in the palette
+    scale: float = 0.5             # Suggested scale for a bandit-sized unit (a hint
+                                   # for tools; convert() takes the scale it is given)
 
 
 STYLES = {
     "current": Style(),
     "smooth": Style(edge="matte", shadow="dither", shadow_alpha=0.6),
     "oldschool": Style(colors=15, alpha_cut=110, contrast=1.35, saturation=1.3, sharpen=60,
-                       outline=(24, 16, 12), shadow="dither", shadow_alpha=0.6),
+                       outline=(24, 16, 12), shadow="dither", shadow_alpha=0.6, scale=0.375),
+    # Presets for the style tuner
+    "oldschool_soft": Style(colors=15, alpha_cut=110, contrast=1.15, saturation=1.1, sharpen=30,
+                            outline=(24, 16, 12), shadow="dither", shadow_alpha=0.6, vivid=6, scale=0.375),
+    "gba": Style(colors=15, alpha_cut=128, contrast=1.1, saturation=1.25, shadow="dither",
+                 shadow_alpha=0.5, vivid=8, scale=0.3),
+    "tiny": Style(colors=15, alpha_cut=100, contrast=1.2, saturation=1.2, outline=(16, 10, 8),
+                  shadow="dither", shadow_alpha=0.6, vivid=8, scale=0.19),
+    "tiny_flat": Style(colors=15, alpha_cut=100, contrast=1.2, saturation=1.2, shadow="dither",
+                       shadow_alpha=0.6, vivid=8, scale=0.19),
 }
 # Styles saved by tools/style_tuner.py (name -> Style fields)
 STYLES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "styles.json")
