@@ -13,12 +13,21 @@ local input = { held = {}, pressed = {} }
 function touch() if input.touch then return input.touch[1], input.touch[2] end end
 function btn(n) return input.held[n] or false end
 function btnp(n) return input.pressed[n] or false end
-for _, f in ipairs({ "cls", "text", "rect", "rectfill", "line", "pset", "trifill", "log" }) do
+for _, f in ipairs({ "cls", "text", "rect", "rectfill", "line", "pset", "trifill", "log",
+                    "sspr", "alpha" }) do
   _G[f] = function() end
 end
+local images = 0
+function image(name) images = images + 1; return { name = name } end
+function collectgarbage() end
 TOP, BOTTOM = 0, 1
 local t0 = os.clock()
 function micros() return math.floor((os.clock() - t0) * 1e6) end
+local real_loadfile = loadfile
+function loadfile(p, ...)   -- the cart's animations, when make_c4.py --gfx made them
+  local name = p:match("^data/anim/(.*)$")
+  return real_loadfile(name and (root .. "/carts/c4/data/anim/" .. name) or p, ...)
+end
 local real_dofile = dofile
 function dofile(p)
   local name = p:match("^data/(.*)$")
@@ -89,4 +98,7 @@ for _ = 1, 20000 do
   frame()
 end
 assert(B.finished, "the battle did not end")
+if real_loadfile(root .. "/carts/c4/data/anim/bandit_wait.lua") then
+  assert(images > 0, "no animation was loaded")
+end
 return frames

@@ -17,6 +17,7 @@ local casting = require("combat.casting")
 local grid = require("combat.grid")
 local ai = require("combat.ai")
 local view = require("view")
+local sprites = require("sprites")
 local setup = require("setup")
 abilities.install(battle)
 casting.install(battle)
@@ -39,6 +40,8 @@ local job         -- the computer's turn (a coroutine)
 local queue = {}  -- events still to show
 local anim        -- the event being shown: { frames, t, at = { [stack] = path } }
 local popups = {} -- { wx, wy, text, col, t }
+local acting = {} -- [stack] = { state, dir, start, loop }: not waiting
+local corpse = {} -- [stack] = true: killed, drawn on its last die frame
 local log_lines = {}
 local frame = 0
 local touching = false
@@ -109,19 +112,62 @@ local function show(e)
     if e.flying and #pts > 2 then pts = { e.from, e.path[#e.path] } end
     local n = 0
     for i = 2, #pts do n = n + math.max(math.abs(pts[i][1] - pts[i - 1][1]), math.abs(pts[i][2] - pts[i - 1][2])) end
-    anim = { frames = math.max(4, math.min(24, n)), t = 0, stack = u, pts = pts, len = n }
+    anim = { frames = math.max(6, math.min(30, n * 2)), t = 0, stack = u, pts = pts, len = n,
+             clear = { u } }
+    acting[u] = { state = "walk", start = frame, loop = true }
   elseif e.t == "melee" or e.t == "shoot" or (e.t == "spell" and e.damage ~= 0) then
     local hit = e.t == "spell" and e.stack or e.target
     if e.damage > 0 then popup(hit, "-" .. e.damage, 2)
     elseif e.damage < 0 then popup(e.stack, "+" .. -e.damage, 5)
     else popup(hit, "0", 13) end
-    anim = { frames = 10, t = 0 }
+    anim = { frames = 10, t = 0, clear = {} }
+    local function act(u, state)
+      if not u then return end
+      acting[u] = { state = state, dir = u.facing, start = frame, loop = false }
+      anim.clear[#anim.clear + 1] = u
+      local m = sprites.get(u.actor or u.kind, state, u.facing)
+      if m then
+        local _, len = sprites.length(m)
+        anim.frames = math.max(anim.frames, math.min(len, 30))
+      end
+    end
+    if e.t ~= "spell" then act(b.units[e.stack], "melee") end
+    local t = b.units[hit]
+    if t and e.damage > 0 and t.count > 0 then act(t, "flinch") end
   elseif e.t == "heal" then
     popup(e.stack, "+" .. e.amount, 5)
     anim = { frames = 8, t = 0 }
-  elseif e.t == "die" or e.t == "cast" or e.t == "blocked" then
+  elseif e.t == "die" then
+    local u = b.units[e.stack]
+    anim = { frames = 6, t = 0 }
+    if u then
+      acting[u] = { state = "die", dir = u.facing, start = frame, loop = false }
+      corpse[u] = true
+      local m = sprites.get(u.actor or u.kind, "die", u.facing)
+      if m then
+        local _, len = sprites.length(m)
+        anim.frames = math.min(len, 24)
+      end
+    end
+  elseif e.t == "cast" or e.t == "blocked" then
     anim = { frames = 6, t = 0 }
   end
+end
+
+-- The animation and frame a stack is drawn with
+local function pose(u)
+  local a = acting[u]
+  local actor = u.actor or u.kind
+  local m
+  if a then
+    local dir = a.dir
+    if a.state == "walk" and anim and anim.stack == u then dir = anim.dir or u.facing end
+    m = sprites.get(actor, a.state, dir or u.facing)
+    if m then return m, sprites.frame(m, frame - a.start, a.loop) end
+  end
+  if u.count <= 0 then return nil end
+  m = sprites.get(actor, "wait", u.facing)
+  if m then return m, sprites.frame(m, frame + u.id * 7, true) end
 end
 
 -- Where a moving stack is drawn: along its path, by the animation's progress
@@ -134,6 +180,7 @@ local function moving_at()
     local l = math.max(math.abs(c[1] - a[1]), math.abs(c[2] - a[2]))
     if d <= l and l > 0 then
       local f = d / l
+      anim.dir = grid.facing(c[1] - a[1], c[2] - a[2])
       return { [anim.stack] = { a[1] + (c[1] - a[1]) * f, a[2] + (c[2] - a[2]) * f } }
     end
     d = d - l
@@ -154,7 +201,12 @@ local function showing()
   end
   if anim then
     anim.t = anim.t + 1
-    if anim.t >= anim.frames then anim = nil end
+    if anim.t >= anim.frames then
+      for _, u in ipairs(anim.clear or {}) do
+        if acting[u] and acting[u].state ~= "die" then acting[u] = nil end
+      end
+      anim = nil
+    end
     return true
   end
   while #queue > 0 and not anim do show(table.remove(queue, 1)) end
@@ -170,7 +222,7 @@ end
 local function new_battle()
   b = setup.battle(seed, creatures, spells)
   reset_turn()
-  job, anim, queue, popups = nil, nil, {}, {}
+  job, anim, queue, popups, acting, corpse = nil, nil, {}, {}, {}, {}
   log_lines = {}
   say(("Bitwa %d"):format(seed))
   play(b:take_events())
@@ -402,6 +454,7 @@ new_battle()
 
 function _update()
   frame = frame + 1
+  sprites.tick()
   local tx, ty = touch()
   local pressed = tx and not touching
   touching = tx ~= nil
@@ -556,7 +609,7 @@ local function draw_bottom()
   view.draw_field({ units = b.units, active = not b.finished and b:current() or nil,
                     dots = turn and not aiming and dots or nil, path = sel and sel.path,
                     ghost = sel and sel.ghost, target = sel and sel.target,
-                    marked = sel and sel.marked, at = moving_at(),
+                    marked = sel and sel.marked, at = moving_at(), pose = pose, corpse = corpse,
                     blink = frame % 20 < 12 })
   for _, p in ipairs(popups) do
     local px, py = view.to_screen(p[1], p[2])

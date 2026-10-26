@@ -18,6 +18,7 @@ function setup.battle(seed, creatures, spells)
   local def = { heroes.stack({ name = "Wróg", level = 8, skills = { death = 3, order = 3, archery = 2 },
                                spells = { "curse", "slow", "magic arrow" } }, {}),
                 st(seed * 11 + 3, 12), st(seed * 13 + 4, 20), st(seed * 17 + 5, 6) }
+  att[1].actor, def[1].actor = "hero.life_fighter_male", "hero.death_mage_female"   -- make_c4.py
   return battle.new({ seed = seed * 7919, spells = spells, creatures = creatures,
                       sides = { [0] = { stacks = att }, [1] = { stacks = def } } })
 end
