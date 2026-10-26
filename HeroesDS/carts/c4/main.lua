@@ -32,6 +32,9 @@ local creatures = dofile("data/creatures.lua")
 local spells = dofile("data/spells.lua")
 local artifacts = dofile("data/artifacts.lua")
 local data = { creatures = creatures, spells = spells, artifacts = artifacts }
+local music_file = loadfile("data/music.lua")   -- the battle music (make_c4.py --music)
+local battle_music = music_file and music_file() or {}
+music_volume(0.6)   -- under the sounds of the battle
 if pathgrid then grid.shape() end
 
 local seed = 1
@@ -97,7 +100,10 @@ local EVENT = {
   heal = function(e) return ("%s: +%d PW"):format(name_of(e.stack), e.amount) end,
   revived = function(e) return ("%s: wstaje %d"):format(name_of(e.stack), e.count) end,
   summon = function(e) return name_of(e.stack) .. " przywołany" end,
-  over = function(e) return e.winner == 0 and "Zwycięstwo!" or "Porażka." end,
+  over = function(e)
+    if #battle_music > 0 then music(e.winner == 0 and "win" or "lose", false) end
+    return e.winner == 0 and "Zwycięstwo!" or "Porażka."
+  end,
 }
 
 -- --- showing the events --------------------------------------------------------------------
@@ -305,6 +311,7 @@ local function new_battle()
   fx.walk_stop()
   log_lines = {}
   say(("Bitwa %d"):format(seed))
+  if #battle_music > 0 then music(battle_music[seed % #battle_music + 1]) end
   play(b:take_events())
 end
 
@@ -565,7 +572,7 @@ function _update()
   end
   if showing() then return end
   if b.finished then
-    if btnp("x") or pressed then mode = "menu" end
+    if btnp("x") or pressed then mode = "menu"; music() end
     return
   end
   if not human_turn() then

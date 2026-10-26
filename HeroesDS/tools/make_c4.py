@@ -12,6 +12,10 @@ animations are kept unless --force. gfx/ and data/ stay out of git (H1).
 The cart goes to the SD card as one file, litelua/carts/c4.lcart (a ZIP without
 compression: the PNGs are compressed already), not as ~6000 files; --lcart also writes it
 elsewhere (for the console over FTP).
+--music converts the battle music from the game's soundtrack (homm4_ost/, MP3, kept
+locally) to music/battle<n>.wav (16-bit mono 16 kHz, streamed from the card) and the end
+of a battle to music/win.wav, music/lose.wav; data/music.lua lists the battle pieces.
+MUSIC picks the pieces (--music-all: all six, ~47 MB).
 """
 import argparse
 import os
@@ -150,6 +154,40 @@ def make_fx(force):
     print(f"  sounds: {made} made")
 
 
+OST = os.path.join(cartkit.HEROES, "homm4_ost", "homm4_ost")
+MUSIC = ("18 - Battle I", "19 - Battle II")
+MUSIC_ALL = MUSIC + ("20 - Battle III", "21 - Battle IV", "22 - Battle V", "23 - Battle VI")
+STINGERS = {"win": "Bonus - Combat - Win", "lose": "Bonus - Combat - Lose"}
+MUSIC_RATE = 16000
+
+
+def make_music(pieces, force):
+    """music/battle<n>.wav, win.wav, lose.wav and data/music.lua (see the module's text)"""
+    import wave
+    import miniaudio
+    out_dir = os.path.join(CART, "music")
+    os.makedirs(out_dir, exist_ok=True)
+    jobs = [(f"battle{n}", src) for n, src in enumerate(pieces, 1)] + list(STINGERS.items())
+    for name, src in jobs:
+        out = os.path.join(out_dir, name + ".wav")
+        if os.path.exists(out) and not force:
+            continue
+        snd = miniaudio.decode_file(os.path.join(OST, src + ".mp3"), output_format=miniaudio.SampleFormat.SIGNED16,
+                                    nchannels=1, sample_rate=MUSIC_RATE)
+        with wave.open(out, "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(MUSIC_RATE)
+            w.writeframes(snd.samples.tobytes())
+        print(f"  {name}: {src}, {os.path.getsize(out) // 1024} KB")
+    for old in os.listdir(out_dir):   # pieces no longer chosen
+        if old.startswith("battle") and old[6:-4].isdigit() and int(old[6:-4]) > len(pieces):
+            os.remove(os.path.join(out_dir, old))
+    with open(os.path.join(CART, "data", "music.lua"), "w", encoding="utf-8", newline="\n") as f:
+        f.write("-- The battle music: made by HeroesDS/tools/make_c4.py from the game's soundtrack\n")
+        f.write("return { " + ", ".join(f'"battle{n}"' for n in range(1, len(pieces) + 1)) + " }\n")
+
+
 def write_style():
     """data/style.lua: what the cart needs of the style (the field's colour = its ground)"""
     import h4atlas
@@ -165,6 +203,8 @@ def main(argv):
     p.add_argument("--sd", default=cartkit.SD)
     p.add_argument("--gfx", action="store_true", help="convert the animations")
     p.add_argument("--fx", action="store_true", help="convert missiles, spell effects and sounds")
+    p.add_argument("--music", action="store_true", help="convert the battle music")
+    p.add_argument("--music-all", action="store_true", help="all six battle pieces")
     p.add_argument("--force", action="store_true", help="convert again the ones made")
     p.add_argument("--lcart", help="also pack the cart into this .lcart file")
     a = p.parse_args(argv[1:])
@@ -175,6 +215,8 @@ def main(argv):
         make_gfx(a.force)
     if a.fx:
         make_fx(a.force)
+    if a.music or a.music_all:
+        make_music(MUSIC_ALL if a.music_all else MUSIC, a.force)
     tool = os.path.join(cartkit.HEROES, "..", "tools", "litelua.py")
     outs = [a.lcart] if a.lcart else []
     if a.sd and os.path.isdir(a.sd):

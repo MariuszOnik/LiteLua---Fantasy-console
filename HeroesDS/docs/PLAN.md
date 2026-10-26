@@ -60,6 +60,16 @@ statystyki stwora / działanie artefaktu; zapis w `save/army.txt`. `src/setup.lu
 bohatera → umiejętności (rosną z poziomem) i czary szkoły; bitwa przez `heroes.build`
 (premie armii, artefakty). Księga czarów przewijana (mag zna do ~40 czarów).
 
+**Muzyka i drobiazgi (2026-10-26):** `make_c4.py --music` (OST z `homm4_ost/`, MP3 przez
+`miniaudio`, MIT): Battle I i II jako `music/battle<n>.wav` (16-bit mono 16 kHz, ~17 MB,
+`--music-all` = sześć), Win / Lose na koniec bitwy; głośność muzyki 0,6. Dźwięk chodu w
+pętli podczas marszu. Liczebność nad głową, zaznaczenie = pulsujący `tint` (bez rombów),
+cel ruchu = krzyżyk, zasięg = kropki na granicy, oddział zwraca się do celu ataku.
+
+**⚠ Przed pushem:** dźwięki z gry (`carts/c4/sfx/*.wav`) weszły do lokalnych commitów
+9b9cdc3, d63be51, bd58785 (teraz w `.gitignore` i zdjęte z repo). Trzeba je usunąć z
+historii (przepisanie lokalnych commitów — za zgodą użytkownika), inaczej push je opublikuje.
+
 **Następny krok:** dalsza gra na DSi i poprawki z rozgrywki; potem H3 (konwerter grafiki) i H4 (pole z prawdziwymi sprite'ami) — albo
 decyzja o innym polu walki, jeśli sterowanie na drobnej siatce się nie sprawdzi.
 

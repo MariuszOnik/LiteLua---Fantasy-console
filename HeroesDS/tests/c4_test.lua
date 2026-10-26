@@ -15,7 +15,7 @@ function touch() if input.touch then return input.touch[1], input.touch[2] end e
 function btn(n) return input.held[n] or false end
 function btnp(n) return input.pressed[n] or false end
 for _, f in ipairs({ "cls", "text", "rect", "rectfill", "line", "pset", "trifill", "log",
-                    "sspr", "alpha", "sfx", "sfx_stop", "tint" }) do
+                    "sspr", "alpha", "sfx", "sfx_stop", "tint", "music", "music_volume" }) do
   _G[f] = function() end
 end
 local images = 0

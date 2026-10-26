@@ -80,12 +80,14 @@ function view.stack_color(u)
   return COLOR[u.side][u.is_hero and 2 or 1]
 end
 
--- Dots over the places a stack can move to (one place in 9, made once per turn)
+-- Dots along the edge of where a stack can move (places with an unreachable neighbour,
+-- every other one), made once per turn
 function view.move_dots(cost, size)
-  local dots = {}
+  local dots, N = {}, grid.N
   for k in pairs(cost) do
     local x, y = grid.xy(k)
-    if x % 3 == 0 and y % 3 == 0 then
+    if (x + y) % 2 == 0 and (x == 0 or y == 0 or x == N - 1 or y == N - 1
+        or not cost[k - N] or not cost[k + N] or not cost[k - 1] or not cost[k + 1]) then
       dots[#dots + 1] = x + size / 2
       dots[#dots + 1] = y + size / 2
     end
