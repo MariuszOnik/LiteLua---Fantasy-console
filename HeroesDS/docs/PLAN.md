@@ -37,8 +37,13 @@ kolei (oddział idzie po drodze, liczby obrażeń / leczenia nad celem, krótkie
 Test `tests/c4_test.lua` (lupa, atrapy API LiteLua): tury gracza dotykiem, Magiczna Strzała
 z Księgi, potem komputer kończy bitwę.
 
-**Następny krok:** gra na DSi (C4 wrzucone przez FTP do `litelua/carts/c4`) i poprawki
-z rozgrywki; potem H3 (konwerter grafiki) i H4 (pole z prawdziwymi sprite'ami) — albo
+**Poprawki po teście na DSi (2026-10-26):** oddział stykający się z wrogiem atakuje z
+miejsca (pole ataku = własne, gdy się da); dotyk ziemi już nigdy nie zatwierdza — rysik
+można przeciągać, wybór idzie za nim; zatwierdza przycisk OK (prawy dolny róg) lub A,
+a drugi dotyk tego samego wroga / celu czaru. Szczyt pamięci Lua w grze na DSi 1,57 MB
+(wyniki `flood` po 2×41 KB czekają na GC) — pilnować.
+
+**Następny krok:** dalsza gra na DSi i poprawki z rozgrywki; potem H3 (konwerter grafiki) i H4 (pole z prawdziwymi sprite'ami) — albo
 decyzja o innym polu walki, jeśli sterowanie na drobnej siatce się nie sprawdzi.
 
 **C4a (pomiar i przyspieszenie) — zrobione.** Kartridż `carts/c4bench`

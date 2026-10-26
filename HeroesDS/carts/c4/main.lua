@@ -1,8 +1,9 @@
 -- HeroesDS C4: a battle on the DS with stand-in graphics (COMBAT.md 9; H6, H8, H11).
--- Bottom screen: the whole field at 3/16, touched to choose; a first touch shows what
--- would happen (path, target, damage on the top screen), a second touch on the same
--- thing (or A) does it, B cancels. Buttons: wait and defend at the left, the spell book
--- at the right. L or R held: the magnifier (x2 around the stylus, the stylus at an edge
+-- Bottom screen: the whole field at 3/16, touched to choose; a touch shows what would
+-- happen (path, target, damage on the top screen) and the stylus can be dragged to
+-- correct it. OK (right) or A does it; a second touch on the same enemy or spell target
+-- too, a touch on the ground never (it only corrects). B cancels. Buttons: wait and
+-- defend at the left, the spell book and OK at the right. L or R held: the magnifier (x2 around the stylus, the stylus at an edge
 -- scrolls). The d-pad moves a cursor; A then touches where it points. The computer plays
 -- side 1 in a coroutine, yielding at grid.tick() every SLICE us, so the hourglass turns.
 -- Events are shown one by one: stacks walk their path, hits show their damage.
@@ -44,6 +45,8 @@ local touching = false
 local slice_start = 0
 local focus = { 590, 512 }     -- scene point the magnifier looks at
 local cursor                   -- { x, y } on the bottom screen while the d-pad is used
+local dragging = false         -- the stylus went down on the field and is still down
+local last_touch = { -1, -1 }
 
 -- --- the log -------------------------------------------------------------------------------
 
@@ -221,9 +224,11 @@ local function choose(px, py)
   local t = view.stack_at(b.units, px, py)
   if t and t ~= u and opts.melee[t.id] ~= nil then
     if opts.shoot[t.id] then return { type = "shoot", target = t.id }, t end
-    -- the place to strike from: the one nearest the stylus
+    -- the place to strike from: where it stands when it can, else the one nearest the stylus
+    local positions = b:attack_positions(u, t)
+    if positions[grid.key(u.x, u.y)] then return { type = "melee", target = t.id, x = u.x, y = u.y }, t end
     local best, bd
-    for k in pairs(b:attack_positions(u, t)) do
+    for k in pairs(positions) do
       local x, y = grid.xy(k)
       local dx, dy = x + u.size / 2 - wx, y + u.size / 2 - wy
       local d = dx * dx + dy * dy
@@ -283,8 +288,8 @@ local function aim_spell(px, py)
   return cmd
 end
 
-local function select_spell(cmd)
-  if sel and same(sel.cmd, cmd) then return confirm() end
+local function select_spell(cmd, again)
+  if again and sel and same(sel.cmd, cmd) then return confirm() end
   local targets, err = casting.check(b, b:current(), cmd)
   if not targets then
     sel = { cmd = cmd, bad = err }
@@ -295,18 +300,21 @@ local function select_spell(cmd)
   sel = { cmd = cmd, marked = marked, count = #targets }
 end
 
-local function pick(px, py)
+-- A touch (again = a new press, not a drag) chooses; a new press on the same enemy or
+-- spell target does it
+local function pick(px, py, again)
   if aiming then
     local cmd = aim_spell(px, py)
-    if cmd then select_spell(cmd) end
+    if cmd then select_spell(cmd, again and cmd.target ~= nil) end
     return
   end
   local cmd, t = choose(px, py)
   if not cmd then
-    sel = t and { info = t } or nil
+    if again then sel = t and { info = t } or nil end
     return
   end
-  if sel and same(sel.cmd, cmd) then return confirm() end
+  if again and t and sel and same(sel.cmd, cmd) then return confirm() end
+  if sel and same(sel.cmd, cmd) then return end
   local u = b:current()
   sel = { cmd = cmd, target = t }
   if cmd.type == "melee" and not cmd.x then return end
@@ -327,6 +335,7 @@ local BUTTONS = {
   { x = 1, y = 4, label = "Cz", cmd = { type = "wait" }, ok = function() return opts.wait end },
   { x = 1, y = 48, label = "Ob", cmd = { type = "defend" }, ok = function() return true end },
   { x = 240, y = 4, label = "Ks", book = true, ok = function() return next(opts.spells) ~= nil end },
+  { x = 240, y = 148, label = "OK", go = true, ok = function() return sel and sel.cmd and not sel.bad end },
 }
 
 local function button_at(px, py)
@@ -426,16 +435,25 @@ function _update()
     if cursor then tx, ty, pressed = cursor[1], cursor[2], true
     elseif sel and sel.cmd and not sel.bad then return confirm() end
   end
+  if not tx then dragging = false end
+  if dragging and tx and not pressed and not book then   -- the stylus dragged: correct
+    local free = not aiming or aiming.aim == "cell" or aiming.aim == "unit_or_cell"
+    if free and (tx ~= last_touch[1] or ty ~= last_touch[2]) then pick(tx, ty, false) end
+    last_touch = { tx, ty }
+    return
+  end
+  if pressed then last_touch = { tx, ty } end
   if not pressed then return end
   if book then return book_touch(tx, ty) end
   local bt = button_at(tx, ty)
   if bt then
     if not bt.ok() then return end
     if bt.book then return open_book() end
-    sel = { cmd = bt.cmd }
+    if not bt.go then sel = { cmd = bt.cmd } end
     return confirm()
   end
-  pick(tx, ty)
+  dragging = true
+  pick(tx, ty, true)
 end
 
 -- An hourglass turning over every second
@@ -483,7 +501,7 @@ local function draw_selection(y)
     text(("obrażenia %d-%d, zabici %d-%d"):format(p.min, p.max, p.kills_min, p.kills_max), 2, y + 9, 12)
     if p.back_min then text(("odwet %d-%d"):format(p.back_min, p.back_max), 2, y + 18, 3) end
   end
-  if not sel.bad then text("dotknij jeszcze raz / A", 116, y + 18, 13) end
+  if not sel.bad then text("OK / A: wykonaj", 152, y + 18, 13) end
 end
 
 local function draw_top()
