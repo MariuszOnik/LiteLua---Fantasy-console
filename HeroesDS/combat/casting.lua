@@ -336,9 +336,14 @@ function casting.sparks_position(b, u, t, px, py)
   if px then wx, wy = px * 16 + 8 - tx, py * 16 + 8 - ty
   else wx, wy = u.x * 16 + u.size * 8 - tx, u.y * 16 + u.size * 8 - ty end
   local wl = f32(math.sqrt(wx * wx + wy * wy))
-  local keys = {}
-  for k in pairs(b:reachable(u)) do keys[#keys + 1] = k end
-  keys[#keys + 1] = grid.key(u.x, u.y)
+  -- the places it can reach (and its own) touching t: only in the box around t
+  local keys, cost, N = {}, b:reachable(u), grid.N
+  for x = math.max(0, t.x - u.size), math.min(N - 1, t.x + t.size) do
+    for y = math.max(0, t.y - u.size), math.min(N - 1, t.y + t.size) do
+      local k = grid.key(x, y)
+      if cost[k] or (x == u.x and y == u.y) then keys[#keys + 1] = k end
+    end
+  end
   table.sort(keys)
   local best, best_cos
   for _, k in ipairs(keys) do
@@ -679,7 +684,7 @@ function casting.cast(b, u, cmd)
     local cells = {}
     for i = -1, 1 do
       for j = -1, 1 do
-        b.field.blocked[grid.key(cmd.x + i, cmd.y + j)] = true
+        b.field:block(cmd.x + i, cmd.y + j)
         cells[#cells + 1] = { cmd.x + i, cmd.y + j }
       end
     end

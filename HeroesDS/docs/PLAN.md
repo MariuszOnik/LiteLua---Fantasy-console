@@ -24,17 +24,18 @@ dotknięcia (podgląd + potwierdzenie), lupa ×2 na L/R; górny = aktywny oddzia
 obrażeń, kolejka, dziennik; komputer gra jedną stroną (`ai.run`), tura komputera w korutynie
 z klepsydrą (H11, `grid.tick`).
 
-**C4a (pomiar) zrobiony — za wolno, najpierw przyspieszyć silnik.** Kartridż
-`carts/c4bench` (`python HeroesDS/tools/make_c4bench.py` kopiuje silnik + reguły bez opisów,
-liczy wynik na PC do `data/pc.lua` i wrzuca na kartę melonDS). melonDS (DS 67 MHz):
-wczytanie kodu 625 ms + reguł 365 ms, 356 KB; **jedno `reachable` średnio 3,2 s (najgorzej
-6,9 s, ×380 względem PC)**; bitwa #1: tura AI średnio 7,3 s, najgorsza 22 s, z tego 97% to
-szukanie drogi (czary 80 ms). Stan końcowy bitwy = PC bit w bit (float32 OK). Najdłuższy
-kawałek bez `grid.tick` 7,3 s — pętle po wszystkich osiągalnych polach (`attack_positions`
-dla każdego wroga, „najbliższe pole” w `ai.act`, `step_toward` „na 12 tur”). Do zrobienia:
-szybszy `grid.reachable` (tablice zamiast tablic-krotek w kopcu, wielokrotne użycie tablic,
-mniej pól), jedno `reachable` na turę, `attack_positions` tylko wokół celu, tick w tych
-pętlach; potem pomiar na DSi (×2 szybszy procesor).
+**C4a (pomiar + pierwsze przyspieszenie).** Kartridż `carts/c4bench`
+(`python HeroesDS/tools/make_c4bench.py` kopiuje silnik + reguły bez opisów, liczy wynik na PC
+do `data/pc.lua` i wrzuca na kartę melonDS). Pierwszy pomiar (melonDS, DS 67 MHz): jedno
+`reachable` 3,2 s, tura AI średnio 7,3 s / najgorsza 22 s. Po przyspieszeniu (`Field:fits`
+z sum prefiksowych, mapa zajętości raz na szukanie, kopiec na płaskich tablicach, koszty
+całkowite ×32, lot bez ponownego szukania, `attack_positions` i Iskry tylko wokół celu,
+`grid.tick` w długich pętlach): `reachable` ~1 s, tura średnio 0,4–1,3 s, najgorsza 3,0 s;
+stan końcowy bitew = PC bit w bit. Lua na DS ≈ 1 mln instrukcji VM/s, szukanie drogi
+~500–1200 instrukcji na pole → dalej tylko przeniesienie szukania drogi do C (do decyzji).
+Uwagi: szczyt pamięci Lua 1737 KB z 2048 KB (!); `micros()` w bitwie #2 dał ujemne sumy
+(przepełnienie przy 32-bitowych liczbach?) — do sprawdzenia w LiteLua; najdłuższy przestój
+klepsydry 1,7 s (pętla bez `grid.tick`, do znalezienia).
 
 **Przeczytaj najpierw:** `docs/DECISIONS.md` (H1–H10), `docs/COMBAT.md` (architektura walki, §11 — stan C3),
 `docs/MECHANICS.md` (zasady walki 1:1, §1–14), `docs/DS_GRAPHICS.md` (pamięć wideo, style,

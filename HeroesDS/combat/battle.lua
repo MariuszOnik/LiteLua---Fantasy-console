@@ -457,7 +457,7 @@ function Battle:path(u, x, y)
   local goal = grid.key(x, y)
   if cost[goal] == nil then return nil end
   if m.teleport then return { { x, y } } end
-  if m.flies then return grid.path(self.field, self.units, m, x, y) end
+  if m.flies then return grid.flight(m, x, y) end   -- reachable() checked the landing
   local out, k, start = {}, goal, grid.key(u.x, u.y)
   while k ~= start do
     table.insert(out, 1, { grid.xy(k) })
@@ -471,7 +471,10 @@ end
 -- picks the same)
 local function cheapest(cost, ok)
   local best, best_cost
+  local n = 0
   for k, c in pairs(cost) do
+    n = n + 1
+    if n & 63 == 0 then grid.tick() end
     if (best_cost == nil or c < best_cost or (c == best_cost and k < best)) and ok(k) then
       best, best_cost = k, c
     end
@@ -779,10 +782,15 @@ end
 function Battle:attack_positions(u, t)
   local r, out = self:reach(u), {}
   if battle.in_reach(u.x, u.y, u.size, t, r) then out[grid.key(u.x, u.y)] = 0 end
+  -- in_reach holds only in the box around t: t.x - size - r <= x <= t.x + t.size + r
   local cost = self:reachable(u)
-  for k, c in pairs(cost) do
-    local x, y = grid.xy(k)
-    if battle.in_reach(x, y, u.size, t, r) then out[k] = c end
+  local N = grid.N
+  for x = math.max(0, t.x - u.size - r), math.min(N - 1, t.x + t.size + r) do
+    for y = math.max(0, t.y - u.size - r), math.min(N - 1, t.y + t.size + r) do
+      local k = grid.key(x, y)
+      local c = cost[k]
+      if c then out[k] = c end
+    end
   end
   return out
 end

@@ -236,7 +236,10 @@ function ai.act(b)
   local nearest = best_by(enemies, function(v) return -grid.dist4(u, v) end)
   local best, bd
   local nx, ny = 2 * nearest.x + nearest.size, 2 * nearest.y + nearest.size
+  local n = 0
   for k in pairs(b:reachable(u)) do
+    n = n + 1
+    if n & 63 == 0 then grid.tick() end
     local x, y = grid.xy(k)
     local dx, dy = 2 * x + u.size - nx, 2 * y + u.size - ny
     local d = dx * dx + dy * dy
