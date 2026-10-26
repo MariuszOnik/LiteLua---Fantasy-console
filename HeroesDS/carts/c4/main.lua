@@ -41,7 +41,7 @@ local queue = {}  -- events still to show
 local anim        -- the event being shown: { frames, t, at = { [stack] = path } }
 local popups = {} -- { wx, wy, text, col, t }
 local acting = {} -- [stack] = { state, dir, start, loop }: not waiting
-local corpse = {} -- [stack] = true: killed, drawn on its last die frame
+local dying = {}  -- [stack] = true: killed, still drawn until its death has been shown
 local log_lines = {}
 local frame = 0
 local touching = false
@@ -133,20 +133,19 @@ local function show(e)
     end
     if e.t ~= "spell" then act(b.units[e.stack], "melee") end
     local t = b.units[hit]
-    if t and e.damage > 0 and t.count > 0 then act(t, "flinch") end
+    if t and e.damage > 0 and (t.count > 0 or dying[t]) then act(t, "flinch") end
   elseif e.t == "heal" then
     popup(e.stack, "+" .. e.amount, 5)
     anim = { frames = 8, t = 0 }
   elseif e.t == "die" then
     local u = b.units[e.stack]
-    anim = { frames = 6, t = 0 }
+    anim = { frames = 6, t = 0, dead = u }
     if u then
       acting[u] = { state = "die", dir = u.facing, start = frame, loop = false }
-      corpse[u] = true
       local m = sprites.get(u.actor or u.kind, "die", u.facing)
       if m then
         local _, len = sprites.length(m)
-        anim.frames = math.min(len, 24)
+        anim.frames = math.min(len, 30)
       end
     end
   elseif e.t == "cast" or e.t == "blocked" then
@@ -165,7 +164,7 @@ local function pose(u)
     m = sprites.get(actor, a.state, dir or u.facing)
     if m then return m, sprites.frame(m, frame - a.start, a.loop) end
   end
-  if u.count <= 0 then return nil end
+  if u.count <= 0 and not dying[u] then return nil end
   m = sprites.get(actor, "wait", u.facing)
   if m then return m, sprites.frame(m, frame + u.id * 7, true) end
 end
@@ -188,8 +187,20 @@ local function moving_at()
   return nil
 end
 
+-- Queues events to show. Stacks they kill stay drawn until their death is shown, and the
+-- animations they need are loaded now: one wait before the show, none in the middle.
 local function play(events)
-  for _, e in ipairs(events or {}) do queue[#queue + 1] = e end
+  local function need(u, state)
+    if u then sprites.get(u.actor or u.kind, state, u.facing) end
+  end
+  for _, e in ipairs(events or {}) do
+    queue[#queue + 1] = e
+    local u, t = b.units[e.stack], e.target and b.units[e.target]
+    if e.t == "die" and u then dying[u] = true; need(u, "die"); need(u, "flinch") end
+    if e.t == "melee" or e.t == "shoot" then need(u, "melee"); need(t, "flinch") end
+    if e.t == "move" then need(u, "walk") end
+    if e.t == "spell" and e.damage > 0 then need(u, "flinch") end
+  end
 end
 
 -- One frame of the show; true while it holds the game
@@ -204,6 +215,9 @@ local function showing()
     if anim.t >= anim.frames then
       for _, u in ipairs(anim.clear or {}) do
         if acting[u] and acting[u].state ~= "die" then acting[u] = nil end
+      end
+      if anim.dead then   -- its death shown: off the field
+        acting[anim.dead], dying[anim.dead] = nil, nil
       end
       anim = nil
     end
@@ -222,7 +236,7 @@ end
 local function new_battle()
   b = setup.battle(seed, creatures, spells)
   reset_turn()
-  job, anim, queue, popups, acting, corpse = nil, nil, {}, {}, {}, {}
+  job, anim, queue, popups, acting, dying = nil, nil, {}, {}, {}, {}
   log_lines = {}
   say(("Bitwa %d"):format(seed))
   play(b:take_events())
@@ -609,7 +623,7 @@ local function draw_bottom()
   view.draw_field({ units = b.units, active = not b.finished and b:current() or nil,
                     dots = turn and not aiming and dots or nil, path = sel and sel.path,
                     ghost = sel and sel.ghost, target = sel and sel.target,
-                    marked = sel and sel.marked, at = moving_at(), pose = pose, corpse = corpse,
+                    marked = sel and sel.marked, at = moving_at(), pose = pose, corpse = dying,
                     blink = frame % 20 < 12 })
   for _, p in ipairs(popups) do
     local px, py = view.to_screen(p[1], p[2])

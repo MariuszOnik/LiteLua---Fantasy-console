@@ -91,7 +91,7 @@ end
 -- The field: the scene, the move dots, the stacks (farther first), the active one and the
 -- selection on top. st = { units, active (stack), dots, path, ghost, target, marked
 -- ([stack] = true), at ([stack] = { wx, wy } while it moves), pose (function(stack) ->
--- animation, frame), corpse ([stack] = true: drawn dead), blink }
+-- animation, frame), corpse ([stack] = true: drawn though dead, until its death is shown), blink }
 function view.draw_field(st)
   local x0, y0 = view.OX - camx * K, view.OY - camy * K
   rectfill(x0, y0, grid.SCENE_W * K, grid.SCENE_H * K, 7)
