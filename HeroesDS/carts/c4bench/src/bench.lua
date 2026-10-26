@@ -76,14 +76,13 @@ function bench.reachable(env, runs)
     end
     if env.yield then env.yield() end
   end
-  local r = { avg = sum // n, worst = worst }
-  if grid.native then r.diff = bench.compare(b) end
-  return r
+  return { avg = sum // n, worst = worst }
 end
 
 -- With pathgrid: does the C search give the same costs and parents as the Lua one for
 -- every stack? Returns the number of differing entries
-function bench.compare(b)
+function bench.compare(env)
+  local b = bench.new_battle(env, 1)
   local diff = 0
   local function same(a, c)
     for k, v in pairs(a) do if c[k] ~= v or math.type(c[k]) ~= math.type(v) then diff = diff + 1 end end
@@ -125,11 +124,14 @@ function bench.battle(env, seed, limit)
   acc = {}
   for _ = 1, limit or 2000 do
     if b.finished or not b:current() then break end
+    local u = b:current()
     local t0 = active()
     start = clock()
     assert(ai.act(b))
     r.stall = math.max(r.stall, clock() - start)
     local t = active() - t0
+    if t > (r.worst_t or 0) then r.worst_t, r.worst_who = t, (u.name or "?") .. " r" .. b.round end
+    r.mem = math.max(r.mem or 0, collectgarbage("count") // 1)
     b:take_events()
     r.turns, r.total, r.worst = r.turns + 1, r.total + t, math.max(r.worst, t)
     if env.yield then env.yield(r) end

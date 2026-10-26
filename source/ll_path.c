@@ -3,7 +3,8 @@
 // LiteLua - path search on a grid (D57): Dijkstra in C for units that stand on a
 // size x size footprint, with step costs, other units in the way, zones of
 // control, slow and miry cells, and flying. Lua does the same about 50 times
-// slower on a DS (HeroesDS measured ~1 s for one search).
+// slower on a DS (HeroesDS measured ~1 s for one search). The search itself is
+// in ll_path_core.itcm.arm.c.
 //
 // Lua API:
 //   g = pathgrid(w, h)               all cells open
@@ -28,9 +29,10 @@
 //   fly = false         passes over closed cells and blockers, lands only where free
 //   columns = false     keys x * h + y instead of y * w + x
 //   div                 return costs / div as numbers (0 stays the integer 0)
-// Returns cost[key] of every place the mover can stop at and parent[key] of the
-// cheapest steps. Ties go the same way on every machine (a binary heap without
-// key order, steps in the given order).
+// cost[key] is the cost of every place the mover can stop at, parent[key] the
+// place it came from (nil at the start). Both are read-only objects that work
+// like tables for [key] and pairs() (in key order): on a DS, filling real
+// tables took as long as the search.
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -41,28 +43,32 @@
 #include "lua.h"
 
 #include "ll_path.h"
+#include "ll_path_core.h"
 
 #define GRID_MT "LiteLua.pathgrid"
+#define RESULT_MT "LiteLua.pathresult"
 #define MAX_SIDE 512
 #define MAX_STEPS 16
 #define MAX_RECTS 64
-
-#define F_CLOSED 1
-#define F_SLOW 2
-#define F_MIRE 4
 
 typedef struct {
     int w, h;
     uint8_t cells[]; // y * w + x
 } Grid;
 
+// The costs or the parents of a search, by key; -1 = none
+typedef struct {
+    int n;
+    bool parent;    // values are keys
+    bool has_div;
+    lua_Number div;
+    int32_t v[];
+} Result;
+
 // Work memory of a search, kept between calls (grown when needed)
-static int32_t *dist;     // cost, -1 = not reached
-static int32_t *parent;
-static uint8_t *mark;     // 1 popped, 2 occupied, 4 fits known, 8 fits, 16 touches a zone
-static int32_t *sums;     // (w+1)(h+1) counts of closed cells
-static int32_t *msums;    // the same for mire cells
-static int32_t *heap_c, *heap_k;
+static int32_t *dist, *sums, *msums, *heap_c;
+static uint32_t *heap_xy;
+static uint8_t *mark;
 static int cap_cells, cap_heap;
 
 static Grid *check_grid(lua_State *L)
@@ -98,7 +104,8 @@ static int g_get(lua_State *L)
 {
     Grid *g = check_grid(L);
     int x = (int)luaL_checkinteger(L, 2), y = (int)luaL_checkinteger(L, 3);
-    lua_pushinteger(L, (x >= 0 && y >= 0 && x < g->w && y < g->h) ? g->cells[y * g->w + x] : F_CLOSED);
+    lua_pushinteger(L, (x >= 0 && y >= 0 && x < g->w && y < g->h) ? g->cells[y * g->w + x]
+                                                                  : LL_PATH_CLOSED);
     return 1;
 }
 
@@ -122,7 +129,7 @@ static int g_fits(lua_State *L)
     bool ok = x >= 0 && y >= 0 && x + s <= g->w && y + s <= g->h;
     for (int j = 0; ok && j < s; j++)
         for (int i = 0; i < s; i++)
-            if (g->cells[(y + j) * g->w + x + i] & F_CLOSED)
+            if (g->cells[(y + j) * g->w + x + i] & LL_PATH_CLOSED)
             {
                 ok = false;
                 break;
@@ -134,83 +141,34 @@ static int g_fits(lua_State *L)
 // ---------------------------------------------------------------------------
 // Search
 
-static bool grow(lua_State *L, int cells)
+static void *grow_array(lua_State *L, void *p, size_t bytes)
 {
-    if (cells <= cap_cells)
-        return true;
-    int s = (cells / 1024 + 1) * 1024;
-    int ss = s + 2 * MAX_SIDE + 1;  // (w+1)(h+1) <= cells + w + h + 1
-    int32_t *d = realloc(dist, sizeof(int32_t) * s);
-    if (d) dist = d;
-    int32_t *p = realloc(parent, sizeof(int32_t) * s);
-    if (p) parent = p;
-    uint8_t *m = realloc(mark, s);
-    if (m) mark = m;
-    int32_t *a = realloc(sums, sizeof(int32_t) * ss);
-    if (a) sums = a;
-    int32_t *b = realloc(msums, sizeof(int32_t) * ss);
-    if (b) msums = b;
-    if (!d || !p || !m || !a || !b)
-        return luaL_error(L, "pathgrid: out of memory"), false;
-    cap_cells = s;
-    return true;
+    void *n = realloc(p, bytes);
+    if (!n)
+        luaL_error(L, "pathgrid: out of memory");
+    return n;
 }
 
-static void heap_grow(lua_State *L, int n)
+static void grow_work(lua_State *L, int cells)
+{
+    if (cells <= cap_cells)
+        return;
+    int s = (cells / 1024 + 1) * 1024;
+    int ss = s + 2 * MAX_SIDE + 1; // (w + 1)(h + 1) = cells + w + h + 1
+    dist = grow_array(L, dist, sizeof(int32_t) * s);
+    mark = grow_array(L, mark, s);
+    sums = grow_array(L, sums, sizeof(int32_t) * ss);
+    msums = grow_array(L, msums, sizeof(int32_t) * ss);
+    cap_cells = s;
+}
+
+static void grow_heap(lua_State *L, int n)
 {
     if (n <= cap_heap)
         return;
-    int s = cap_heap ? cap_heap * 2 : 4096;
-    while (s < n)
-        s *= 2;
-    int32_t *c = realloc(heap_c, sizeof(int32_t) * s);
-    if (c) heap_c = c;
-    int32_t *k = realloc(heap_k, sizeof(int32_t) * s);
-    if (k) heap_k = k;
-    if (!c || !k)
-        luaL_error(L, "pathgrid: out of memory");
-    cap_heap = s;
-}
-
-// The same binary heap as HeroesDS's grid.lua (1-based, ties by position only)
-static void heap_push(int n, int32_t c, int32_t k)
-{
-    heap_c[n] = c;
-    heap_k[n] = k;
-    while (n > 1)
-    {
-        int p = n / 2;
-        if (heap_c[p] <= heap_c[n])
-            break;
-        int32_t t = heap_c[p]; heap_c[p] = heap_c[n]; heap_c[n] = t;
-        t = heap_k[p]; heap_k[p] = heap_k[n]; heap_k[n] = t;
-        n = p;
-    }
-}
-
-static void heap_pop(int n, int32_t *c, int32_t *k)
-{
-    *c = heap_c[1];
-    *k = heap_k[1];
-    int32_t lc = heap_c[n], lk = heap_k[n];
-    n--;
-    if (n > 0)
-    {
-        heap_c[1] = lc;
-        heap_k[1] = lk;
-        int i = 1;
-        for (;;)
-        {
-            int l = 2 * i, r = l + 1, m = i;
-            if (l <= n && heap_c[l] < heap_c[m]) m = l;
-            if (r <= n && heap_c[r] < heap_c[m]) m = r;
-            if (m == i)
-                break;
-            int32_t t = heap_c[i]; heap_c[i] = heap_c[m]; heap_c[m] = t;
-            t = heap_k[i]; heap_k[i] = heap_k[m]; heap_k[m] = t;
-            i = m;
-        }
-    }
+    heap_c = grow_array(L, heap_c, sizeof(int32_t) * n);
+    heap_xy = grow_array(L, heap_xy, sizeof(uint32_t) * n);
+    cap_heap = n;
 }
 
 static int read_ints(lua_State *L, int opts, const char *name, int32_t *out, int max)
@@ -248,219 +206,153 @@ static bool opt_bool(lua_State *L, int opts, const char *name, bool def)
     return v;
 }
 
-static inline int sgn(int v) { return (v > 0) - (v < 0); }
-
-// The nearest of 8 directions (HeroesDS grid.dir8): borders at 22.5 degrees exact
-static void dir8(int dx, int dy, int *ox, int *oy)
+static Result *new_result(lua_State *L, int n, bool parent)
 {
-    int ax = abs(dx), ay = abs(dy);
-    if (ax == 0 && ay == 0) { *ox = 1; *oy = 0; return; }
-    int s2 = (ax + ay) * (ax + ay);
-    if (s2 < 2 * ax * ax) { *ox = sgn(dx); *oy = 0; return; }
-    if (s2 < 2 * ay * ay) { *ox = 0; *oy = sgn(dy); return; }
-    *ox = sgn(dx);
-    *oy = sgn(dy);
+    Result *r = (Result *)lua_newuserdatauv(L, sizeof(Result) + sizeof(int32_t) * n, 0);
+    r->n = n;
+    r->parent = parent;
+    r->has_div = false;
+    r->div = 1;
+    luaL_setmetatable(L, RESULT_MT);
+    return r;
 }
 
 static int g_flood(lua_State *L)
 {
     Grid *g = check_grid(L);
     luaL_checktype(L, 2, LUA_TTABLE);
-    const int W = g->w, H = g->h, M = W + 1;
-    int sx = opt_int(L, 2, "x", 0), sy = opt_int(L, 2, "y", 0);
-    int size = opt_int(L, 2, "size", 1);
-    int budget = opt_int(L, 2, "budget", 0);
-    bool corners = opt_bool(L, 2, "corners", true);
-    bool fly = opt_bool(L, 2, "fly", false);
+    LLPathJob j = { 0 };
+    j.w = g->w;
+    j.h = g->h;
+    j.cells = g->cells;
     bool columns = opt_bool(L, 2, "columns", false);
+    j.kx = columns ? g->h : 1;
+    j.ky = columns ? 1 : g->w;
+    j.x = opt_int(L, 2, "x", 0);
+    j.y = opt_int(L, 2, "y", 0);
+    j.size = opt_int(L, 2, "size", 1);
+    j.budget = opt_int(L, 2, "budget", 0);
+    j.corners = opt_bool(L, 2, "corners", true);
+    j.fly = opt_bool(L, 2, "fly", false);
     lua_getfield(L, 2, "slow");
-    bool has_slow = !lua_isnil(L, -1);
-    int slow = has_slow ? (int)luaL_checkinteger(L, -1) : 0;
+    j.has_slow = !lua_isnil(L, -1);
+    j.slow = j.has_slow ? (int)luaL_checkinteger(L, -1) : 0;
     lua_getfield(L, 2, "mire");
-    bool has_mire = !lua_isnil(L, -1);
-    int mire = has_mire ? (int)luaL_checkinteger(L, -1) : 0;
+    j.has_mire = !lua_isnil(L, -1);
+    j.mire = j.has_mire ? (int)luaL_checkinteger(L, -1) : 0;
     lua_getfield(L, 2, "div");
     bool has_div = !lua_isnil(L, -1);
     lua_Number div = has_div ? luaL_checknumber(L, -1) : 1;
     lua_pop(L, 3);
-    luaL_argcheck(L, size >= 1 && size <= W && size <= H, 2, "size out of range");
-    luaL_argcheck(L, sx >= 0 && sy >= 0 && sx < W && sy < H, 2, "start outside the grid");
+    luaL_argcheck(L, j.size >= 1 && j.size <= j.w && j.size <= j.h, 2, "size out of range");
+    luaL_argcheck(L, j.x >= 0 && j.y >= 0 && j.x < j.w && j.y < j.h, 2, "start outside the grid");
 
     int32_t steps[MAX_STEPS * 3], blockers[MAX_RECTS * 3], zones[MAX_RECTS * 3];
     int32_t zone_costs[MAX_STEPS];
-    int ns = read_ints(L, 2, "steps", steps, MAX_STEPS * 3) / 3;
-    if (ns == 0)
+    j.nsteps = read_ints(L, 2, "steps", steps, MAX_STEPS * 3) / 3;
+    if (j.nsteps == 0)
     {
         static const int32_t def[] = { 1, 0, 2, -1, 0, 2, 0, 1, 2, 0, -1, 2,
                                        1, 1, 3, -1, -1, 3, 1, -1, 3, -1, 1, 3 };
         memcpy(steps, def, sizeof(def));
-        ns = 8;
+        j.nsteps = 8;
     }
-    int nb = read_ints(L, 2, "blockers", blockers, MAX_RECTS * 3) / 3;
-    int nz = read_ints(L, 2, "zones", zones, MAX_RECTS * 3) / 3;
+    j.steps = steps;
+    j.nblockers = read_ints(L, 2, "blockers", blockers, MAX_RECTS * 3) / 3;
+    j.blockers = blockers;
+    j.nzones = read_ints(L, 2, "zones", zones, MAX_RECTS * 3) / 3;
+    j.zones = zones;
     int nzc = read_ints(L, 2, "zone_costs", zone_costs, MAX_STEPS);
-    for (int i = nzc; i < ns; i++)
+    for (int i = nzc; i < j.nsteps; i++)
         zone_costs[i] = 0;
-    // the cheapest straight step: costlier ones are diagonal
-    int straight = steps[2];
-    for (int i = 1; i < ns; i++)
-        if (steps[i * 3 + 2] < straight) straight = steps[i * 3 + 2];
+    j.zone_costs = zone_costs;
 
-    const int cells = W * H;
-    if (!grow(L, cells))
-        return 0;
-    heap_grow(L, 4096);
-
-    // prefix sums of closed and mire cells: S[(y) * M + x] over cells < x, < y
-    for (int i = 0; i < M; i++)
-        sums[i] = msums[i] = 0;
-    for (int y = 0; y < H; y++)
+    const int cells = j.w * j.h;
+    grow_work(L, cells);
+    grow_heap(L, cells < 4096 ? 4096 : cells);
+    Result *cost = new_result(L, cells, false);
+    cost->has_div = has_div;
+    cost->div = div;
+    Result *parent = new_result(L, cells, true);
+    j.dist = dist;
+    j.sums = sums;
+    j.msums = msums;
+    j.mark = mark;
+    j.cost = cost->v;
+    j.parent = parent->v;
+    for (;;)
     {
-        int row = 0, mrow = 0;
-        sums[(y + 1) * M] = msums[(y + 1) * M] = 0;
-        for (int x = 0; x < W; x++)
-        {
-            uint8_t f = g->cells[y * W + x];
-            row += f & F_CLOSED;
-            mrow += (f & F_MIRE) != 0;
-            sums[(y + 1) * M + x + 1] = sums[y * M + x + 1] + row;
-            msums[(y + 1) * M + x + 1] = msums[y * M + x + 1] + mrow;
-        }
-    }
-#define BOX(S, x, y, s) (S[((y) + (s)) * M + (x) + (s)] - S[(y) * M + (x) + (s)] \
-                         - S[((y) + (s)) * M + (x)] + S[(y) * M + (x)])
-#define FITS(x, y) ((x) >= 0 && (y) >= 0 && (x) + size <= W && (y) + size <= H \
-                    && BOX(sums, x, y, size) == 0)
-
-    for (int i = 0; i < cells; i++)
-        dist[i] = -1;
-    memset(mark, 0, cells);
-    // places overlapping a blocker / touching a zone
-    for (int b = 0; b < nb; b++)
-    {
-        int bx = blockers[b * 3], by = blockers[b * 3 + 1], bs = blockers[b * 3 + 2];
-        for (int y = by - size + 1 > 0 ? by - size + 1 : 0; y <= by + bs - 1 && y < H; y++)
-            for (int x = bx - size + 1 > 0 ? bx - size + 1 : 0; x <= bx + bs - 1 && x < W; x++)
-                mark[y * W + x] |= 2;
-    }
-    for (int z = 0; z < nz; z++)
-    {
-        int zx = zones[z * 3], zy = zones[z * 3 + 1], zs = zones[z * 3 + 2];
-        for (int y = zy - size > 0 ? zy - size : 0; y <= zy + zs && y < H; y++)
-            for (int x = zx - size > 0 ? zx - size : 0; x <= zx + zs && x < W; x++)
-                mark[y * W + x] |= 16;
-    }
-
-    int start = sy * W + sx;
-    dist[start] = 0;
-    int hn = 1;
-    heap_c[1] = 0;
-    heap_k[1] = start;
-    int popped = 0;
-    while (hn > 0)
-    {
-        int32_t c, k;
-        heap_pop(hn, &c, &k);
-        hn--;
-        if (c > dist[k])
-            continue;
-        if (!(mark[k] & 1))
-        {
-            mark[k] |= 1;
-            popped++;
-        }
-        int x = k % W, y = k / W;
-        // steps that leave a zone freely: straight to or away from each zone touched
-        uint32_t free_mask = ~0u;
-        if (mark[k] & 16)
-        {
-            bool any = false;
-            uint32_t ok = 0;
-            for (int z = 0; z < nz; z++)
-            {
-                int zx = zones[z * 3], zy = zones[z * 3 + 1], zs = zones[z * 3 + 2];
-                if (x <= zx + zs && zx <= x + size && y <= zy + zs && zy <= y + size)
-                {
-                    int fx, fy;
-                    dir8((2 * zx + zs) - (2 * x + size), (2 * zy + zs) - (2 * y + size), &fx, &fy);
-                    for (int s = 0; s < ns; s++)
-                    {
-                        int dx = steps[s * 3], dy = steps[s * 3 + 1];
-                        if ((dx == fx && dy == fy) || (dx == -fx && dy == -fy))
-                            ok |= 1u << s;
-                    }
-                    any = true;
-                }
-            }
-            if (any)
-                free_mask = ok;
-        }
-        for (int s = 0; s < ns; s++)
-        {
-            int dx = steps[s * 3], dy = steps[s * 3 + 1], cost = steps[s * 3 + 2];
-            int nx = x + dx, ny = y + dy;
-            if (nx < 0 || ny < 0 || nx >= W || ny >= H)
-                continue;
-            int nk = ny * W + nx;
-            int32_t nc = c + cost;
-            if (has_slow && (g->cells[nk] & F_SLOW))
-                nc = c + (cost > slow ? cost : slow);
-            if (has_mire && nx + size <= W && ny + size <= H && BOX(msums, nx, ny, size) > 0)
-                nc = c + (cost > mire ? cost : mire);
-            if (!(free_mask & (1u << s)))
-                nc += zone_costs[s];
-            if (nc > budget || (dist[nk] >= 0 && nc >= dist[nk]))
-                continue;
-            bool pass;
-            if (fly)
-                pass = nx + size <= W && ny + size <= H;
-            else
-            {
-                pass = !(mark[nk] & 2) && FITS(nx, ny);
-                if (pass && corners && cost > straight)
-                    pass = FITS(nx, y) || FITS(x, ny);
-            }
-            if (!pass)
-                continue;
-            dist[nk] = nc;
-            parent[nk] = k;
-            heap_grow(L, hn + 2);
-            heap_push(++hn, nc, nk);
-        }
-    }
-
-    // results
-    lua_createtable(L, 0, popped);
-    int nparent = 0;
-    for (int k = 0; k < cells; k++)
-        if (dist[k] >= 0) nparent++;
-    lua_createtable(L, 0, nparent);
-    for (int k = 0; k < cells; k++)
-    {
-        if (dist[k] < 0)
-            continue;
-        int x = k % W, y = k / W;
-        lua_Integer key = columns ? (lua_Integer)x * H + y : k;
-        if (k != start)
-        {
-            int p = parent[k];
-            lua_pushinteger(L, columns ? (lua_Integer)(p % W) * H + p / W : p);
-            lua_rawseti(L, -2, key);
-        }
-        if (!(mark[k] & 1))
-            continue;
-        if (fly && ((mark[k] & 2) || !FITS(x, y)))
-            continue;
-        if (has_div && dist[k] != 0)
-            lua_pushnumber(L, (lua_Number)dist[k] / div);
-        else
-            lua_pushinteger(L, dist[k]);
-        lua_rawseti(L, -3, key);
+        j.heap_c = heap_c;
+        j.heap_xy = heap_xy;
+        j.heap_cap = cap_heap;
+        if (ll_path_search(&j) >= 0)
+            break;
+        grow_heap(L, cap_heap * 2);
     }
     return 2;
-#undef FITS
-#undef BOX
 }
+
+// ---------------------------------------------------------------------------
+// Results: read-only, [key] and pairs()
+
+static void push_value(lua_State *L, const Result *r, int32_t v)
+{
+    if (r->parent || !r->has_div || v == 0)
+        lua_pushinteger(L, v);
+    else
+        lua_pushnumber(L, (lua_Number)v / r->div);
+}
+
+static int r_index(lua_State *L)
+{
+    Result *r = (Result *)luaL_checkudata(L, 1, RESULT_MT);
+    int isnum;
+    lua_Integer k = lua_tointegerx(L, 2, &isnum);
+    if (!isnum || k < 0 || k >= r->n || r->v[k] < 0)
+        lua_pushnil(L);
+    else
+        push_value(L, r, r->v[k]);
+    return 1;
+}
+
+static int r_newindex(lua_State *L)
+{
+    return luaL_error(L, "path search results are read-only");
+}
+
+// The key after `key` that has a value, in key order (the iterator of pairs)
+static int r_next(lua_State *L)
+{
+    Result *r = (Result *)luaL_checkudata(L, 1, RESULT_MT);
+    lua_Integer k = lua_isnil(L, 2) ? 0 : luaL_checkinteger(L, 2) + 1;
+    for (; k < r->n; k++)
+        if (r->v[k] >= 0)
+        {
+            lua_pushinteger(L, k);
+            push_value(L, r, r->v[k]);
+            return 2;
+        }
+    lua_pushnil(L);
+    return 1;
+}
+
+static int r_pairs(lua_State *L)
+{
+    luaL_checkudata(L, 1, RESULT_MT);
+    lua_pushcfunction(L, r_next);
+    lua_pushvalue(L, 1);
+    lua_pushnil(L);
+    return 3;
+}
+
+static int r_tostring(lua_State *L)
+{
+    Result *r = (Result *)luaL_checkudata(L, 1, RESULT_MT);
+    lua_pushstring(L, r->parent ? "path parents" : "path costs");
+    return 1;
+}
+
+// ---------------------------------------------------------------------------
 
 static int g_index(lua_State *L)
 {
@@ -490,8 +382,7 @@ void ll_path_register(lua_State *L)
 {
     static const luaL_Reg methods[] = {
         { "set", g_set }, { "get", g_get }, { "fits", g_fits }, { "flood", g_flood },
-        { "clone", g_clone },
-        { NULL, NULL },
+        { "clone", g_clone }, { NULL, NULL },
     };
     luaL_newmetatable(L, GRID_MT);
     luaL_newlib(L, methods);
@@ -501,5 +392,17 @@ void ll_path_register(lua_State *L)
     lua_pushcfunction(L, g_tostring);
     lua_setfield(L, -2, "__tostring");
     lua_pop(L, 1);
+
+    luaL_newmetatable(L, RESULT_MT);
+    lua_pushcfunction(L, r_index);
+    lua_setfield(L, -2, "__index");
+    lua_pushcfunction(L, r_newindex);
+    lua_setfield(L, -2, "__newindex");
+    lua_pushcfunction(L, r_pairs);
+    lua_setfield(L, -2, "__pairs");
+    lua_pushcfunction(L, r_tostring);
+    lua_setfield(L, -2, "__tostring");
+    lua_pop(L, 1);
+
     lua_register(L, "pathgrid", l_pathgrid);
 }

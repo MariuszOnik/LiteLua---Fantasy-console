@@ -36,6 +36,7 @@ local function run()
     require("combat.grid").shape()
     say(("field shape for pathgrid: %s ms"):format(ms(micros() - t)))
   end
+  if pathgrid then require("floodtest")(say) end
   local pcf = loadfile("data/pc.lua")
   local pc = pcf and pcf() or {}
 
@@ -45,7 +46,6 @@ local function run()
   local r = bench.reachable(env, 5)
   say(("reachable: avg %s ms, worst %s ms%s"):format(ms(r.avg), ms(r.worst),
     pc.reach and (" (PC x%d)"):format(r.avg // math.max(1, pc.reach.avg)) or ""))
-  say(r.diff and ("C vs Lua search: %d differences"):format(r.diff) or "no pathgrid: Lua search")
 
   collectgarbage()
   say(("Lua memory now %d KB, peak so far %d KB"):format(collectgarbage("count") // 1,
@@ -61,12 +61,16 @@ local function run()
     worst, stall = math.max(worst, b.worst), math.max(stall, b.stall)
     say(("#%d %dr %dt avg%d max%d st%d %s"):format(seed, b.rounds, b.turns, b.avg // 1000,
       b.worst // 1000, b.stall // 1000, ref and (ok and "=PC" or "DIFF") or ""))
-    log(("  spell %s ms, path %s ms of %s ms; %d slices"):format(ms(b.spell), ms(b.path),
-      ms(b.total), b.slices))
+    log(("  spell %s ms, path %s ms of %s ms; %d slices; worst turn %s; Lua mem max %d KB"):format(
+      ms(b.spell), ms(b.path), ms(b.total), b.slices, b.worst_who or "-", b.mem or 0))
     if ref and not ok then log("  DS: " .. b.checksum, "\n  PC: " .. ref.checksum) end
   end
   say(("turn avg %s ms, worst %s ms, stall %s ms"):format(ms(sum_avg // BATTLES), ms(worst), ms(stall)))
   say(("same as PC: %d / %d   mem peak %d KB"):format(same, BATTLES, sys.stats().mem_peak // 1024))
+  if pathgrid then
+    status = "C vs Lua"
+    say(("C vs Lua search: %d differences"):format(bench.compare(env)))
+  end
   status = "done"
 end
 

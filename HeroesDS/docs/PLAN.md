@@ -26,16 +26,16 @@ z klepsydrą (H11, `grid.tick`).
 
 **C4a (pomiar i przyspieszenie) — zrobione.** Kartridż `carts/c4bench`
 (`python HeroesDS/tools/make_c4bench.py`: silnik + reguły bez opisów, wynik PC do
-`data/pc.lua`, kopia na kartę melonDS). Szukanie drogi idzie w C przez nowe API LiteLua
-`pathgrid` / `grid:flood` (D57), gdy jest dostępne (`grid.native`); wersja w Lua zostaje
-wzorcem (PC, testy). melonDS (DS 67 MHz), 12 bitew komputer–komputer: jedno szukanie
-3,2 s → 80 ms, tura komputera średnio 97 ms, najgorsza 0,9 s; C = Lua (0 różnic), 12/12
-bitew = PC bit w bit. Wczytanie: kod 0,65 s, reguły 0,36 s, kształt pola 0,6 s (raz).
-Inne przyspieszenia: `Field:fits` z sum prefiksowych, koszty całkowite ×32, lot bez
-ponownego szukania, `attack_positions` / Iskry / `free_spot` tylko wokół celu,
-`Field:changed()` po zmianie pól. Zostało: jedna tura 0,9 s bez `grid.tick` (bitwa #3 —
-do znalezienia przy C4); szczyt pamięci 2044 KB był od porównania C z Lua w benchu
-(po nim 411 KB) — w grze pilnować. Pomiar na DSi jeszcze nie zrobiony.
+`data/pc.lua`, kopia na kartę melonDS; na DSi przez FTP). Szukanie drogi w C przez API
+LiteLua `pathgrid` / `grid:flood` (D57), gdy jest (`grid.native`); Lua zostaje wzorcem (PC,
+testy). melonDS (DS), 12 bitew komputer–komputer: szukanie 3,2 s → 37 ms, tura komputera
+średnio 73 ms, najgorsza 0,6 s (diabeł z teleportem), najdłuższy kawałek bez `grid.tick`
+0,19 s (jedno wywołanie C — klepsydra może lekko szarpnąć); C = Lua (0 różnic), 12/12 bitew =
+PC bit w bit; pamięć Lua w bitwach do ~1,45 MB (śmieci przed GC). DSi (pierwsza wersja C):
+szukanie 63 ms, tura 83 ms — DSi tylko ~25% szybsze od melonDS w trybie DS. Wczytanie: kod
+0,65 s, reguły 0,36 s, kształt pola 0,6 s (raz). Przyspieszenia w Lua: `Field:fits` z sum
+prefiksowych, koszty całkowite ×32, lot bez ponownego szukania, `attack_positions` / Iskry /
+`free_spot` / teleport bez skanu całego pola po oddziałach, `Field:changed()` po zmianie pól.
 
 **Przeczytaj najpierw:** `docs/DECISIONS.md` (H1–H10), `docs/COMBAT.md` (architektura walki, §11 — stan C3),
 `docs/MECHANICS.md` (zasady walki 1:1, §1–14), `docs/DS_GRAPHICS.md` (pamięć wideo, style,

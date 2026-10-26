@@ -48,8 +48,8 @@ g:set(10, 5, 1)   -- a wall]],
       sig = "grid:flood(opts) -> cost, parent",
       args = { { "opts", "table", "x, y, size, budget, steps, corners, blockers, zones, "
                  .. "zone_costs, slow, mire, fly, columns, div" } },
-      ret = { { "cost", "table: key -> cost of every place it can stop at" },
-              { "parent", "table: key -> the key it came from (follow it back to the start)" } },
+      ret = { { "cost", "key -> cost of every place it can stop at" },
+              { "parent", "key -> the key it came from (follow it back to the start)" } },
       desc = "Searches from x, y (the top-left cell of a size x size unit, size 1 "
           .. "by default) every place it reaches for at most budget. Keys are "
           .. "y * w + x (x * h + y with columns = true). steps: { dx, dy, cost, "
@@ -61,7 +61,9 @@ g:set(10, 5, 1)   -- a wall]],
           .. "unless it goes straight to or away from the zone. slow / mire: the "
           .. "least cost of a step onto a slow cell / with the unit on a mire cell. "
           .. "fly: passes over walls and blockers, lands only where it fits. "
-          .. "div: costs come back divided by it (for fractions).",
+          .. "div: costs come back divided by it (for fractions). cost and parent "
+          .. "are read-only and work like tables for [key] and pairs() (in key "
+          .. "order) — on a DS, filling real tables took as long as the search.",
       example = [[
 local cost, parent = g:flood({ x = hx, y = hy, budget = 10 })
 local k = ty * g.w + tx

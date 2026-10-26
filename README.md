@@ -463,6 +463,8 @@ local cost, parent = g:flood({ x = hx, y = hy, budget = 10 })
 -- parent[key]: the cell it came from, back to the start
 ```
 
+`cost` and `parent` are read-only: read them with `[key]` and `pairs()` (in key order).
+
 By default a straight step costs 2 and a diagonal one 3. Options: `size` (the unit's
 square), `steps`, `blockers` (other units), `zones` (zones of control), `slow`, `mire`,
 `fly`, `div` — see the API reference.

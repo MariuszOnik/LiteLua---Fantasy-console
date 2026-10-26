@@ -1330,9 +1330,15 @@ szukanie ~1 s, tura komputera do kilku sekund. Propozycja agenta, użytkownik za
 - **Ten sam wynik co Lua:** ten sam kopiec binarny i kolejność kroków, więc remisy idą tak
   samo; HeroesDS zostawia wersję w Lua jako wzorzec (PC, testy), na DS woła C. Sprawdzone na
   DS: 0 różnic kosztów i rodziców, 12/12 bitew z tym samym stanem końcowym co PC.
-- Wynik w melonDS (DS): jedno szukanie 3,2 s → 80 ms, tura komputera średnio ~0,1 s.
+- Wynik w melonDS (DS): jedno szukanie 3,2 s → 37 ms, tura komputera średnio ~0,07 s;
+  DSi (konsola): pierwsza wersja 63 ms na szukanie.
 - Pamięć robocza szukania w C poza limitem Lua (statyczne bufory, rosną w razie potrzeby,
   ~0,2 MB dla 102×102); komórki siatki w userdata (liczą się w limicie).
+- **Wyniki to obiekty C tylko do odczytu** (`[key]`, `pairs()` w kolejności kluczy), nie
+  tablice Lua: na DS wstawienie ~8500 kluczy trwało 150 ms (~17 µs na klucz), tyle co samo
+  szukanie. Rdzeń szukania (`ll_path_core.itcm.arm.c`) jako kod ARM w ITCM (reguła D19, ITCM
+  28,5 KB z 32 KB), bez dzielenia w pętli (kopiec trzyma x, y). melonDS (DS): lot przez całe
+  pole 350 → 145 ms, jedno szukanie HeroesDS średnio 80 → 37 ms.
 - `grid:clone()` — HeroesDS buduje kształt pola raz (0,6 s w Lua) i kopiuje go na bitwę.
 - **Poprawka `micros()`:** licznik taktów 33,5 MHz (32 bity) przekręca się co 128 s, więc
   pomiary dłuższe niż 128 s dawały ujemne czasy. Teraz licznik 64-bitowy, aktualizowany w

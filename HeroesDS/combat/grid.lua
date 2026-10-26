@@ -325,9 +325,11 @@ function grid.reachable(field, stacks, m)
   local size = m.size
   if m.teleport then
     local out = {}
+    local occ = occupied(stacks, size, m.id)
     for x = 0, N - 1 do
+      grid.tick()
       for y = 0, N - 1 do
-        if field:fits(x, y, size) and not grid.overlaps(stacks, x, y, size, m.id) then
+        if not occ[x * N + y] and field:fits(x, y, size) then
           local dx, dy = x - m.x, y - m.y
           out[x * N + y] = f32(math.sqrt(dx * dx + dy * dy))
         end

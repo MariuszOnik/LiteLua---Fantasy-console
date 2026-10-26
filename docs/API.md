@@ -1011,13 +1011,13 @@ A copy of the grid: make the walls once, copy them for each level.
 grid:flood(opts) -> cost, parent
 ```
 
-Searches from x, y (the top-left cell of a size x size unit, size 1 by default) every place it reaches for at most budget. Keys are y * w + x (x * h + y with columns = true). steps: { dx, dy, cost, ... }, by default 4 straight steps of 2 and 4 diagonal ones of 3. corners (true): a diagonal step needs one of its two straight neighbours free. blockers: { x, y, size, ... } squares it may not overlap (other units). zones: { x, y, size, ... } zones of control: leaving a place that touches one costs zone_costs[i] more for step i, unless it goes straight to or away from the zone. slow / mire: the least cost of a step onto a slow cell / with the unit on a mire cell. fly: passes over walls and blockers, lands only where it fits. div: costs come back divided by it (for fractions).
+Searches from x, y (the top-left cell of a size x size unit, size 1 by default) every place it reaches for at most budget. Keys are y * w + x (x * h + y with columns = true). steps: { dx, dy, cost, ... }, by default 4 straight steps of 2 and 4 diagonal ones of 3. corners (true): a diagonal step needs one of its two straight neighbours free. blockers: { x, y, size, ... } squares it may not overlap (other units). zones: { x, y, size, ... } zones of control: leaving a place that touches one costs zone_costs[i] more for step i, unless it goes straight to or away from the zone. slow / mire: the least cost of a step onto a slow cell / with the unit on a mire cell. fly: passes over walls and blockers, lands only where it fits. div: costs come back divided by it (for fractions). cost and parent are read-only and work like tables for [key] and pairs() (in key order) — on a DS, filling real tables took as long as the search.
 
 | Argument | Type | Description |
 |---|---|---|
 | `opts` | table | x, y, size, budget, steps, corners, blockers, zones, zone_costs, slow, mire, fly, columns, div |
 
-Returns: cost — table: key -> cost of every place it can stop at; parent — table: key -> the key it came from (follow it back to the start)
+Returns: cost — key -> cost of every place it can stop at; parent — key -> the key it came from (follow it back to the start)
 
 Example:
 
