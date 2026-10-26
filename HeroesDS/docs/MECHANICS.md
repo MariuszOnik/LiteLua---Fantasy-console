@@ -165,17 +165,13 @@ mur (oblężenie) → Stone Gaze → **szczęście celu** → ograniczenie do PW
   *Ranged First Strike* (gdy cel go nie ma): strzela pierwszy, odpowiedź po.
 - *Shoots Twice*: drugi strzał po całej wymianie.
 
-## 9. Bohater na polu bitwy (exe, `Combat.swift`)
+## 9. Bohater na polu bitwy
 
+Bohater to jednostka na polu bitwy (oddział 1 istoty) — szczegóły w §13.
 - PW = `10 × poziom + 90`; obrażenia `(16L − 16)/10 + 16` … `(24L − 24)/10 + 24`
-  (dzielenie całkowite); Speed 6.
-- Atak i obrona z umiejętności (wartości ×10 w grze, poziomy 0–5):
-  walka wręcz (Combat) atak 1; 1,5; 2; 3; 4; 4 · łucznictwo (Archery) atak dystansowy
-  0,7; 1; 1,5; 2; 3; 3 · wytrzymałość (Toughness?) obrona 1; 1,5; 2; 3; 4; 6.
-  **Do sprawdzenia w C1b** — nazwy umiejętności w kodzie źródłowym (`combat`, `archery`,
-  `toughness`) nie pokrywają się 1:1 z nazwami z manualu.
-- Pociski: 12 z Łucznictwem, 24 na poziomie arcymistrza; bohater nie ma kary wręcz.
-- Bohater-mag strzela „magicznym pociskiem” zamiast strzały.
+  (dzielenie całkowite); Speed 6 (exe, `Combat.swift`).
+- Atak i obrona z umiejętności — §13.2. Pociski: 12 z Łucznictwem, 24 na poziomie arcymistrza;
+  bohater nie ma kary wręcz. Bohater-mag strzela „magicznym pociskiem” zamiast strzały.
 
 ## 10. Koniec walki
 
@@ -306,8 +302,71 @@ jednostek w C1c. Punkty czaru na oddział (nie × liczebność), moc z kolumny S
 - `sea_bonus` (pirat) [tekst]: na okręcie szybszy, mocniejszy, lepsza obrona — wartości nieznane.
 - Mapa przygody: `stealth`, `cave_dweller`, `taxpayer` (1 złota na turę za każdą istotę).
 
-## Do ustalenia (C1b / C1c)
+## 13. Bohater: statystyki, umiejętności, ekwipunek (C1b-3)
 
-- Umiejętności bohatera (Taktyka: ruch i kolejność; Atak/Obrona: % do statystyk jednostek;
-  Dowodzenie: morale/szczęście) — `HeroSkills.swift`, `table.skills`.
-- Czary: obrażenia, obszar, odporność na magię, czasy trwania.
+Źródła: opisy umiejętności i artefaktów w grze (`table.skills`, `table.Artifacts`, polskie),
+tabele zbudowane w kodzie exe (`tools/exe_tables.py`, dane za homm4-mac, MIT),
+`HeroSkills.swift`, `Artifacts.swift`. Generator: `make_rules.py` → `artifacts.lua`.
+
+### 13.1 Umiejętności — słowa kluczowe gry ≠ polskie nazwy
+36 umiejętności: 9 głównych, każda z 3 podrzędnymi. Ważne dla walki:
+
+| klucz (exe) | polska nazwa | rodzaj |
+|---|---|---|
+| `tactics` | Taktyka | główna: `offense` Atak, `defense` Obrona, `leadership` Dowodzenie |
+| `toughness` | **Walka** | główna: `combat` **Walka wręcz**, `archery` Łucznictwo, `resistance` Odporność na magię |
+| `life` `order` `death` `chaos` `nature` | szkoły magii | główne (czary — C1c) |
+
+Poziomy: podstawowy, zaawansowany, ekspercki, mistrzowski, arcymistrzowski (1–5).
+
+### 13.2 Bohater sam (wartości z opisów w grze)
+- **Walka** (`toughness`): obrona bohatera wręcz i przed strzałami **15 / 20 / 30 / 40 / 60**
+  (bez umiejętności 10).
+- **Walka wręcz** (`combat`): atak wręcz **15 / 20 / 30 / 40 / 40** (bez: 10) i **dzieli
+  naturalną obronę wroga** przez **1,5 / 2 / 3 / 4 / 4**, nie poniżej 10, nigdy obrony bohatera.
+- **Łucznictwo** (`archery`): atak dystansowy **10 / 15 / 20 / 30 / 30** (bez: 7 — exe) i dzieli
+  obronę celu przez **1 / 1,5 / 2 / 2 / 2**, z tymi samymi ograniczeniami.
+- **Odporność na magię** (`resistance`): **30 / 50 / 70 / 80 / 100 %** odporności bohatera.
+- **[tekst]** Dzielenie obrony wroga jest tylko w opisie gry — homm4-mac go nie liczy. Do
+  przyjęcia w C2 (zgodnie z H2 liczymy jak opis, dopóki exe nie mówi inaczej).
+- Wartości ataku i obrony w exe są w dziesiątych (1,0 = 10 na ekranie) — przy liczeniu
+  stosunku atak/obrona trzeba trzymać jedną skalę dla bohaterów i istot.
+
+### 13.3 Premie dla armii (z opisów; działa najlepszy bohater w armii — homm4-mac)
+- **Atak** (`offense`): atak wręcz i dystansowy wszystkich swoich jednostek **+10 % / poziom**.
+- **Obrona** (`defense`): obrona **+10 % / poziom**.
+- **Taktyka**: szybkość **+1…+5**, ruch **+1 / 1,5 / 2 / 2,5 / 3**.
+- **Dowodzenie** (`leadership`): morale i szczęście **+1…+5**.
+- Klasa bohatera (awansowana) może mieć własną premię jak artefakt (`CLASS_EFFECTS`, np.
+  Ochrona przed Chaosem, Trucizna, Wyssanie życia, +morale dla armii).
+
+### 13.4 Ekwipunek — sloty
+14 miejsc: łuk, stopy, głowa, pierścień lewy i prawy, szyja, lewa ręka (tarcza), prawa ręka
+(broń; „obie ręce” zajmuje lewą i prawą), ramiona (płaszcz), tors (zbroja), 4 × różne
+(`miscellaneous`). Plecak nie działa. Mikstury (`potion`) się pije/rzuca, nie zakłada.
+Poziomy artefaktów: przedmiot (`item`), drobny, główny, relikwia; zwoje i pergaminy niosą czar.
+
+### 13.5 Efekty artefaktów (`artifacts.lua`, `effects`)
+Każdy efekt: **typ**, **cel** (`self` bohater, `own_creatures` swoje jednostki, `own_heroes`
+inni swoi bohaterowie, `enemy_creatures`, `enemy_heroes`, `all`) i **wartość**.
+Jednostki: atak/obrona **bohatera w dziesiątych** (Zbroja z Adamantu 500 = „+50 obrony”,
+Topór 80 = „+8 ataku”); dla armii w procentach (Tarcza z Adamantu: +50 % obrony armii);
+ruch w setnych pola (Skrzydlate Sandały 600 = „+2 ruchu”).
+
+Typy ważne w walce: `attack` (wręcz/dystans osobno), `defense`, `damage_pct` (Pierścień
+Wojownika +20 % obrażeń armii), `speed`, `combat_move`, `morale`, `luck`,
+`magic_resistance_pct`, `hit_points_pct`, `extra_damage`, `ability` (np. Strzał ogłuszający,
+Wyssanie życia, Tarcza ogniowa), `spell_effect` (stały czar, np. Ochrona przed Chaosem),
+`spell_on_hit` (czar przy trafieniu), `spell_immunity`, `charged_spell` (czar z ładunkami),
+`spellbook`, `spell_points`, `spell_point_regen`, `spell_power_pct`, `spell_cost`,
+`skill_bonus`. Poza walką: `income`, `adventure_move_pct`, `ignore_terrain` (numer terenu),
+`dwelling_growth_pct`.
+- **Komplety** (`set_bonus`): gdy bohater nosi wszystkie części — dodatkowe efekty (np.
+  Płaszcz Ciemności + Pierścień Światła: Anioł Stróż na początku każdej walki).
+- Nieznane jeszcze typy (`type_N`, ~13 wystąpień w kilku artefaktach) — do ustalenia z opisów,
+  gdy będą potrzebne.
+
+## Do ustalenia (C1c)
+
+- Czary: obrażenia, obszar, odporność na magię, czasy trwania; czary jednostek
+  (`exe_tables.CREATURE_SPELLS`), siła czaru (umiejętności szkół magii).

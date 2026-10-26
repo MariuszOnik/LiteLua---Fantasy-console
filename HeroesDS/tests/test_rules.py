@@ -61,6 +61,17 @@ class RulesTest(unittest.TestCase):
         self.assertEqual(text, '{ hp = 10, dmg = { 1, 3 }, abilities = { flying = true }, '
                                'cost = { gold = 20 }, ["3_headed"] = true }')
 
+    def test_lua_string_escapes(self):
+        text = 'a"b' + "\\" + "c" + "\n" + "d"
+        self.assertEqual(make_rules.lua_value(text), r'"a\"b\\c\nd"')
+
+    def test_readable_effect(self):
+        e = make_rules.readable_effect({"type": 55, "target": 0, "amount": 80, "ranged": False})
+        self.assertEqual(e, {"type": "attack", "target": "self", "amount": 80, "ranged": False})
+        e = make_rules.readable_effect({"type": 43, "target": 3, "amount": 0, "spell": 117})
+        self.assertEqual((e["type"], e["target"], e["spell"]), ("spell_effect", "own_creatures", "protection from chaos"))
+        self.assertEqual(make_rules.readable_effect({"type": 99, "target": 5, "amount": 1})["type"], "type_99")
+
 
 if __name__ == "__main__":
     unittest.main()

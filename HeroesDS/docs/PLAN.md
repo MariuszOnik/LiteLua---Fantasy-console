@@ -61,11 +61,14 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
 - **C1b-2 ✅** działanie zdolności → `MECHANICS.md` §12 (ruch, strzał, wręcz, cele dodatkowe,
   efekty po ciosie w kolejności exe, strach, odporności, regeneracja, odrodzenie; 3 zdolności
   tylko z opisu: mana_leech, random_curse, sea_bonus).
-- **Następny krok: C1b-3** — **bohater**: statystyki z poziomu, umiejętności (`HeroSkills.swift`,
-  `table.skills`) i **ekwipunek** — sloty i premie artefaktów dla bohatera i armii
-  (`Artifacts.swift`, `ArtifactEffects.swift`, `table.Artifacts`); uwaga użytkownika:
-  bohater ma własne statystyki i elementy zbroi dające bonusy. Potem C1c czary (w tym czary
-  jednostek, `creatureSpells`).
+- **C1b-3 ✅** bohater → `MECHANICS.md` §13: umiejętności (klucze exe ≠ polskie nazwy:
+  `toughness` = Walka, `combat` = Walka wręcz), wartości z opisów gry (w tym dzielenie obrony
+  wroga przez Walkę wręcz/Łucznictwo — tylko w opisie, [tekst]), premie dla armii, 14 slotów,
+  efekty artefaktów. Dane: `tools/exe_tables.py` (tabele zbudowane w kodzie exe: artefakty,
+  klasy, umiejętności, czary, czary jednostek — za homm4-mac, MIT), `make_rules.py` →
+  `extracted/rules/artifacts.lua` (248 artefaktów, polskie nazwy i opisy, efekty z nazwami).
+- **Następny krok: C1c** — czary (`Spells.swift`, `BattleSpells.swift`, `table.spells`):
+  obrażenia, obszar, odporność na magię, czasy trwania, czary jednostek, siła czaru.
 - Mapa świata: ustalenia o terenie 2.5D zapisane w `docs/FORMATS.md` (sekcja „Ważne na później”).
 - Otwarte w formatach (`FORMATS.md`): pole `?` palety, sekwencje bohaterów.
 - Pobrany kod z sieci (`ref/`) — nie uruchamiamy go (blokada auto mode); czytamy opis
