@@ -25,3 +25,11 @@ liczba klatek i kierunków mogą być uproszczone pod możliwości DS.
 - **AKuHAK/mh4** — brak licencji, opisuje tylko archiwum `.h4r` (mamy własny czytnik).
 - Fakty o formatach i liczby z gry (wzory, statystyki) nie są kodem — zapisujemy je
   własnymi słowami w `docs/FORMATS.md` / `docs/MECHANICS.md`.
+
+## H4 (2026-10-26) — Grafika jednostek w pierwszej wersji: bez zmian w silniku
+Zaakceptowana propozycja z `DS_GRAPHICS.md` (H2a): atlas PNG 8 bpp na animację
+i kierunek, skala 0,5 (do dopracowania per jednostka w H3), alfa klatek progowana na 50 %,
+cienie jako osobny 1-kolorowy atlas rysowany z `alpha()`; animacje ładowane przed starciem
+i zwalniane po nim; tekstury z alfą (A5I3) w silniku dopiero, gdy pierwsza wersja zadziała.
+Uzupełnienie z H2b: cień przechowywany w połowie rozdzielczości i rysowany powiększony
+(`sspr`) — inaczej dwa komplety animacji nie mieszczą się w 256 KB VRAM.

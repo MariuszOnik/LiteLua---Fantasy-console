@@ -18,6 +18,7 @@ Usage:
   python h4r.py extract <archive> <name> <out_file>
 """
 import gzip
+import os
 import struct
 import sys
 import zlib
@@ -80,6 +81,34 @@ class Archive:
         if len(data) != e.size:
             raise ValueError(f"{e.name}: size {len(data)} != {e.size}")
         return data
+
+
+class Library:
+    """All archives of a game Data folder; a name is looked up in the newest first.
+
+    The order is our assumption (overrides and expansions over the base game);
+    the same name in two archives is rare outside the *_override files.
+    """
+    ORDER = ("storm_override", "x2_override", "updates", "storm", "x2", "heroes4", "text", "music")
+
+    def __init__(self, data_dir):
+        found = {os.path.splitext(f)[0].lower(): f for f in os.listdir(data_dir) if f.lower().endswith(".h4r")}
+        names = [n for n in self.ORDER if n in found] + sorted(n for n in found if n not in self.ORDER)
+        self.archives = [Archive(os.path.join(data_dir, found[n])) for n in names]
+
+    def entry(self, name):
+        for a in self.archives:
+            e = a.entries.get(name.lower())
+            if e:
+                return a, e
+        raise KeyError(name)
+
+    def __contains__(self, name):
+        return any(name.lower() in a.entries for a in self.archives)
+
+    def read(self, name):
+        a, e = self.entry(name)
+        return a.read(e)
 
 
 def main(argv):

@@ -72,10 +72,45 @@ Atlas = unikalne klatki animacji upakowane w prostokąt o bokach potęgi dwójki
 3. **A5I3 dla cieni/efektów** — dopiero gdy pierwsza wersja zadziała, jako punkt w planie
    LiteLua (zmiana w silniku).
 
-## H2b — pomiar na konsoli (następny krok)
+## H2b — wyniki (melonDS, 2026-10-26)
 
-Kartridż testowy z atlasami bandyty i smoka (generowanymi lokalnie, poza repo):
-czas `image()` dla atlasów 128×128, 256×128, 256×256, 512×256 (8 bpp i 4 bpp),
-`vram` przed/po, cykl ładuj–zwolnij ×20 (czy VRAM się nie fragmentuje), dwie jednostki
-animowane na górnym ekranie. Pomiar w melonDS, ostatecznie na DSi (timing melonDS nie
-jest cykliczny — CLAUDE.md).
+Kartridż `carts/h2b` (grafika generowana lokalnie: `python HeroesDS/tools/make_h2b.py`,
+kopiuje też na kartę emulatora). Atlasy przez `tools/h4atlas.py`, skala 0,5.
+
+| Animacja (+ cień) | atlas | czas `image()` ×2 + meta | VRAM |
+|---|---|---|---|
+| bandyta wait | 256×64 | 54 ms | 17 KB |
+| bandyta flinch | 128×256 | 97–105 ms | 34–36 KB |
+| bandyta melee | 256×256 | 183 ms | 68 KB |
+| bandyta melee, 16 kolorów | 256×256 | 163 ms | 36 KB |
+| czarny smok melee | 256×512 | 354 ms | 136 KB |
+| czarny smok melee, 16 kolorów | 256×512 | 308 ms | 72 KB |
+| czarny smok walk | 256×512 | 379 ms | 144 KB |
+
+- **Cienie**: pierwsza próba (cień w pełnej rozdzielczości, 4 bpp) — cienie zajmowały
+  prawie tyle co klatki i dwa komplety bandytów (292 KB) nie weszły do VRAM. Teraz cień
+  jest 2× mniejszy i rysowany powiększony (`sspr`, `alpha(0.45)`) — wygląda dobrze,
+  zajmuje ~4× mniej.
+- **Cykl ładuj–zwolnij**: 20 × (4 atlasy różnych rozmiarów, szczyt 194 KB) — VRAM wraca
+  do stanu początkowego za każdym razem, bez błędów braku pamięci (bez fragmentacji
+  w tej skali).
+- **Starcie** bandyta vs bandyta z dociąganiem: na stałe tylko `wait` obu (39 KB); atak
+  ładuje melee atakującego + flinch obrońcy: **~290 ms przestoju**, VRAM 144 KB. Animacje,
+  cienie i trafienie w klatce `hit` działają.
+- **Czas wczytywania rośnie z wielkością PNG** (~0,7 ms/KB VRAM); 16 kolorów prawie nie
+  skraca czasu (dekoder PNG + odczyt), ale połowi pamięć.
+- **Wielkość na ekranie**: bandyta przy 0,5 ma ~45×50 px — na górnym ekranie zostaje dużo
+  miejsca. Do rozważenia w H3: skala zależna od rozmiaru jednostki (małe większe, smoki
+  mniejsze).
+- **Uwaga**: timing melonDS nie jest cykliczny — czasy trzeba potwierdzić na DSi.
+
+## Wnioski po H2b
+1. Atlas PNG 8 bpp + cień w połowie rozdzielczości działa bez zmian w silniku.
+2. Dociąganie animacji przy każdym ataku = ~0,3 s przestoju (emulator). Do gry lepiej
+   ładować animacje **przy wejściu do bitwy**, a dociągać tylko to, co się nie mieści —
+   do decyzji po pomiarze na DSi.
+3. Duże jednostki (smok) wymagają mniejszej skali lub 16 kolorów — do decyzji w H3.
+
+## Następny pomiar — konsola DSi
+Ten sam kartridż na konsoli (ROM `litelua.nds` + `litelua/carts/h2b`), wynik
+z `litelua/log.txt` (FTP).

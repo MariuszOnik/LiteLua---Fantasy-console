@@ -30,3 +30,5 @@ tests/carts/sound/music/rock.wav
 /HeroesDS/extracted/
 /HeroesDS/*.ora
 /HeroesDS/*.png
+/HeroesDS/carts/*/gfx/
+/HeroesDS/carts/*/data/
