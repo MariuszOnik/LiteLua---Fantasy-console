@@ -7,11 +7,28 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   w przeciwległych narożnikach (duże sprite'y bojowe ładowane i zwalniane w locie).
 
 ## Gdzie skończyliśmy
-H0 zrobione, plan zaakceptowany. Walka: mechanika 1:1 z H4, grafika uproszczona (H2).
-Otwarte: kolejność — H1 i C1 na zmianę, czy najpierw jeden tor do końca?
+- **H1a ✅** czytnik archiwów `tools/h4r.py` + testy (`python -m unittest discover -s HeroesDS/tests`).
+  Wszystkie 8 archiwów z `Data/` czytają się; z 21381 plików 2 nie dają się odczytać
+  z winy danych gry (alias `layers.sample_cursor.h4d` na nieistniejący plik, uszkodzony
+  `actor_sequence.hero.spazz_sword.combat.death.ne.h4d` w `x2_override.h4r`).
+- **Następny krok: H1b** — dekoder sprite'ów `.h4d` → PNG na PC (podgląd bandyty).
+  Format jest opisany w `ref/homm4-mac/h4sprite.py` (MIT, H3) — paleta ≤256 kolorów
+  + alfa 4 bity na piksel, wiersze jako spany; pasuje do tekstur DS A5I3/A3I5.
+- Pracujemy małymi krokami: jeden podpunkt = test na PC + lokalny commit + ta sekcja.
 
-Szkic czytnika archiwów: `tools/h4r.py` (format opisany w docstringu; nie czyta jeszcze
-całego katalogu — błąd przy końcówce wpisu, do poprawy w H1).
+## Co już wiemy
+- `heroes4.h4r` (600 MB) to główne zasoby: `actor_sequence` (11285 animacji),
+  `adv_object` (2767), `combat_object` (1048), `sound` (990), `layers` (656, interfejs),
+  `combat_actor` (139), `adv_actor` (137), `terrain`, `battlefield_preset_map`.
+  `x2*.h4r`, `storm*.h4r`, `updates.h4r` — dodatki i poprawki (override: nowsze wersje).
+- Animacje jednostki (np. `bandit`): mapa przygody = `actor_sequence.bandit.<anim>.<kier>`
+  (stand, walk, prewalk, postwalk, attack, fidget; 8 kierunków); walka =
+  `actor_sequence.bandit.combat.<anim>.<kier>` (base_frame, wait, fidget, walk, melee,
+  melee_up, flinch, die, …; często tylko 4 kierunki ukośne — reszta przez odbicie?).
+  Do tego `combat_actor.bandit.h4d` i `adv_actor.bandit.h4d` (meta jednostki, do zbadania).
+- Klatki animacji bywają współdzielone („frame 002 004” = klatki 2 i 4) — kolejność
+  klatek trzeba odczytać z pliku (H1c).
+- Źródła i licencje: H3 w `DECISIONS.md`.
 
 ## Punkty
 
@@ -19,9 +36,12 @@ całego katalogu — błąd przy końcówce wpisu, do poprawy w H1).
 Folder w repo LuaDS (H1), wykluczenia w `.gitignore`, plan i decyzje.
 
 ### Tor A — grafika
-- **H1 — Formaty.** Czytnik `.h4r` (gzip w środku), format sekwencji aktorów (klatki,
-  offsety, kierunki, cienie, prędkość, klatki współdzielone). Wynik: `docs/FORMATS.md`.
-  Najpierw sprawdzić, czy formaty są już opisane w sieci.
+- **H1 — Formaty.** Wynik: `docs/FORMATS.md`.
+  - **H1a ✅** czytnik `.h4r` (gzip w środku, aliasy) + testy.
+  - **H1b** dekoder obrazów `.h4d` → PNG (klatki, cienie, alfa) + podgląd na PC.
+  - **H1c** meta sekwencji: kolejność i czas klatek, origin, kierunki (które są odbiciami),
+    `combat_actor` / `adv_actor`.
+  - **H1d** `docs/FORMATS.md` — opis formatów własnymi słowami.
 - **H2 — Możliwości LiteLua.** Sprite'y, palety, rozmiary tekstur, budżet VRAM/RAM na
   dwie duże animacje na górnym ekranie, ładowanie/zwalnianie w locie. Braki → osobny punkt
   w planie LiteLua (`docs/PLAN.md` w głównym repo).

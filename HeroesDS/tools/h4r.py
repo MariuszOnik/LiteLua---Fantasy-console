@@ -4,8 +4,11 @@ Layout (reverse engineered, little endian):
   header:    "H4R\\x05", u32 dir_offset
   directory: u32 count, then count entries:
              u32 offset, u32 packed_size, u32 size, u32 time,
-             u16 len + name, u16 len + source path, u16 unknown, u32 unknown
+             u16 len + name, u16 len + source path, u16 len + alias, u32 (always 3)
   data:      each entry is a gzip stream (or raw when packed_size == size)
+
+An entry with an alias has no data of its own (offset and packed_size are 0);
+it stands for the entry named by the alias.
 
 The archive also keeps an older copy of the directory right after the header;
 the one at dir_offset is authoritative.
@@ -29,6 +32,7 @@ class Entry:
     size: int
     time: int
     path: str
+    alias: str
 
 
 class Archive:
@@ -37,6 +41,7 @@ class Archive:
         self.f = open(filename, "rb")
         magic, dir_offset = struct.unpack("<4sI", self.f.read(8))
         if magic != b"H4R\x05":
+            self.f.close()
             raise ValueError(f"{filename}: not an h4r archive")
         self.f.seek(dir_offset)
         self.entries = {}
@@ -46,8 +51,9 @@ class Archive:
             offset, packed, size, time = struct.unpack("<4I", self.f.read(16))
             name = self._str()
             path = self._str()
-            self.f.read(6)
-            e = Entry(name, offset, packed, size, time, path)
+            alias = self._str()
+            self.f.read(4)
+            e = Entry(name, offset, packed, size, time, path, alias)
             self.entries[name.lower()] = e
             self.order.append(e)
 
@@ -61,6 +67,8 @@ class Archive:
 
     def read(self, name):
         e = name if isinstance(name, Entry) else self.entries[name.lower()]
+        if e.alias:
+            return self.read(e.alias)
         self.f.seek(e.offset)
         raw = self.f.read(e.packed_size)
         if raw[:2] == b"\x1f\x8b":

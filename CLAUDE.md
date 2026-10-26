@@ -52,6 +52,8 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - `tests/carts/` — kartridże testowe (`bench` — benchmark VM, D19; `files` — piaskownica, D20; `sound` — P7; `song` — utwory `.lsong` na żywo, D41; `edit` — edytor kodu; `map` — mapy kafelkowe, D50; `oop` — pomiar klas/middleclass, D54); `build.ps1` kopiuje je na kartę emulatora
 - `tests/tools/` — testy narzędzi PC: `python -m unittest discover -s tests/tools`
   (też edytor `@code` i launcher z atrapami API — wymaga pakietu `lupa`, inaczej pominięty)
+- `HeroesDS/` — gra w stylu Heroes IV (własny `docs/PLAN.md` i `docs/DECISIONS.md`, decyzje H<n>);
+  zasoby oryginalnej gry tylko lokalnie (`.gitignore`), testy: `python -m unittest discover -s HeroesDS/tests`
 - `README.md` — manual użytkownika (po angielsku, D15); aktualizuj w każdym punkcie, który
   zmienia coś widocznego dla twórców gier
 - `.claude/commands/punkt.md` — komenda `/punkt`: cykl jednego punktu planu

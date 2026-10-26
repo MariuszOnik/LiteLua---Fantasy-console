@@ -14,3 +14,14 @@ Zasady walki (statystyki, wzory obrażeń, inicjatywa, kontratak, morale/szczę�
 czary) odwzorowujemy wiernie, ale w kodzie otwartym na rozbudowę (moce i czary jako dane +
 hooki, nie zaszyte warunki). Prezentacja nie musi być 1:1 — układ ekranów, skala sprite'ów,
 liczba klatek i kierunków mogą być uproszczone pod możliwości DS.
+
+## H3 (2026-10-26) — Źródła wiedzy o formatach i zasadach, licencje
+- **Anbrose/homm4-mac** (MIT, © 2026 Anton Ozhigin): `tools/h4sprite.py` opisuje format
+  sprite'ów `.h4d`, a `native/Sources/H4Engine/*.swift` zawiera zasady gry odtworzone
+  z oryginału (m.in. `Combat.swift`, `Battle.swift`, `BattleSpells.swift`). Licencja MIT
+  pozwala korzystać z kodu — przy przeniesieniu fragmentu podajemy autora i licencję
+  w nagłówku pliku. Kopia do wglądu: `ref/homm4-mac/` (poza repo).
+- **Anbrose/hommiv-remake-macos** — brak licencji: tylko do wglądu, bez kopiowania kodu.
+- **AKuHAK/mh4** — brak licencji, opisuje tylko archiwum `.h4r` (mamy własny czytnik).
+- Fakty o formatach i liczby z gry (wzory, statystyki) nie są kodem — zapisujemy je
+  własnymi słowami w `docs/FORMATS.md` / `docs/MECHANICS.md`.
