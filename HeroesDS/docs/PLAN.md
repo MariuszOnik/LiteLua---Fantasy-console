@@ -61,8 +61,11 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
 - **C1b-2 ✅** działanie zdolności → `MECHANICS.md` §12 (ruch, strzał, wręcz, cele dodatkowe,
   efekty po ciosie w kolejności exe, strach, odporności, regeneracja, odrodzenie; 3 zdolności
   tylko z opisu: mana_leech, random_curse, sea_bonus).
-- **Następny krok: C1b-3** — umiejętności bohaterów w walce (`HeroSkills.swift`,
-  `table.skills`), potem C1c czary (w tym czary jednostek, `creatureSpells`).
+- **Następny krok: C1b-3** — **bohater**: statystyki z poziomu, umiejętności (`HeroSkills.swift`,
+  `table.skills`) i **ekwipunek** — sloty i premie artefaktów dla bohatera i armii
+  (`Artifacts.swift`, `ArtifactEffects.swift`, `table.Artifacts`); uwaga użytkownika:
+  bohater ma własne statystyki i elementy zbroi dające bonusy. Potem C1c czary (w tym czary
+  jednostek, `creatureSpells`).
 - Mapa świata: ustalenia o terenie 2.5D zapisane w `docs/FORMATS.md` (sekcja „Ważne na później”).
 - Otwarte w formatach (`FORMATS.md`): pole `?` palety, sekwencje bohaterów.
 - Pobrany kod z sieci (`ref/`) — nie uruchamiamy go (blokada auto mode); czytamy opis
