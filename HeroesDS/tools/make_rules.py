@@ -4,7 +4,7 @@ creature (creature_abilities.py) and the footprint from combat_actor.
 
   python HeroesDS/tools/make_rules.py [out_dir]
 
-Default output: HeroesDS/extracted/rules/creatures.lua and artifacts.lua (made from the game
+Default output: HeroesDS/extracted/rules/{creatures,artifacts,spells}.lua (made from the game
 files, so it stays out of git). A Lua data file:
 
   return {
@@ -149,6 +149,54 @@ def artifacts(lib):
     return out, report
 
 
+# Facts heroes4.exe keeps in code, not in table.Spells (homm4-mac BattleSpells.swift, MIT):
+# area radius in cells (exe: world units / 16; 0x718870), the fixed lengths in the target's
+# own turns (all other lasting spells last the battle), mass spell -> the single one it casts.
+AREA_RADIUS = {"fireball": 4, "kreegan_fire_potion": 4, "cloud of confusion": 4, "despair": 4,
+               "choking gas": 4, "inferno": 7}
+DURATION = {"confusion": 1, "stun": 1, "song of peace": 1, "short hypnotism": 1, "summon stinkbug": 1,
+            "quickness": 2, "terror": 2, "frozen": 2, "blind": 3, "cowardice": 3, "hypnotize": 3,
+            "sanctuary": 6}
+SPELL_FLAGS = {"Adventure": "adventure", "Blessing": "blessing", "Combat": "combat", "Curse": "curse",
+               "Damage": "damage", "Summoning": "summoning", "Bodies": "bodies", "Elementals": "elementals",
+               "Enemies": "enemies", "Friends": "friends", "Mechanical": "mechanical", "Undead": "undead",
+               "Can Be Default": "default", "Cannot be dispelled": "no_dispel", "Cold": "cold", "Fear": "fear",
+               "Fire": "fire", "Healing": "healing", "Line of Sight": "line_of_sight", "Mind": "mind",
+               "Resisted": "resisted", "Resisted if Enemy": "resisted_if_enemy", "Teachable": "teachable",
+               "High Priority": "high_priority"}
+
+
+def spells(lib):
+    from exe_tables import ARTIFACT_IDS, CREATURE_SPELLS, SPELL_KEYWORDS  # noqa: F401
+    ids = {k: i for i, k in enumerate(SPELL_KEYWORDS)}
+    casters = {}
+    for creature, sids in CREATURE_SPELLS.items():
+        for n, sid in enumerate(sids):
+            casters.setdefault(SPELL_KEYWORDS[sid], []).append(creature)
+    _, rows = h4table.parse(lib.read("table.Spells.h4d"))
+    out, report = {}, []
+    for r in h4table.records(rows):
+        kw = r.get("Keyword", "").strip()
+        if not kw or not r.get("Level", "").strip().isdigit():
+            continue
+        key = kw.lower()
+        if key not in ids:
+            report.append(f"spell {kw}: no id in exe_tables.SPELL_KEYWORDS")
+        flags = {SPELL_FLAGS[c]: True for c in SPELL_FLAGS if r.get(c, "").strip()}
+        out[key] = dict(id=ids.get(key, -1), name=r["Name"].strip(), short=r["Short Name"].strip(),
+                        level=num(r["Level"]), cost=num(r["Cost"]), school=r["Alignment"].strip().lower(),
+                        base=num(r["Base"]), increase=num(r["Increase"]), per_level=num(r["Per Level"], 1),
+                        creature=r["Summoned Creature"].strip().lower(), flags=flags,
+                        type=r.get("Type", "").strip().lower(), help=r["Help Text"].strip())
+        if key in AREA_RADIUS:
+            out[key]["area_radius"] = AREA_RADIUS[key]
+        if key in DURATION:
+            out[key]["duration"] = DURATION[key]
+        if key in casters:
+            out[key]["cast_by"] = casters[key]
+    return out, report
+
+
 def write_lua(path, title, data):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
@@ -175,7 +223,8 @@ def main(argv):
     out_dir = argv[1] if len(argv) > 1 else os.path.dirname(OUT)
     lib = h4r.Library(DATA)
     for name, title, make in (("creatures", "Creatures of Heroes IV", creatures),
-                              ("artifacts", "Artifacts of Heroes IV", artifacts)):
+                              ("artifacts", "Artifacts of Heroes IV", artifacts),
+                              ("spells", "Spells of Heroes IV", spells)):
         data, report = make(lib)
         path = os.path.join(out_dir, name + ".lua")
         write_lua(path, title, data)

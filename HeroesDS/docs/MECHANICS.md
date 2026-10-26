@@ -366,7 +366,86 @@ Wyssanie życia, Tarcza ogniowa), `spell_effect` (stały czar, np. Ochrona przed
 - Nieznane jeszcze typy (`type_N`, ~13 wystąpień w kilku artefaktach) — do ustalenia z opisów,
   gdy będą potrzebne.
 
-## Do ustalenia (C1c)
+## 14. Czary (C1c)
 
-- Czary: obrażenia, obszar, odporność na magię, czasy trwania; czary jednostek
-  (`exe_tables.CREATURE_SPELLS`), siła czaru (umiejętności szkół magii).
+Źródła: `table.Spells` (polska, 193 czary: poziom, koszt, szkoła, siła bazowa, przyrost,
+flagi, opisy) → `make_rules.py` → `extracted/rules/spells.lua`; reguły rzucania z
+`BattleSpells.swift` (homm4-mac, adresy exe w nawiasach).
+
+### 14.1 Dane czaru (`spells.lua`)
+`level` 1–5, `cost` (mana), `school` (life/order/death/chaos/nature), `base` + `increase`
+× poziom rzucającego (gdy `per_level`), `creature` (przywoływana), `type` (damage, curse,
+blessing, healing, summoning, resurrection…), `flags`: `combat`, `damage`, `curse`,
+`blessing`, `mind`, `fire`, `cold`, `fear`, `line_of_sight`, `resisted`,
+`resisted_if_enemy`, `enemies`/`friends` (na kogo), `undead`/`mechanical`/`elementals`
+(czy działa na takie jednostki), `bodies` (na ciała poległych), `no_dispel`, `default`
+(czar domyślny jednostki). Do tego: `id` (numer w exe), `area_radius`, `duration`, `cast_by`
+(jednostki, które go rzucają).
+
+### 14.2 Siła czaru (exe 0x865200)
+- **Bohater**: `siła = (base + increase × poziom_bohatera) × pct / 100`,
+  `pct = 100 + 20 × poziom umiejętności mocy szkoły` (życie: `spirit` Duch, porządek:
+  `mind` Umysł, śmierć: `demonology` Demonologia, chaos: `pyromancy` Piromancja, natura:
+  `meditation` Medytacja) `+ 20 × Magia Bitewna (sorcery)` dla czarów z obrażeniami
+  `+` premie artefaktów (`spell_power_pct`). Graal szkoły strony: +50 % (natura +25 %).
+- **Jednostka** rzuca na poziomie 0; czary z obrażeniami, przywołania i Wskrzeszenie:
+  `pct × Spell Power × liczebność / 100`; Odrodzenie × liczebność startowa.
+- **Przywołanie**: liczba istot = `siła / doświadczenie istoty` (min. 1).
+- Wymóg: bohater zna szkołę na poziomie ≥ poziom czaru (podstawowy = 1 … arcymistrz = 5).
+
+### 14.3 Koszt
+Koszt z księgi (artefakty: `spell_cost`), + koszt czaru pod Power Drain, + jeszcze raz pod
+Magic Leech, −2 pod Mana Flare, minimum 1. Jednostki mają punkty czaru **na oddział**.
+
+### 14.4 Odporność na magię (exe 0x40cac0)
+`r` = odporność jednostki w % (zdolność, umiejętność bohatera, artefakty); czar Odporność na
+magię i **Ochrona przed szkołą** czaru — każde zabiera połowę **pozostałej** podatności
+(`k = 100 − r`, `k −= k/2`). Niewrażliwość na magię / Anty-magia = 100 %.
+- **Czary z obrażeniami**: obrażenia × (100 − r) % (w górę). Unholy Song na celu: +¼.
+- **Inne czary z flagą `resisted`** (lub `resisted_if_enemy` na wrogu): rzut — z szansą r %
+  czar w ogóle nie działa.
+- Kto może być celem: flagi `enemies`/`friends`; nieumarli/mechaniczni/żywiołaki tylko gdy
+  czar ma odpowiednią flagę; czary umysłu nie działają na nich (ani na odpornych na umysł);
+  `fire`/`cold` nie działa na odpornych; Niewrażliwość, Anty-magia i Sanktuarium odbijają
+  **każdy** czar (także przyjazny); linia wzroku blokowana tylko przez mury zamku.
+
+### 14.5 Obszar
+- Kula Ognia, Ogień Krigan, Chmura Konfuzji, Rozpacz, Duszący Gaz: promień **4 pola**;
+  Inferno **7 pól**. Jednostka jest w zasięgu, gdy `odległość do środka jej kwadratu −
+  rozmiar/2 < promień`; **swoje i wrogie** jednakowo.
+- Łańcuch błyskawic: siła połowi się przy każdym skoku, do najbliższej nietrafionej
+  jednostki, max 5 celów.
+- Iskry: półkole przed rzucającym (podchodzi jak do ataku wręcz).
+- Czary masowe = ten sam czar na każdy dozwolony cel.
+- Ruchome piaski (siła = liczba pól), Dym (chmura 4 × 4, strzały przez nią ×½), Wzrost skał
+  (głaz 3 × 3) — zmieniają pole bitwy.
+
+### 14.6 Czas trwania
+**Prawie wszystkie czary trwają do końca bitwy** (albo do rozproszenia). Stała długość
+(w turach celu; +1, gdy rzucony na oddział, który właśnie ma turę): Konfuzja, ogłuszenie,
+Pieśń pokoju, krótka hipnoza 1 · Szybkość (Quickness), Groza, zamrożenie 2 · Ślepota,
+Tchórzostwo, Hipnoza 3 · Sanktuarium 6. Trucizna i Zaraza zadają obrażenia na początku każdej
+tury celu; Regeneracja leczy.
+- Przeciwieństwa się znoszą: Błogosławieństwo ↔ Klątwa, Fortuna ↔ Pech, Przyspieszenie/
+  Szybkość ↔ Spowolnienie/Zmęczenie, Rozpacz/Smutek ↔ Radość, Szał ↔ Pieśń pokoju.
+- Rozproszenie: wszystkie; Anulowanie — dobre; Egzorcyzm — złe; nigdy `no_dispel`.
+
+### 14.7 Odbicie i kary
+- **Magiczne lustro**: wrogi czar klątwy/obrażeń, który zadziałał, wraca do rzucającego
+  z **połową siły**.
+- Spell Shackle: rzucający dostaje `10 × koszt` obrażeń (po swojej odporności).
+
+### 14.8 Czary jednostek (`exe_tables.CREATURE_SPELLS`, `cast_by` w `spells.lua`)
+Archanioł: Wskrzeszenie · arcydiabeł: Przywołanie demona · smok wróżek: Błyskawica,
+Konfuzja, Krąg ognia, Kula ognia · dżin: Lodowy pocisk, Spowolnienie, Tchórzostwo, Iluzoryczny
+sojusznik, Pieśń pokoju, Duchowy zapał · leprechaun: Fortuna · mag: Magiczna pięść, Klątwa,
+Trucizna, Wskrzeszanie szkieletów, Rozmycie · koszmar i mroczny czempion: Groza · ogr mag:
+Żądza krwi · feniks: Odrodzenie · satyr: Duchowy zapał · żywiołak wody: Lodowy pocisk,
+Ruchome piaski, Spowolnienie, Osłabienie · czarodziejka: Implozja, Masowe anulowanie,
+Wygnanie, Masowe spowolnienie. (Nazwy polskie — z `spells.lua`.)
+
+## Otwarte (do C2)
+- Dzielenie obrony wroga przez Walkę wręcz / Łucznictwo bohatera (§13.2) — tylko w opisie.
+- Szczegóły pojedynczych czarów (np. Wygnanie, Poświęcenie, Męczennik, Kradzież zaklęć) —
+  w `BattleSpells.swift` `cast()`, przenosić przy implementacji.
+- Zdolności tylko z opisu (§12.10), kilka nieznanych typów efektów artefaktów (§13.5).

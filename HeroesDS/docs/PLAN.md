@@ -7,73 +7,43 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   w przeciwległych narożnikach — **zmienione decyzją H5**: walka na polu bitwy z małymi
   sprite'ami, bez zbliżenia.
 
-## Gdzie skończyliśmy
-- **H1a ✅** czytnik archiwów `tools/h4r.py` + testy (`python -m unittest discover -s HeroesDS/tests`).
-  Wszystkie 8 archiwów z `Data/` czytają się; z 21381 plików 2 nie dają się odczytać
-  z winy danych gry (alias `layers.sample_cursor.h4d` na nieistniejący plik, uszkodzony
-  `actor_sequence.hero.spazz_sword.combat.death.ne.h4d` w `x2_override.h4r`).
-- **H1b ✅** dekoder sprite'ów `tools/h4d.py` → PNG (klatki z cieniem, strip, meta.json):
-  `python HeroesDS/tools/h4d.py HeroesDS/Data/heroes4.h4r actor_sequence.bandit.combat.melee.sw.h4d HeroesDS/extracted/x`.
-  Parsuje wszystkie 14449 `actor_sequence` ze wszystkich archiwów (liczba obrazów
-  zgodna z nagłówkiem). Wynik zgodny z H4ResHelper (bandit.stand.e: 6 obrazów, 5 klatek).
-- **H1c ✅** opisy jednostek `tools/h4actor.py` (`combat_actor` i `adv_actor`):
-  `python HeroesDS/tools/h4actor.py HeroesDS/Data/heroes4.h4r combat_actor.bandit.h4d`.
-  Wszystkie 348 plików (168 combat, 180 adv) czytają się co do bajtu. Daje: listę
-  animacji, fps, klatkę trafienia, sekwencję dla każdego z 8 kierunków, rozmiar na siatce
-  walki (1–7 pól), wysokość, dystanse chodu, punkty wylotu pocisków, przesunięcia.
-- **H1d ✅** `docs/FORMATS.md` — opis formatów `.h4r`, `.h4d`, `combat_actor`,
-  `adv_actor`. **H1 zamknięte.**
-- `ref/homm4-mac/` — pełny klon Anbrose/homm4-mac (MIT, do czytania): silnik gry
-  w Swifcie (`native/Sources/H4Engine/`: `Battle.swift`, `BattleSpells.swift`,
-  `Combat.swift`, `Spells.swift`, `Tables.swift` …) z adresami w `heroes4.exe` —
-  główne źródło dla C1. W nowym czacie, jeśli brak: `git clone --depth 1
-  https://github.com/Anbrose/homm4-mac.git ref/homm4-mac`.
-- **H2a ✅** analiza możliwości LiteLua i budżetu VRAM → `docs/DS_GRAPHICS.md`;
-  propozycja zaakceptowana (decyzja H4).
-- **H2b ✅ (melonDS)** kartridż `carts/h2b` + generator atlasów `tools/h4atlas.py`
-  (animacja → atlas PNG z paletą, cień 2× mniejszy, meta `.lua`) i `tools/make_h2b.py`
-  (generuje grafikę kartridża lokalnie i kopiuje na kartę emulatora). Wyniki
-  w `DS_GRAPHICS.md`: bandyta melee 183 ms / 68 KB, smok melee 354 ms / 136 KB, cykle
-  ładuj–zwolnij bez wycieków, starcie działa, dociąganie przy ataku ~290 ms.
-  Uruchamianie w melonDS: launcher czasem gubi pierwsze klawisze — `tap 28 178`
-  (przycisk Play) w skrypcie `tools/melon.py` działa pewnie.
-- **H2c ✅** trzy style grafiki (current / smooth / oldschool) w `tools/h4atlas.py --style`,
-  kartridż `h2b` z przełączaniem L/R (bandyta vs smok), poprawki falowania i palety (ogień);
-  pomiar na DSi: oldschool 171–201 ms przestoju przy ataku, smooth nie mieści kompletu.
-  Wyniki: `DS_GRAPHICS.md`, sekcja „Trzy style”. **Użytkownikowi podoba się oldschool** —
-  do potwierdzenia jako decyzja (H5) i dostrojenia (kontrast, 16 vs 32 kolory?).
-- Wysyłanie na konsolę: FTP `192.168.1.86:5000` (DHCP), pliki kartridża do
-  `litelua/carts/h2b/` (`curl --ftp-create-dirs -T`), log: `litelua/log.txt`.
-- **H2d ✅** narzędzie `tools/style_tuner.py` (okno z suwakami, presety, Reset, ograniczenia
-  DS: 16/256 kolorów, kolory 15-bit, ocena pamięci; zapis do `tools/styles.json`).
-  Użytkownik dostroił styl **`test1`** (skala 0,19, bez obrysu) — sprawdzony w `h2b`.
-- **Decyzja H5:** bez zbliżenia starcia — walka na polu bitwy z małymi sprite'ami
-  w stylu `test1`. Kartridż `h2b` (zbliżenie) jest już tylko historią pomiarów.
-- **C1a ✅** rdzeń mechaniki walki → `docs/MECHANICS.md`: pole 102×102, ruch, kolejność
-  (klucz Speed+1000, czekanie, obrona), morale, szczęście, wzór obrażeń, strzał (dzielniki),
-  kontratak i wymiana jednoczesna, First Strike, kontrstrzał, bohater w walce.
-  Źródło: `ref/homm4-mac` (`Combat.swift`, `Battle.swift`) + manual (tekst:
-  `pdftotext` do `extracted/text/`, poza repo).
-- **C1b-1 ✅** dane jednostek z gry: czytnik tabel `tools/h4table.py` (cp1250 — polska
-  wersja), generator `tools/make_rules.py` → `extracted/rules/creatures.lua` (74 jednostki:
-  statystyki, polskie nazwy, zdolności z exe — `tools/creature_abilities.py`, rozmiar,
-  odporność na magię). Block rozstrzygnięty: 30 % szansy na pełny blok.
-- **C1b-2 ✅** działanie zdolności → `MECHANICS.md` §12 (ruch, strzał, wręcz, cele dodatkowe,
-  efekty po ciosie w kolejności exe, strach, odporności, regeneracja, odrodzenie; 3 zdolności
-  tylko z opisu: mana_leech, random_curse, sea_bonus).
-- **C1b-3 ✅** bohater → `MECHANICS.md` §13: umiejętności (klucze exe ≠ polskie nazwy:
-  `toughness` = Walka, `combat` = Walka wręcz), wartości z opisów gry (w tym dzielenie obrony
-  wroga przez Walkę wręcz/Łucznictwo — tylko w opisie, [tekst]), premie dla armii, 14 slotów,
-  efekty artefaktów. Dane: `tools/exe_tables.py` (tabele zbudowane w kodzie exe: artefakty,
-  klasy, umiejętności, czary, czary jednostek — za homm4-mac, MIT), `make_rules.py` →
-  `extracted/rules/artifacts.lua` (248 artefaktów, polskie nazwy i opisy, efekty z nazwami).
-- **Następny krok: C1c** — czary (`Spells.swift`, `BattleSpells.swift`, `table.spells`):
-  obrażenia, obszar, odporność na magię, czasy trwania, czary jednostek, siła czaru.
-- Mapa świata: ustalenia o terenie 2.5D zapisane w `docs/FORMATS.md` (sekcja „Ważne na później”).
-- Otwarte w formatach (`FORMATS.md`): pole `?` palety, sekwencje bohaterów.
-- Pobrany kod z sieci (`ref/`) — nie uruchamiamy go (blokada auto mode); czytamy opis
-  i piszemy własny.
-- Pracujemy małymi krokami: jeden podpunkt = test na PC + lokalny commit + ta sekcja.
+## Gdzie skończyliśmy (notka dla nowego czatu, 2026-10-26)
+
+**Stan:** tor A (grafika) do H2 włącznie i tor B **C1 (mechanika) zamknięte**. Kodu walki
+jeszcze nie ma — jest komplet zasad i danych.
+
+**Następny krok: C2 — projekt systemu walki** (dokument, bez kodu; do akceptacji użytkownika):
+model danych (oddział, bohater, pole bitwy 102×102, efekty czarów), kolejka tur, akcje
+(ruch, atak, strzał, czar, czekanie, obrona), zdolności i czary jako dane + hooki (H2),
+deterministyczny seed (LCG z `MECHANICS.md` §6.1), zdarzenia dla animacji. Do rozstrzygnięcia
+z użytkownikiem w C2: który ekran = pole bitwy (dotyk!), który = informacje (H5); czy liczymy
+dzielenie obrony przez Walkę wręcz/Łucznictwo (tylko w opisie gry, `MECHANICS.md` §13.2);
+skala siatki na DS (102×102 pól na 256×192). Potem C3 (silnik w czystym Lua + testy na PC,
+`lupa`), C4 (kartridż ze stubami grafiki), H4 (makieta pola bitwy w stylu `test1`).
+
+**Przeczytaj najpierw:** `docs/DECISIONS.md` (H1–H5), `docs/MECHANICS.md` (zasady walki 1:1,
+§1–14), `docs/DS_GRAPHICS.md` (pamięć wideo, style, pomiary DSi), `docs/FORMATS.md`.
+
+**Dane z gry** (lokalnie, poza repo — `Data/` i `extracted/` są w `.gitignore`):
+- `python HeroesDS/tools/make_rules.py` → `extracted/rules/creatures.lua` (74 jednostki),
+  `artifacts.lua` (248), `spells.lua` (193) — polskie nazwy (gra GOG po polsku, cp1250).
+- Grafika: `tools/h4atlas.py --style test1` (styl użytkownika z `tools/styles.json`),
+  `tools/style_tuner.py` (okno do strojenia stylu), `tools/h4d.py` (podgląd PNG).
+- `ref/homm4-mac/` — klon Anbrose/homm4-mac (MIT): silnik H4 w Swifcie z adresami exe;
+  źródło reguł. Jeśli brak: `git clone --depth 1 https://github.com/Anbrose/homm4-mac.git ref/homm4-mac`.
+  Tylko czytamy (nie uruchamiamy pobranego kodu — blokada auto mode); tabele zbudowane
+  w kodzie exe są już przeniesione do `tools/exe_tables.py` i `tools/creature_abilities.py`.
+
+**Testy:** `python -m unittest discover -s HeroesDS/tests` (31 testów, dane syntetyczne).
+
+**Konsola / emulator:** kartridże HeroesDS w `HeroesDS/carts/` (grafika generowana lokalnie);
+melonDS: `tools/melon.py` (w skrypcie `tap 28 178` = Play w launcherze — klawisze bywają
+gubione); DSi: FTP `192.168.1.86:5000` (DHCP — może się zmienić), `curl --ftp-create-dirs -T`
+do `litelua/carts/<cart>/`, log `litelua/log.txt`.
+
+**Styl pracy:** małe kroki — punkt = test na PC + lokalny commit + aktualizacja tej sekcji;
+push tylko na prośbę. Po polsku. Edycje z `\` tylko narzędziem Edit lub skryptem z Write
+(heredoc w bashu psuje znaki ucieczki).
 
 ## Co już wiemy
 - `heroes4.h4r` (600 MB) to główne zasoby: `actor_sequence` (11285 animacji),
@@ -105,7 +75,7 @@ Folder w repo LuaDS (H1), wykluczenia w `.gitignore`, plan i decyzje.
   - **H1b ✅** dekoder obrazów `.h4d` → PNG (klatki, cienie, alfa) + testy.
   - **H1c ✅** `combat_actor` / `adv_actor`: animacje, fps, kierunki, rozmiar, dystanse.
   - **H1d ✅** `docs/FORMATS.md` — opis formatów własnymi słowami.
-- **H2 — Możliwości LiteLua.** (H2a ✅ analiza → `docs/DS_GRAPHICS.md`; H2b ✅ melonDS, DSi do zrobienia) Sprite'y, palety, rozmiary tekstur, budżet VRAM/RAM na
+- **H2 — Możliwości LiteLua ✅** (H2a analiza, H2b/H2c pomiary melonDS i DSi, trzy style, H2d tuner stylu → `docs/DS_GRAPHICS.md`; decyzje H4, H5) Sprite'y, palety, rozmiary tekstur, budżet VRAM/RAM na
   dwie duże animacje na górnym ekranie, ładowanie/zwalnianie w locie. Braki → osobny punkt
   w planie LiteLua (`docs/PLAN.md` w głównym repo).
 - **H3 — Konwerter PC → LiteLua.** Profile: *mapa* (małe sprite'y, mało klatek) i *walka*
@@ -116,13 +86,12 @@ Folder w repo LuaDS (H1), wykluczenia w `.gitignore`, plan i decyzje.
   w H2b i porzucone.)
 
 ### Tor B — walka (bez grafiki)
-- **C1 — Mechanika.** Manuale, Monster Manual, h4.heroes.net.pl: statystyki, wzór obrażeń,
-  inicjatywa, kontratak, morale/szczęście, moce jednostek, czary obszarowe.
-  Wynik: `docs/MECHANICS.md`.
+- **C1 — Mechanika ✅** Wynik: `docs/MECHANICS.md` (C1a rdzeń, C1b-1 dane jednostek,
+  C1b-2 zdolności, C1b-3 bohater i artefakty, C1c czary) + generator `tools/make_rules.py`.
 - **C2 — Projekt systemu walki.** Model danych (jednostka, oddział, pole bitwy), kolejka
   tur, akcje, moce jako hooki, deterministyczny seed.
 - **C3 — Silnik walki w czystym Lua** + testy na PC.
-- **C4 — Podpięcie do kartridża** ze stubami grafiki (dolny ekran mapa walki, górny starcie).
+- **C4 — Podpięcie do kartridża** ze stubami grafiki (pole bitwy + ekran informacji, H5).
 
 ### Później
 Tryb mapy kontynentu — osobny plan, gdy walka będzie stała. **Najpierw przeczytać
