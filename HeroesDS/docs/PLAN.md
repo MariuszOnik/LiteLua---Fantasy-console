@@ -11,9 +11,16 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   Wszystkie 8 archiwów z `Data/` czytają się; z 21381 plików 2 nie dają się odczytać
   z winy danych gry (alias `layers.sample_cursor.h4d` na nieistniejący plik, uszkodzony
   `actor_sequence.hero.spazz_sword.combat.death.ne.h4d` w `x2_override.h4r`).
-- **Następny krok: H1b** — dekoder sprite'ów `.h4d` → PNG na PC (podgląd bandyty).
-  Format jest opisany w `ref/homm4-mac/h4sprite.py` (MIT, H3) — paleta ≤256 kolorów
-  + alfa 4 bity na piksel, wiersze jako spany; pasuje do tekstur DS A5I3/A3I5.
+- **H1b ✅** dekoder sprite'ów `tools/h4d.py` → PNG (klatki z cieniem, strip, meta.json):
+  `python HeroesDS/tools/h4d.py HeroesDS/Data/heroes4.h4r actor_sequence.bandit.combat.melee.sw.h4d HeroesDS/extracted/x`.
+  Parsuje wszystkie 14449 `actor_sequence` ze wszystkich archiwów (liczba obrazów
+  zgodna z nagłówkiem). Wynik zgodny z H4ResHelper (bandit.stand.e: 6 obrazów, 5 klatek).
+- **Następny krok: H1c** — meta sekwencji: co znaczy pole „speed” w palecie (klatki: 24/16,
+  cienie: 8 — raczej nie prędkość; H4ResHelper pokazuje Speed 100), skąd czas klatek,
+  nagłówek typu 3 (+6 bajtów: 4449 plików — jeźdźcy/strzelcy?), które kierunki istnieją
+  (walka bandyty: melee ma 8, die/fidget 4 ukośne), `combat_actor.*` i `adv_actor.*`.
+- Pobrany kod z sieci (`ref/`) — nie uruchamiamy go (blokada auto mode); czytamy opis
+  i piszemy własny.
 - Pracujemy małymi krokami: jeden podpunkt = test na PC + lokalny commit + ta sekcja.
 
 ## Co już wiemy
@@ -26,8 +33,11 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   `actor_sequence.bandit.combat.<anim>.<kier>` (base_frame, wait, fidget, walk, melee,
   melee_up, flinch, die, …; często tylko 4 kierunki ukośne — reszta przez odbicie?).
   Do tego `combat_actor.bandit.h4d` i `adv_actor.bandit.h4d` (meta jednostki, do zbadania).
-- Klatki animacji bywają współdzielone („frame 002 004” = klatki 2 i 4) — kolejność
-  klatek trzeba odczytać z pliku (H1c).
+- Klatki animacji bywają współdzielone: nazwa obrazu „frame 002 004” = obraz klatek 2 i 4
+  (cienie tak samo: „shadow 002 004”). Klatki 8-bit z paletą ≤255 kolorów + alfa 4 bity,
+  cienie 1 kolor + alfa. Pozycje na płótnie 800×600, origin zwykle (−361, −347).
+- Rozmiary: bandyta na mapie ~52×45 px/klatka, w walce do ~205×173 (cały ruch ciosu),
+  pojedyncza klatka ~120×100 → na DS trzeba skalować (H3).
 - Źródła i licencje: H3 w `DECISIONS.md`.
 
 ## Punkty
@@ -38,7 +48,7 @@ Folder w repo LuaDS (H1), wykluczenia w `.gitignore`, plan i decyzje.
 ### Tor A — grafika
 - **H1 — Formaty.** Wynik: `docs/FORMATS.md`.
   - **H1a ✅** czytnik `.h4r` (gzip w środku, aliasy) + testy.
-  - **H1b** dekoder obrazów `.h4d` → PNG (klatki, cienie, alfa) + podgląd na PC.
+  - **H1b ✅** dekoder obrazów `.h4d` → PNG (klatki, cienie, alfa) + testy.
   - **H1c** meta sekwencji: kolejność i czas klatek, origin, kierunki (które są odbiciami),
     `combat_actor` / `adv_actor`.
   - **H1d** `docs/FORMATS.md` — opis formatów własnymi słowami.
