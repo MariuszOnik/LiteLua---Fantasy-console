@@ -20,13 +20,16 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   Wszystkie 348 plików (168 combat, 180 adv) czytają się co do bajtu. Daje: listę
   animacji, fps, klatkę trafienia, sekwencję dla każdego z 8 kierunków, rozmiar na siatce
   walki (1–7 pól), wysokość, dystanse chodu, punkty wylotu pocisków, przesunięcia.
-- **Następny krok: H1d** — `docs/FORMATS.md`: opis formatów `.h4r`, `.h4d`
-  (actor_sequence), `combat_actor`, `adv_actor` własnymi słowami (dziś są w docstringach
-  `tools/*.py`). Potem H2 (możliwości LiteLua) / C1 (mechanika).
-- Otwarte w formatach: znaczenie `hit_frame` (bandyta melee: 6, a ostrze spada
-  w klatkach 8–9 — może liczone od 0 albo z wyprzedzeniem na flinch), trzecie pole
-  nagłówka palety (24/16/8 — nie fps), sekwencje bohaterów (`hero`: 199 odwołań do
-  nieistniejących nazw — inne nazewnictwo), kilka jednostek z dodatków bez sekwencji.
+- **H1d ✅** `docs/FORMATS.md` — opis formatów `.h4r`, `.h4d`, `combat_actor`,
+  `adv_actor`. **H1 zamknięte.**
+- `ref/homm4-mac/` — pełny klon Anbrose/homm4-mac (MIT, do czytania): silnik gry
+  w Swifcie (`native/Sources/H4Engine/`: `Battle.swift`, `BattleSpells.swift`,
+  `Combat.swift`, `Spells.swift`, `Tables.swift` …) z adresami w `heroes4.exe` —
+  główne źródło dla C1. W nowym czacie, jeśli brak: `git clone --depth 1
+  https://github.com/Anbrose/homm4-mac.git ref/homm4-mac`.
+- **Następny krok: do wyboru H2** (możliwości LiteLua: sprite'y, palety, VRAM na dwie
+  duże animacje) **albo C1** (mechanika walki → `docs/MECHANICS.md`).
+- Otwarte w formatach (`FORMATS.md`): pole `?` palety, sekwencje bohaterów.
 - Pobrany kod z sieci (`ref/`) — nie uruchamiamy go (blokada auto mode); czytamy opis
   i piszemy własny.
 - Pracujemy małymi krokami: jeden podpunkt = test na PC + lokalny commit + ta sekcja.
@@ -56,11 +59,11 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
 Folder w repo LuaDS (H1), wykluczenia w `.gitignore`, plan i decyzje.
 
 ### Tor A — grafika
-- **H1 — Formaty.** Wynik: `docs/FORMATS.md`.
+- **H1 — Formaty ✅** Wynik: `docs/FORMATS.md`.
   - **H1a ✅** czytnik `.h4r` (gzip w środku, aliasy) + testy.
   - **H1b ✅** dekoder obrazów `.h4d` → PNG (klatki, cienie, alfa) + testy.
   - **H1c ✅** `combat_actor` / `adv_actor`: animacje, fps, kierunki, rozmiar, dystanse.
-  - **H1d** `docs/FORMATS.md` — opis formatów własnymi słowami.
+  - **H1d ✅** `docs/FORMATS.md` — opis formatów własnymi słowami.
 - **H2 — Możliwości LiteLua.** Sprite'y, palety, rozmiary tekstur, budżet VRAM/RAM na
   dwie duże animacje na górnym ekranie, ładowanie/zwalnianie w locie. Braki → osobny punkt
   w planie LiteLua (`docs/PLAN.md` w głównym repo).
