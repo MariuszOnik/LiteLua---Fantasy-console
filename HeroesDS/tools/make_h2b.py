@@ -22,10 +22,11 @@ CART = os.path.join(HERE, "..", "carts", "h2b")
 DATA = os.path.join(HERE, "..", "Data")
 
 STATES = ("wait", "melee", "flinch")
-# unit: (actor, direction, scale per style)
-UNITS = {"bandit": ("bandit", "ne", {"current": 0.5, "smooth": 0.5, "oldschool": 0.375}),
-         "dragon": ("black dragon", "sw", {"current": 0.35, "smooth": 0.35, "oldschool": 0.3})}
-STYLE_ORDER = ("oldschool", "smooth", "current")
+# unit: (actor, direction, scale per style; other styles: the style's scale hint,
+# the dragon 0.8 of it)
+UNITS = {"bandit": ("bandit", "ne", {"current": 0.5, "smooth": 0.5, "oldschool": 0.375}, 1.0),
+         "dragon": ("black dragon", "sw", {"current": 0.35, "smooth": 0.35, "oldschool": 0.3}, 0.8)}
+STYLE_ORDER = ("test1", "oldschool", "smooth", "current")
 
 
 def main(argv):
@@ -35,17 +36,25 @@ def main(argv):
     lib = h4r.Library(DATA)
     for sub in ("gfx", "data"):
         shutil.rmtree(os.path.join(CART, sub), ignore_errors=True)
+    styles = []
     for style in STYLE_ORDER:
-        for unit, (actor, d, scales) in UNITS.items():
+        if style not in h4atlas.STYLES:
+            print(f"  (no style {style}, skipped)")
+            continue
+        hint = h4atlas.STYLES[style].scale
+        styles.append(dict(name=style, zoom=1))
+        for unit, (actor, d, scales, ratio) in UNITS.items():
+            scale = scales.get(style, round(hint * ratio, 3))
             for st in STATES:
-                atlas, shadow, meta = h4atlas.convert(lib, actor, st, d, scales[style], style=style)
+                atlas, shadow, meta = h4atlas.convert(lib, actor, st, d, scale, style=style)
                 name = f"{style}_{unit}_{st}"
                 h4atlas.write(CART, name, atlas, shadow, meta)
                 bpp = 4 if len(atlas.getpalette()) // 3 <= 16 else 8
                 print(f"  {name}: {len(meta['frames'])} frames, {atlas.width}x{atlas.height} {bpp} bpp"
                       + (f", shadow {shadow.width}x{shadow.height}" if shadow else ""))
     with open(os.path.join(CART, "data", "styles.lua"), "w") as f:
-        f.write("return " + h4atlas.lua(list(STYLE_ORDER)) + "\n")
+        f.write("return {\n" + "".join(f'  {{ name = "{s["name"]}", zoom = {s["zoom"]} }},\n' for s in styles)
+                + "}\n")
     if a.sd and os.path.isdir(a.sd):
         dest = os.path.join(a.sd, "litelua", "carts", "h2b")
         shutil.rmtree(dest, ignore_errors=True)

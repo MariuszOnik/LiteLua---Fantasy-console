@@ -1,7 +1,7 @@
 -- HeroesDS H2b: can LiteLua load and animate Heroes IV units, and which look
 -- works on the DS?
 -- Top screen: a duel, bandit (bottom left, ne) vs black dragon (top right, sw),
--- in one of three styles (L / R): oldschool, smooth, current (DS_GRAPHICS.md).
+-- in one of the styles from data/styles.lua (L / R), 1:1 (Y: 2x for comparison).
 -- Only "wait" stays loaded; an attack loads the attacker's melee and the
 -- defender's flinch (the stall is shown) and frees the previous ones.
 -- X: measure load time and video memory of the style's atlases, and
@@ -42,24 +42,32 @@ local function load_anim(name)
   return a
 end
 
--- Draws frame f (1-based) of animation a with its ground point at x, y
-local function draw_anim(a, f, x, y)
+-- Draws frame f (1-based) of animation a with its ground point at x, y,
+-- k times bigger (k = 2: small graphics with chunky pixels, a quarter of the
+-- video memory of the same size on screen)
+local function draw_anim(a, f, x, y, k)
   local s = a.sframes[f]
   if a.simg and s > 0 then
-    local r, z = a.srects[s], a.szoom
+    local r, z = a.srects[s], a.szoom * k
     alpha(a.salpha)
-    sspr(a.simg, r[1], r[2], r[3], r[4], x + r[5], y + r[6], r[3] * z, r[4] * z)
+    sspr(a.simg, r[1], r[2], r[3], r[4], x + r[5] * k, y + r[6] * k, r[3] * z, r[4] * z)
     alpha()
   end
   local i = a.frames[f]
   if i > 0 then
     local r = a.rects[i]
-    spr(a.subs[i], x + r[5], y + r[6])
+    if k == 1 then
+      spr(a.subs[i], x + r[5], y + r[6])
+    else
+      sspr(a.img, r[1], r[2], r[3], r[4], x + r[5] * k, y + r[6] * k, r[3] * k, r[4] * k)
+    end
   end
 end
 
+local zoom = styles[style_i].zoom
+
 local function anim_name(unit, state)
-  return styles[style_i] .. "_" .. unit .. "_" .. state
+  return styles[style_i].name .. "_" .. unit .. "_" .. state
 end
 
 -- --- measurement (a coroutine) ---------------------------------------------------
@@ -68,7 +76,7 @@ local function measure()
   out = {}
   free_all()
   local base = vram()
-  say(("style %s, VRAM at start %d KB"):format(styles[style_i], base // 1024))
+  say(("style %s, VRAM at start %d KB"):format(styles[style_i].name, base // 1024))
   say("anim              ms   KB  atlas")
   for unit in pairs(UNITS) do
     for _, st in ipairs(STATES) do
@@ -143,7 +151,7 @@ local function attack(att, def)
   att.anims.melee = load_anim(anim_name(att.name, "melee"))
   def.anims.flinch = load_anim(anim_name(def.name, "flinch"))
   stall = ("%.0f ms, VRAM %d KB"):format((micros() - t0) / 1000, vram() // 1024)
-  print(styles[style_i] .. " attack: load " .. stall)
+  print(styles[style_i].name .. " attack: load " .. stall)
   play(att, "melee")
   att.target = def
 end
@@ -163,7 +171,7 @@ local job -- The measurement coroutine while it runs
 
 start_duel()
 out = { "A: bandit attacks   B: dragon attacks",
-        "L / R: style        X: measure" }
+        "L / R: style  Y: 1x/2x  X: measure" }
 
 function _update()
   if job then
@@ -177,9 +185,11 @@ function _update()
   end
   if btnp("l") or btnp("r") then
     style_i = (style_i + (btnp("r") and 0 or -2)) % #styles + 1 -- 1-based wrap
+    zoom = styles[style_i].zoom
     start_duel()
     return
   end
+  if btnp("y") then zoom = 3 - zoom end -- 1x <-> 2x
   if btnp("a") then attack(units.left, units.right) end
   if btnp("b") then attack(units.right, units.left) end
   if btnp("x") then
@@ -200,9 +210,9 @@ function _draw(screen)
     end
     for _, u in ipairs({ units.right, units.left }) do -- Farther unit first
       local f, a = frame_of(u)
-      draw_anim(a, math.min(f, #a.frames), u.x, u.y)
+      draw_anim(a, math.min(f, #a.frames), u.x, u.y, zoom)
     end
-    text("style: " .. styles[style_i] .. "  (L/R)", 2, 2, 12)
+    text(("style: %s x%d  (L/R, Y: zoom)"):format(styles[style_i].name, zoom), 2, 2, 12)
     text("load: " .. stall, 2, 184, 12)
   else
     cls(0)

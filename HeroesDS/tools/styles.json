@@ -1,0 +1,22 @@
+{
+ "test1": {
+  "colors": 15,
+  "edge": "cut",
+  "alpha_cut": 100,
+  "ground": [
+   112,
+   104,
+   66
+  ],
+  "brightness": 1.38,
+  "contrast": 1.2,
+  "saturation": 1.48,
+  "sharpen": 0,
+  "outline": null,
+  "shadow": "dither",
+  "shadow_alpha": 0.6,
+  "vivid": 8,
+  "scale": 0.19,
+  "_note": "tuned on bandit melee sw"
+ }
+}
