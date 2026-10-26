@@ -8,6 +8,10 @@ local sprites = require("sprites")
 
 local view = {}
 
+-- The field's colour: the ground colour the graphics' style was made for (make_c4.py)
+local style_file = loadfile("data/style.lua")
+view.GROUND = style_file and style_file().ground or 7
+
 local BASE = 3 / 16
 local K = BASE
 view.W = grid.SCENE_W * BASE // 1       -- 221
@@ -94,7 +98,7 @@ end
 -- animation, frame), corpse ([stack] = true: drawn though dead, until its death is shown), blink }
 function view.draw_field(st)
   local x0, y0 = view.OX - camx * K, view.OY - camy * K
-  rectfill(x0, y0, grid.SCENE_W * K, grid.SCENE_H * K, 7)
+  rectfill(x0, y0, grid.SCENE_W * K, grid.SCENE_H * K, view.GROUND)
   local dots = st.dots
   if dots then
     for i = 1, #dots, 2 do

@@ -5,7 +5,7 @@ r"""Makes the C4 battle cart (HeroesDS/carts/c4) and copies it to the emulator S
 
 The cart gets the combat engine and the rules (cartkit); main.lua and src/ are ours.
 --gfx converts the creatures' and heroes' combat animations from the original game
-(Data/) in the "test1" style at the field's scale 3/16 (H5, H8): for every actor the
+(Data/) in the STYLE style at the field's scale 3/16 (H5, H8): for every actor the
 states in STATES, 8 directions each, as gfx/u/<actor>_<state>_<dir>.png (+ _sh.png, the
 shadow) and data/anim/<actor>_<state>.lua = { [dir] = meta } (h4atlas meta). Made
 animations are kept unless --force. gfx/ and data/ stay out of git (H1).
@@ -27,7 +27,7 @@ DATA = os.path.join(cartkit.HEROES, "Data")
 STATES = ("wait", "walk", "melee", "flinch", "die")
 DIRS = ("e", "n", "ne", "nw", "s", "se", "sw", "w")
 SCALE = 0.1875
-STYLE = "test1"
+STYLE = "test2"   # tools/styles.json, tuned by the user in style_tuner.py
 # the heroes of src/setup.lua
 HERO_ACTORS = ("hero.life_fighter_male", "hero.death_mage_female")
 
@@ -84,6 +84,16 @@ def make_gfx(force):
     print(f"  animations: {made} made, {skipped} kept")
 
 
+def write_style():
+    """data/style.lua: what the cart needs of the style (the field's colour = its ground)"""
+    import h4atlas
+    st = h4atlas.STYLES[STYLE]
+    r, g, b = st.ground
+    with open(os.path.join(CART, "data", "style.lua"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(f"-- The graphics' style ({STYLE}, tools/styles.json): made by HeroesDS/tools/make_c4.py\n")
+        f.write(f'return {{ name = "{STYLE}", ground = 0x{r:02x}{g:02x}{b:02x} }}\n')
+
+
 def main(argv):
     p = argparse.ArgumentParser()
     p.add_argument("--sd", default=cartkit.SD)
@@ -93,6 +103,7 @@ def main(argv):
     a = p.parse_args(argv[1:])
     cartkit.copy_engine(CART)
     cartkit.copy_rules(CART)
+    write_style()
     if a.gfx:
         make_gfx(a.force)
     tool = os.path.join(cartkit.HEROES, "..", "tools", "litelua.py")

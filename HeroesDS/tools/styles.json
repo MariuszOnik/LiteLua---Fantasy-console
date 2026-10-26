@@ -18,5 +18,25 @@
   "vivid": 8,
   "scale": 0.19,
   "_note": "tuned on bandit melee sw"
+ },
+ "test2": {
+  "colors": 9,
+  "edge": "cut",
+  "alpha_cut": 100,
+  "ground": [
+   112,
+   104,
+   66
+  ],
+  "brightness": 1.07,
+  "contrast": 0.98,
+  "saturation": 1.01,
+  "sharpen": 0,
+  "outline": null,
+  "shadow": "dither",
+  "shadow_alpha": 0.6,
+  "vivid": 9,
+  "scale": 0.19,
+  "_note": "tuned on pirate melee ne"
  }
 }
