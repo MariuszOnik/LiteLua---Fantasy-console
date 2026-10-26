@@ -199,10 +199,115 @@ mur (oblężenie) → Stone Gaze → **szczęście celu** → ograniczenie do PW
   (krasnolud 50, złoty golem 75; niewrażliwość = 100).
 - Opisy zdolności po polsku: `table.creature_abilities` (słowo kluczowe → nazwa, opis).
 
+## 12. Zdolności jednostek (C1b-2)
+
+Słowa kluczowe jak w `table.creature_abilities` (tam też polskie nazwy i opisy).
+Źródło: `Battle.swift` (`aftermath` exe 0x553440, `extraTargets`, `startOfTurn` 0x567ef0,
+`meleeExchange`, `rangeDivisor`); oznaczone **[tekst]** — tylko z opisu w grze, homm4-mac
+tego nie odtwarza, do weryfikacji. „Żywa” jednostka = nie nieumarła, nie mechaniczna,
+nie żywiołak.
+
+### 12.1 Wliczone w statystyki (nic nie robią w walce)
+`strength` (Siła), `toughness` (Wytrzymałość), `stone_skin` (Kamienna skóra) — tabela
+jednostek ma już podwyższone wartości; exe ich nie sprawdza.
+
+### 12.2 Ruch
+- `flying` — nad przeszkodami, jednostkami i murami; ląduje na wolnym miejscu.
+- `teleport` — dowolne wolne miejsce na polu (nie, gdy spętana).
+- `strike_and_return` — po ataku wraca na miejsce startu (jeśli wolne).
+- `long_weapon` — atak wręcz o 1 pole dalej (kontratak też).
+- `berserk` — nie może czekać; musi atakować albo iść w stronę wroga.
+
+### 12.3 Strzelanie
+- `ranged` — strzelec (pociski z tabeli); wręcz ×0,5 ataku, chyba że `normal_melee`.
+- `short_range` / `long_range` — dzielnik odległości (6.3).
+- `siege_machine` (polska nazwa: Ignorowanie przeszkód) — bez kary za przeszkody i mury.
+- `no_ranged_penalties` (Oblężnicza, katapulta) — pełne obrażenia mimo przeszkód.
+- `unlimited_shots`, `shoots_twice` (drugi strzał po kontrstrzale), `ranged_first_strike`.
+- `area_effect` (cyklop, gargantuan) — strzał trafia też **wszystkich** (swoich też) stojących
+  obok celu; `large_area_effect` (katapulta, pociski zapalające) — to samo, ogniem.
+
+### 12.4 Walka wręcz
+- `first_strike`, `first_strike_immunity`, `no_retaliation`, `unlimited_retaliation`,
+  `strikes_twice` (drugi cios po kontrataku), `charging` (6.2), `giantslayer` (×2 vs poziom 4).
+- `hydra_strike` (Wielokrotne ataki, hydra) — trafia **wszystkich wrogów obok siebie**.
+- `3_headed_attack` (cerber) — cel + do 2 wrogów stojących obok atakującego **i** obok celu
+  (najbliżsi celu).
+- `breath_attack` / `arc_breath_attack` (smoki, feniks) — trafia też jednostkę **tuż za celem**
+  na linii atakujący → cel (punkt `rozmiar_celu/2 + 1,5` pola za środkiem celu), **swoją
+  albo wrogą**, chyba że ma odporność na ogień.
+- Cele dodatkowe dostają tylko obrażenia (bez efektów z 12.5).
+
+### 12.5 Efekty po ciosie (kolejność jak w exe)
+1. Odwet (czar Retribution na celu) i Ognista aura (czar na atakującym) — C1c.
+2. `poison` — trucizna = **¼ zadanych obrażeń** (Ochrona przed Śmiercią: połowa dawki);
+   zostaje większa z dawek; zadaje ją **na początku każdej tury** zatrutego do końca bitwy.
+3. `fire_shield` (efreet) — wręcz: **¼ ciosu** wraca do atakującego jako ogień (chyba że
+   odporny na ogień; gdy właściciel tarczy ma Ochronę przed Chaosem — połowa tego).
+4. Gdy cel żyje: `weakness` (czar Osłabienie, żywi) · `stunning` (wręcz; giermek) — szansa
+   `obrażenia × 100 / zdrowie_celu_przed − 5` %, **bez rzutu na odporność**; ogłuszony traci
+   turę i nie kontratakuje.
+5. Tylko wręcz, gdy cel żyje:
+   `aging` (duch; czar Postarzenie: atak −25 %, obrona −20 %, szybkość i ruch ½) ·
+   `blinding` (jednorożec) 30 % na Ślepotę · `curse` — czar Klątwa (minimalne obrażenia) ·
+   `devouring` — każdy atakujący ma 1/10 szansy połknąć jednostkę celu, najwyżej 1/10
+   liczebności atakujących.
+6. Tylko wręcz: `hypnotize` (syrena) — 30 % na przejęcie celu na 1 turę (gdy już
+   zahipnotyzowany — uwolnienie) · `binding` (modliszka) — cel nie może się ruszać, dopóki
+   atakujący się nie ruszy (nie działa na niematerialnych; może atakować i rzucać) ·
+   `lightning` (ptak gromu) — błyskawica **30 obrażeń × liczba atakujących**, jak czar (odporność
+   na magię działa) · `freeze` (lodowy demon) — 30 %, potem rzut na odporność; zamrożony
+   traci tury (opis: 2 tury).
+7. `vampire` (wampir; też czar Wampirzy dotyk) — wręcz, żywy cel: **½ obrażeń** (w górę) leczy
+   rany i **wskrzesza** poległych, najwyżej do liczebności z początku bitwy (Ochrona przed
+   Śmiercią celu: połowa).
+
+Osobno, w samym ciosie (przed szczęściem):
+- `stone_gaze` (meduza, nie w ciosach dodatkowych) — żywy, niewidomy-odporny cel bez
+  niewrażliwości: na każdego atakującego 250/100/50/20 ‰ jednostki celu poziomu 1/2/3/4 zamienia
+  się w kamień; działa, gdy uzbiera się co najmniej pół jednostki — doliczane do obrażeń jako
+  `PW_celu × ‰ × liczba / 1000`.
+- `block` — 30 % na całkowite zablokowanie (6.2).
+
+### 12.6 Strach
+- `panic` (kościany smok) i czar Aura strachu — zaatakowany **nie kontratakuje** (chyba że
+  ma Ochronę przed Śmiercią lub strach go nie dotyczy — nieumarli, mechaniczni). [tekst]: po
+  ataku przerażona ofiara wycofuje się na pewną odległość (homm4-mac tego nie robi).
+- `terror` (koszmar) — w exe to **czar** jednostki (Groza: cel traci turę), nie efekt ciosu.
+
+### 12.7 Obrona i odporności
+- `block`, `insubstantial` (obrona ×2), `skeletal` (obrona ×2 vs strzały).
+- `fire_resistance` / `cold_resistance` — pełna odporność na czary ognia/zimna, połowa
+  obrażeń od ataków ogniem/zimnem (`fire_attack`, `cold_attack`, zionięcie).
+- `life/order/death/chaos/nature_protection` — pełna odporność na czary tej szkoły;
+  obrażenia od stworów tego charakteru **×2/3** (exe; polski opis Ochrony przed Śmiercią mówi
+  „o połowę” — liczymy jak exe).
+- `magic_resistance` (% z opisu), `magic_immunity`, `magic_mirror` (odbija wrogie czary) — C1c.
+- `blind` (troglodyta) — odporny na ataki wzrokowe (Ślepota, Kamienne spojrzenie).
+- `undead`, `mechanical`, `elemental` — nie są „żywe”: bez trucizny, ogłuszenia, osłabienia,
+  wysysania życia, czarów umysłu; nieumarli i mechaniczni bez morale.
+
+### 12.8 Początek tury, śmierć
+- `regeneration` (troll) — na początku tury leczy rany **pierwszej** jednostki o **50 PW**
+  (bohater z tą zdolnością: 20 + 2 × poziom). Opis w grze: „leczy wszystkie rany na końcu
+  tury” — liczymy jak exe.
+- `rebirth` (feniks) — gdy oddział zginie: wraca `55 × liczebność_startowa` PW (jeśli ma
+  punkty czaru na Odrodzenie).
+
+### 12.9 Rzucanie czarów
+`spellcaster` i jednostki z czarami w exe (archanioł: Wskrzeszenie, arcydiabeł: przywołanie
+demonów — `summons_demons`, koszmar i mroczny czempion: Groza, feniks: Odrodzenie, dżin, mag,
+smok wróżek, żywiołak wody, czarodziejka, chochlik/leprechaun, satyr, ogr mag) — lista czarów
+jednostek w C1c. Punkty czaru na oddział (nie × liczebność), moc z kolumny Spell Power.
+
+### 12.10 Niezweryfikowane / poza walką
+- `mana_leech` (chochlik) [tekst]: co turę wysysa manę z wrogich czarodziejów i oddaje swoim.
+- `random_curse` (obserwator) [tekst]: atak dokłada losowy czar ofensywny Chaosu lub Śmierci.
+- `sea_bonus` (pirat) [tekst]: na okręcie szybszy, mocniejszy, lepsza obrona — wartości nieznane.
+- Mapa przygody: `stealth`, `cave_dweller`, `taxpayer` (1 złota na turę za każdą istotę).
+
 ## Do ustalenia (C1b / C1c)
 
-- Działanie każdej zdolności (efekty po ciosie: trucizna, ogłuszenie, spętanie, wyssanie
-  życia, strach, …) — `Battle.swift`: `aftermath`, `extraTargets`, `startOfTurn`.
 - Umiejętności bohatera (Taktyka: ruch i kolejność; Atak/Obrona: % do statystyk jednostek;
   Dowodzenie: morale/szczęście) — `HeroSkills.swift`, `table.skills`.
 - Czary: obrażenia, obszar, odporność na magię, czasy trwania.

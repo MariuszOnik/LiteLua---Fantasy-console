@@ -58,8 +58,11 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   wersja), generator `tools/make_rules.py` → `extracted/rules/creatures.lua` (74 jednostki:
   statystyki, polskie nazwy, zdolności z exe — `tools/creature_abilities.py`, rozmiar,
   odporność na magię). Block rozstrzygnięty: 30 % szansy na pełny blok.
-- **Następny krok: C1b-2** — działanie zdolności (efekty po ciosie, dodatkowe cele, początek
-  tury) do `MECHANICS.md`; potem C1b-3 umiejętności bohaterów; C1c czary.
+- **C1b-2 ✅** działanie zdolności → `MECHANICS.md` §12 (ruch, strzał, wręcz, cele dodatkowe,
+  efekty po ciosie w kolejności exe, strach, odporności, regeneracja, odrodzenie; 3 zdolności
+  tylko z opisu: mana_leech, random_curse, sea_bonus).
+- **Następny krok: C1b-3** — umiejętności bohaterów w walce (`HeroSkills.swift`,
+  `table.skills`), potem C1c czary (w tym czary jednostek, `creatureSpells`).
 - Mapa świata: ustalenia o terenie 2.5D zapisane w `docs/FORMATS.md` (sekcja „Ważne na później”).
 - Otwarte w formatach (`FORMATS.md`): pole `?` palety, sekwencje bohaterów.
 - Pobrany kod z sieci (`ref/`) — nie uruchamiamy go (blokada auto mode); czytamy opis
