@@ -28,10 +28,18 @@ lewej; komputer gra stroną 1 w korutynie z klepsydrą; Y = komputer gra też za
 ekran: runda, aktywny oddział, wybór, kolejka, dziennik po polsku). Sprawdzone w melonDS:
 podgląd, atak, ruch, autobitwa do końca.
 
-**Następny krok: C4c** — lupa ×2 na L/R (H8), krzyżak + A zamiast rysika, czary bohatera
-(Księga po prawej stronie pola, cel / obszar dotykiem), krótkie animacje zdarzeń (ruch po
-drodze, błysk trafienia, liczby obrażeń). Potem H3 (konwerter grafiki) i H4 (pole z
-prawdziwymi sprite'ami). Na DSi C4b jeszcze nie sprawdzone.
+**C4c (sterowanie i pokaz zdarzeń) — zrobione.** W `carts/c4`: lupa ×2 na L/R wokół
+rysika / aktywnego oddziału (rysik przy krawędzi przewija; `view.set_camera`), krzyżak
+przesuwa kursor, A dotyka w jego miejscu; Księga czarów (przycisk Ks po prawej, lista na
+dolnym ekranie, cel wg `casting.aim`: oddział / pole / oba / dwa oddziały / oddział i
+miejsce, podświetlone cele z `casting.check`, drugi dotyk = rzuć); zdarzenia pokazywane po
+kolei (oddział idzie po drodze, liczby obrażeń / leczenia nad celem, krótkie pauzy).
+Test `tests/c4_test.lua` (lupa, atrapy API LiteLua): tury gracza dotykiem, Magiczna Strzała
+z Księgi, potem komputer kończy bitwę.
+
+**Następny krok:** gra na DSi (C4 wrzucone przez FTP do `litelua/carts/c4`) i poprawki
+z rozgrywki; potem H3 (konwerter grafiki) i H4 (pole z prawdziwymi sprite'ami) — albo
+decyzja o innym polu walki, jeśli sterowanie na drobnej siatce się nie sprawdzi.
 
 **C4a (pomiar i przyspieszenie) — zrobione.** Kartridż `carts/c4bench`
 (`python HeroesDS/tools/make_c4bench.py`: silnik + reguły bez opisów, wynik PC do
@@ -60,7 +68,7 @@ pomiary DSi), `docs/FORMATS.md`.
   Tylko czytamy (nie uruchamiamy pobranego kodu — blokada auto mode); tabele zbudowane
   w kodzie exe są już przeniesione do `tools/exe_tables.py` i `tools/creature_abilities.py`.
 
-**Testy:** `python -m unittest discover -s HeroesDS/tests` (37 testów Pythona, w tym `test_combat`: 17 + 15 + 18 + 7 + 15 + 7 przypadków w Lua przez `lupa`; dane syntetyczne, `real_creatures` także na `extracted/rules/creatures.lua`, gdy jest).
+**Testy:** `python -m unittest discover -s HeroesDS/tests` (38 testów Pythona, w tym `test_combat`: 17 + 15 + 18 + 7 + 15 + 7 przypadków w Lua przez `lupa`; dane syntetyczne, `real_creatures` także na `extracted/rules/creatures.lua`, gdy jest).
 
 **Konsola / emulator:** kartridże HeroesDS w `HeroesDS/carts/` (grafika generowana lokalnie);
 melonDS: `tools/melon.py` (w skrypcie `tap 28 178` = Play w launcherze — klawisze bywają

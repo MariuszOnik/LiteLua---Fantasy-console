@@ -39,6 +39,9 @@ class CombatTest(unittest.TestCase):
     def test_casting(self):
         self.assertGreater(run_lua("casting_test.lua"), 10)
 
+    def test_c4_cart(self):
+        self.assertGreaterEqual(run_lua("c4_test.lua"), 0)
+
     def test_ai(self):
         count, _worst = run_lua("ai_test.lua")
         self.assertGreater(count, 5)

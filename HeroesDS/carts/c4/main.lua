@@ -1,10 +1,13 @@
--- HeroesDS C4b: a battle on the DS with stand-in graphics (COMBAT.md 9; H6, H8, H11).
+-- HeroesDS C4: a battle on the DS with stand-in graphics (COMBAT.md 9; H6, H8, H11).
 -- Bottom screen: the whole field at 3/16, touched to choose; a first touch shows what
 -- would happen (path, target, damage on the top screen), a second touch on the same
--- thing (or A) does it, B cancels. Buttons at the left: wait, defend. The computer plays
+-- thing (or A) does it, B cancels. Buttons: wait and defend at the left, the spell book
+-- at the right. L or R held: the magnifier (x2 around the stylus, the stylus at an edge
+-- scrolls). The d-pad moves a cursor; A then touches where it points. The computer plays
 -- side 1 in a coroutine, yielding at grid.tick() every SLICE us, so the hourglass turns.
--- Top screen: round, the active stack, the selection with its damage preview, the turn
--- order and the log. X after the end: a new battle.
+-- Events are shown one by one: stacks walk their path, hits show their damage.
+-- Top screen: round, the active stack, the selection with its preview, the turn order,
+-- the log. Y: the computer plays your side too. X after the end: a new battle.
 
 local stats = require("combat.stats")
 local battle = require("combat.battle")
@@ -28,12 +31,19 @@ local seed = 1
 local b           -- the battle
 local opts        -- the human's options this turn (Battle:options), nil = to make
 local dots        -- move dots of this turn
-local sel         -- { cmd, preview, path, ghost, target } or { info = stack }
+local sel         -- { cmd, preview, path, ghost, target, marked, note } or { info = stack }
+local book        -- the spell book: { list = { keys } } while open
+local aiming      -- a spell waiting for its target: { key, aim, target? }
 local job         -- the computer's turn (a coroutine)
+local queue = {}  -- events still to show
+local anim        -- the event being shown: { frames, t, at = { [stack] = path } }
+local popups = {} -- { wx, wy, text, col, t }
 local log_lines = {}
 local frame = 0
 local touching = false
 local slice_start = 0
+local focus = { 590, 512 }     -- scene point the magnifier looks at
+local cursor                   -- { x, y } on the bottom screen while the d-pad is used
 
 -- --- the log -------------------------------------------------------------------------------
 
@@ -64,7 +74,6 @@ local EVENT = {
   wait = function(e) return name_of(e.stack) .. " czeka" end,
   defend = function(e) return name_of(e.stack) .. " broni się" end,
   cast = function(e) return ("%s rzuca %s"):format(name_of(e.stack), spell_name(e.spell)) end,
-  cast_at = function(e) return ("%s rzuca %s"):format(name_of(e.stack), spell_name(e.spell)) end,
   spell = function(e)
     if e.damage > 0 then return ("%s: %d, zabici %d"):format(name_of(e.stack), e.damage, e.killed) end
     if e.damage < 0 then return ("%s: +%d PW"):format(name_of(e.stack), -e.damage) end
@@ -78,18 +87,87 @@ local EVENT = {
   over = function(e) return e.winner == 0 and "Zwycięstwo!" or "Porażka." end,
 }
 
-local function play(events)
-  for _, e in ipairs(events or {}) do
-    local f = EVENT[e.t]
-    if f then say(f(e)) end
+-- --- showing the events --------------------------------------------------------------------
+
+local function popup(id, s, col)
+  local u = b.units[id]
+  if not u then return end
+  popups[#popups + 1] = { u.x + u.size / 2, u.y + u.size / 2, s, col, 0 }
+end
+
+-- Starts showing one event: the log line, and an animation that holds the next ones
+local function show(e)
+  local f = EVENT[e.t]
+  if f then say(f(e)) end
+  if e.t == "move" then
+    local u = b.units[e.stack]
+    local pts = { e.from }
+    for _, p in ipairs(e.path) do pts[#pts + 1] = p end
+    if e.flying and #pts > 2 then pts = { e.from, e.path[#e.path] } end
+    local n = 0
+    for i = 2, #pts do n = n + math.max(math.abs(pts[i][1] - pts[i - 1][1]), math.abs(pts[i][2] - pts[i - 1][2])) end
+    anim = { frames = math.max(4, math.min(24, n)), t = 0, stack = u, pts = pts, len = n }
+  elseif e.t == "melee" or e.t == "shoot" or (e.t == "spell" and e.damage ~= 0) then
+    local hit = e.t == "spell" and e.stack or e.target
+    if e.damage > 0 then popup(hit, "-" .. e.damage, 2)
+    elseif e.damage < 0 then popup(e.stack, "+" .. -e.damage, 5)
+    else popup(hit, "0", 13) end
+    anim = { frames = 10, t = 0 }
+  elseif e.t == "heal" then
+    popup(e.stack, "+" .. e.amount, 5)
+    anim = { frames = 8, t = 0 }
+  elseif e.t == "die" or e.t == "cast" or e.t == "blocked" then
+    anim = { frames = 6, t = 0 }
   end
+end
+
+-- Where a moving stack is drawn: along its path, by the animation's progress
+local function moving_at()
+  if not (anim and anim.stack) then return nil end
+  local d = anim.len * anim.t / anim.frames
+  local pts = anim.pts
+  for i = 2, #pts do
+    local a, c = pts[i - 1], pts[i]
+    local l = math.max(math.abs(c[1] - a[1]), math.abs(c[2] - a[2]))
+    if d <= l and l > 0 then
+      local f = d / l
+      return { [anim.stack] = { a[1] + (c[1] - a[1]) * f, a[2] + (c[2] - a[2]) * f } }
+    end
+    d = d - l
+  end
+  return nil
+end
+
+local function play(events)
+  for _, e in ipairs(events or {}) do queue[#queue + 1] = e end
+end
+
+-- One frame of the show; true while it holds the game
+local function showing()
+  for i = #popups, 1, -1 do
+    local p = popups[i]
+    p[5] = p[5] + 1
+    if p[5] > 24 then table.remove(popups, i) end
+  end
+  if anim then
+    anim.t = anim.t + 1
+    if anim.t >= anim.frames then anim = nil end
+    return true
+  end
+  while #queue > 0 and not anim do show(table.remove(queue, 1)) end
+  return anim ~= nil
 end
 
 -- --- the battle ----------------------------------------------------------------------------
 
+local function reset_turn()
+  opts, dots, sel, book, aiming = nil, nil, nil, nil, nil
+end
+
 local function new_battle()
   b = setup.battle(seed, creatures, spells)
-  opts, dots, sel, job = nil, nil, nil, nil
+  reset_turn()
+  job, anim, queue, popups = nil, nil, {}, {}
   log_lines = {}
   say(("Bitwa %d"):format(seed))
   play(b:take_events())
@@ -118,9 +196,25 @@ end
 
 local function same(a, c)
   return a and c and a.type == c.type and a.target == c.target and a.x == c.x and a.y == c.y
+    and a.spell == c.spell and a.second == c.second
 end
 
--- The command a touch at (px, py) means, or an info selection
+local function confirm()
+  local ev, err = b:act(sel.cmd)
+  if not ev then say("Nie można: " .. tostring(err)) end
+  play(ev)
+  reset_turn()
+end
+
+-- --- choosing ------------------------------------------------------------------------------
+
+-- The world cell under a screen point
+local function cell_at(px, py)
+  local wx, wy = view.to_world(px, py)
+  return math.floor(wx), math.floor(wy)
+end
+
+-- The command a touch at (px, py) means for a move or an attack, or an info selection
 local function choose(px, py)
   local u = b:current()
   local wx, wy = view.to_world(px, py)
@@ -155,14 +249,58 @@ local function choose(px, py)
   return { type = "move", x = x, y = y }
 end
 
-local function confirm()
-  local ev, err = b:act(sel.cmd)
-  if not ev then say("Nie można: " .. tostring(err)) end
-  play(ev)
-  opts, dots, sel = nil, nil, nil
+-- A spell's command from a touch, by its aim; nil while it needs more (aiming keeps it)
+local function aim_spell(px, py)
+  local t = view.stack_at(b.units, px, py)
+  local x, y = cell_at(px, py)
+  local a = aiming
+  local cmd = { type = "cast", spell = a.key }
+  if a.aim == "cell" then
+    cmd.x, cmd.y = x, y
+  elseif a.aim == "unit" then
+    if not t then return nil end
+    cmd.target = t.id
+  elseif a.aim == "unit_or_cell" then
+    if t then cmd.target = t.id else cmd.x, cmd.y = x, y end
+  elseif a.aim == "unit_and_point" then
+    if not t then return nil end
+    cmd.target, cmd.x, cmd.y = t.id, x, y
+  elseif a.aim == "two_units" or a.aim == "unit_then_cell" then
+    if not a.target then
+      if not t then return nil end
+      a.target = t.id
+      say(spell_name(a.key) .. ": " .. name_of(t.id) .. (a.aim == "two_units" and ", teraz drugi oddział" or ", teraz miejsce"))
+      return nil
+    end
+    cmd.target = a.target
+    if a.aim == "two_units" then
+      if not t then return nil end
+      cmd.second = t.id
+    else
+      cmd.x, cmd.y = x, y
+    end
+  end
+  return cmd
+end
+
+local function select_spell(cmd)
+  if sel and same(sel.cmd, cmd) then return confirm() end
+  local targets, err = casting.check(b, b:current(), cmd)
+  if not targets then
+    sel = { cmd = cmd, bad = err }
+    return
+  end
+  local marked = {}
+  for _, t in ipairs(targets) do marked[t] = true end
+  sel = { cmd = cmd, marked = marked, count = #targets }
 end
 
 local function pick(px, py)
+  if aiming then
+    local cmd = aim_spell(px, py)
+    if cmd then select_spell(cmd) end
+    return
+  end
   local cmd, t = choose(px, py)
   if not cmd then
     sel = t and { info = t } or nil
@@ -184,16 +322,68 @@ local function pick(px, py)
   end
 end
 
--- Buttons at the left of the field
+-- Buttons at the sides of the field
 local BUTTONS = {
-  { y = 4, label = "Cz", cmd = { type = "wait" }, ok = function() return opts.wait end },
-  { y = 48, label = "Ob", cmd = { type = "defend" }, ok = function() return true end },
+  { x = 1, y = 4, label = "Cz", cmd = { type = "wait" }, ok = function() return opts.wait end },
+  { x = 1, y = 48, label = "Ob", cmd = { type = "defend" }, ok = function() return true end },
+  { x = 240, y = 4, label = "Ks", book = true, ok = function() return next(opts.spells) ~= nil end },
 }
 
 local function button_at(px, py)
-  if px >= view.OX then return nil end
+  if px >= view.OX and px < 238 then return nil end
   for _, bt in ipairs(BUTTONS) do
-    if py >= bt.y and py < bt.y + 40 then return bt end
+    if px >= bt.x and px < bt.x + 15 and py >= bt.y and py < bt.y + 40 then return bt end
+  end
+end
+
+-- The spell book: a list over the field, one row of 16 px a spell
+local function open_book()
+  local list = {}
+  for key in pairs(opts.spells) do list[#list + 1] = key end
+  table.sort(list, function(a, c) return spell_name(a) < spell_name(c) end)
+  book = { list = list }
+  sel, aiming = nil, nil
+end
+
+local function book_touch(px, py)
+  local i = (py - 20) // 16 + 1
+  local key = book.list[i]
+  book = nil
+  if not key or px < 20 or px > 236 then return end
+  local aim = opts.spells[key].aim
+  aiming = { key = key, aim = aim }
+  if aim == "none" then   -- no target: the next touch on the field (or A) casts it
+    select_spell({ type = "cast", spell = key })
+    return
+  end
+  say(spell_name(key) .. ": wskaż cel")
+end
+
+-- --- input ---------------------------------------------------------------------------------
+
+-- The magnifier: L or R held; the stylus at an edge scrolls
+local function magnifier(tx, ty)
+  local held = btn("l") or btn("r")
+  if held and view.zoom == 1 then
+    local u = b:current()
+    if tx then focus = { view.to_scene(tx, ty) }
+    elseif u then focus = { grid.screen(u.x + u.size / 2, u.y + u.size / 2) } end
+  elseif held and tx then
+    local dx = (tx < 24 and -6) or (tx > 232 and 6) or 0
+    local dy = (ty < 16 and -6) or (ty > 176 and 6) or 0
+    focus[1], focus[2] = focus[1] + dx / 0.375, focus[2] + dy / 0.375
+  end
+  view.set_camera(held and 2 or 1, focus[1], focus[2])
+end
+
+-- The d-pad cursor; returns its point when A touches with it
+local function dpad()
+  local dx = (btn("left") and -2 or 0) + (btn("right") and 2 or 0)
+  local dy = (btn("up") and -2 or 0) + (btn("down") and 2 or 0)
+  if dx ~= 0 or dy ~= 0 then
+    cursor = cursor or { 128, 96 }
+    cursor[1] = math.max(0, math.min(255, cursor[1] + dx))
+    cursor[2] = math.max(0, math.min(191, cursor[2] + dy))
   end
 end
 
@@ -206,12 +396,16 @@ function _update()
   local tx, ty = touch()
   local pressed = tx and not touching
   touching = tx ~= nil
+  if tx then cursor = nil end
+  magnifier(tx, ty)
+  dpad()
 
   if btnp("y") then
     HUMAN[0] = not HUMAN[0]
     say(HUMAN[0] and "Grasz sam" or "Komputer gra za ciebie (Y)")
-    opts, dots, sel = nil, nil, nil
+    reset_turn()
   end
+  if showing() then return end
   if b.finished then
     if btnp("x") or pressed then seed = seed + 1; new_battle() end
     return
@@ -224,16 +418,24 @@ function _update()
     opts = b:options()
     dots = view.move_dots(opts.move, b:current().size)
   end
-  if btnp("b") then sel = nil end
-  if btnp("a") and sel and sel.cmd then return confirm() end
-  if pressed then
-    local bt = button_at(tx, ty)
-    if bt then
-      if bt.ok() then sel = { cmd = bt.cmd }; return confirm() end
-      return
-    end
-    pick(tx, ty)
+  if btnp("b") then
+    if book or aiming then book, aiming = nil, nil end
+    sel = nil
   end
+  if btnp("a") then
+    if cursor then tx, ty, pressed = cursor[1], cursor[2], true
+    elseif sel and sel.cmd and not sel.bad then return confirm() end
+  end
+  if not pressed then return end
+  if book then return book_touch(tx, ty) end
+  local bt = button_at(tx, ty)
+  if bt then
+    if not bt.ok() then return end
+    if bt.book then return open_book() end
+    sel = { cmd = bt.cmd }
+    return confirm()
+  end
+  pick(tx, ty)
 end
 
 -- An hourglass turning over every second
@@ -252,9 +454,36 @@ local function stack_lines(u, y, col)
   text(("Atak %d  Obr %d  PW %d/%d  Szyb %d  Ruch %d"):format(u.attack, u.defense,
     stats.hit_points(u) - u.wounds, stats.hit_points(u), u.speed, u.move), 2, y + 9, 13)
   local extra = {}
+  if u.caster then extra[#extra + 1] = "mana " .. (u.spell_points or 0) end
   if u.shots and u.shots > 0 and u.shooter then extra[#extra + 1] = "strzały " .. u.shots end
   for k in pairs(u.effects) do extra[#extra + 1] = spell_name(k) end
   if #extra > 0 then text(table.concat(extra, ", "), 2, y + 18, 13) end
+end
+
+local function draw_selection(y)
+  if aiming and not sel then
+    text(spell_name(aiming.key) .. ": wskaż cel na polu", 2, y, 4)
+    return
+  end
+  if not sel then return end
+  if sel.info then return stack_lines(sel.info, y, view.stack_color(sel.info)) end
+  local c = sel.cmd
+  if c.type == "cast" then
+    text(("Czar: %s (%d many)"):format(spell_name(c.spell), opts.spells[c.spell].cost), 2, y, 4)
+    if sel.bad then text("nie można: " .. tostring(sel.bad), 2, y + 9, 2)
+    else text(("cele: %d"):format(sel.count), 2, y + 9, 12) end
+  elseif c.type == "move" then
+    text(("Ruch na %d,%d"):format(c.x, c.y), 2, y, 4)
+  elseif c.type == "melee" and not c.x then
+    text(("Atak na %s"):format(name_of(c.target)), 2, y, 4)
+    text("za daleko - podejdzie w jego stronę", 2, y + 9, 3)
+  elseif sel.preview then
+    local p = sel.preview
+    text(("%s %s"):format(c.type == "shoot" and "Strzał w" or "Atak na", name_of(c.target)), 2, y, 4)
+    text(("obrażenia %d-%d, zabici %d-%d"):format(p.min, p.max, p.kills_min, p.kills_max), 2, y + 9, 12)
+    if p.back_min then text(("odwet %d-%d"):format(p.back_min, p.back_max), 2, y + 18, 3) end
+  end
+  if not sel.bad then text("dotknij jeszcze raz / A", 116, y + 18, 13) end
 end
 
 local function draw_top()
@@ -265,31 +494,15 @@ local function draw_top()
     text("X lub dotyk: nowa bitwa", 2, 12, 13)
   else
     text(("Runda %d"):format(b.round), 2, 2, 13)
+    if not HUMAN[0] then text("auto (Y)", 60, 2, 14) end
     if u then
       stack_lines(u, 12, view.stack_color(u))
-      if not human_turn() then
+      if not human_turn() and not anim then
         text("Tura przeciwnika...", 120, 2, 3)
         hourglass(236, 30)
       end
     end
-    if sel then
-      local y = 44
-      if sel.info then
-        stack_lines(sel.info, y, view.stack_color(sel.info))
-      elseif sel.cmd.type == "move" then
-        text(("Ruch na %d,%d - dotknij jeszcze raz"):format(sel.cmd.x, sel.cmd.y), 2, y, 4)
-      elseif sel.cmd.type == "melee" and not sel.cmd.x then
-        text(("Atak na %s"):format(name_of(sel.cmd.target)), 2, y, 4)
-        text("za daleko - podejdzie w jego stronę", 2, y + 9, 3)
-        text("dotknij jeszcze raz / A", 140, y + 18, 13)
-      elseif sel.preview then
-        local p = sel.preview
-        text(("%s %s"):format(sel.cmd.type == "shoot" and "Strzał w" or "Atak na", name_of(sel.cmd.target)), 2, y, 4)
-        text(("obrażenia %d-%d, zabici %d-%d"):format(p.min, p.max, p.kills_min, p.kills_max), 2, y + 9, 12)
-        if p.back_min then text(("odwet %d-%d"):format(p.back_min, p.back_max), 2, y + 18, 3) end
-        text("dotknij jeszcze raz / A", 140, y + 18, 13)
-      end
-    end
+    if human_turn() then draw_selection(44) end
     -- the turn order
     local x = 2
     for _, id in ipairs(b:queue()) do
@@ -301,24 +514,48 @@ local function draw_top()
   end
   -- the log, newest at the bottom
   local n = #log_lines
-  for i = 0, 11 do
+  for i = 0, 10 do
     local l = log_lines[n - i]
     if l then text(l, 2, 182 - i * 9, i == 0 and 12 or 13) end
   end
 end
 
+local function draw_book()
+  rectfill(18, 2, 220, 188, 0)
+  rect(18, 2, 220, 188, 13)
+  text("Księga czarów (B: zamknij)", 24, 6, 4)
+  for i, key in ipairs(book.list) do
+    local y = 20 + (i - 1) * 16
+    text(spell_name(key), 24, y + 4, 12)
+    text(tostring(opts.spells[key].cost), 214, y + 4, 10)
+    line(20, y + 15, 235, y + 15, 15)
+  end
+end
+
 local function draw_bottom()
   cls(15)
+  local turn = human_turn() and not anim
   view.draw_field({ units = b.units, active = not b.finished and b:current() or nil,
-                    dots = human_turn() and dots or nil, path = sel and sel.path,
+                    dots = turn and not aiming and dots or nil, path = sel and sel.path,
                     ghost = sel and sel.ghost, target = sel and sel.target,
+                    marked = sel and sel.marked, at = moving_at(),
                     blink = frame % 20 < 12 })
-  if human_turn() then
+  for _, p in ipairs(popups) do
+    local px, py = view.to_screen(p[1], p[2])
+    text(p[3], px - #p[3] * 3, py - 12 - p[5] // 2, p[4])
+  end
+  if turn and opts then
     for _, bt in ipairs(BUTTONS) do
-      local ok = opts and bt.ok()
-      rect(1, bt.y, 15, 40, ok and 12 or 14)
-      text(bt.label, 3, bt.y + 16, ok and 12 or 14)
+      local ok = bt.ok()
+      rectfill(bt.x, bt.y, 15, 40, 15)
+      rect(bt.x, bt.y, 15, 40, ok and 12 or 14)
+      text(bt.label, bt.x + 2, bt.y + 16, ok and 12 or 14)
     end
+  end
+  if book then draw_book() end
+  if cursor then
+    line(cursor[1] - 4, cursor[2], cursor[1] + 4, cursor[2], 4)
+    line(cursor[1], cursor[2] - 4, cursor[1], cursor[2] + 4, 4)
   end
 end
 
