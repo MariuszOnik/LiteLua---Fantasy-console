@@ -148,6 +148,7 @@ end
 
 function T.simultaneous_exchange_with_the_dead()
   -- 50 strong attackers kill a lone target in one blow
+  battle.dead_strike_back = true
   local b, a, d = duel({ speed = 9, dmg = { 10, 10 } }, { speed = 3, dmg = { 5, 5 } }, 50, 1)
   local ev = assert(b:act({ type = "melee", target = d.id }))
   local blows = find(ev, "melee")
@@ -160,8 +161,7 @@ function T.simultaneous_exchange_with_the_dead()
   battle.dead_strike_back = false
   b, a, d = duel({ speed = 9, dmg = { 10, 10 } }, { speed = 3, dmg = { 5, 5 } }, 50, 1)
   ev = assert(b:act({ type = "melee", target = d.id }))
-  eq(find(ev, "melee")[2].damage, 0, "the blow lands first")
-  battle.dead_strike_back = true
+  eq(find(ev, "melee")[2].damage, 0, "the blow lands first (H9, the default)")
   local ok, err = b:act({ type = "defend" })
   eq(ok, nil); eq(err, "the battle is over")
 end

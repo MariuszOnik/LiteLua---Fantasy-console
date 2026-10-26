@@ -67,3 +67,10 @@ w skali 3/16 = 0,1875 ma 221×192 px, czyli całe pole mieści się na ekranie D
 Pole siatki to romb 6×3 px, więc dotyk wskazuje oddział lub punkt, który gra dociąga do
 najbliższego dozwolonego miejsca. Przytrzymanie L/R włącza lupę ×2 (skala 0,375) wokół
 rysika — te same atlasy powiększone `sprx`. Styl `test1` przechodzi z 0,19 na 0,1875.
+
+## H9 (2026-10-26) — Zabity w wymianie nie oddaje ciosu
+W jednoczesnej wymianie wręcz cios atakującego ląduje pierwszy: cel, który od niego zginął,
+nie oddaje (tak liczy homm4-mac bez czasów animacji i exe przy równych czasach trafienia).
+Zastępuje propozycję z `COMBAT.md` §8, by zabity oddawał pełnym oddziałem — przy przewadze
+atakującego dawało to obrażenia od oddziału, który już nie żyje. Strzały bez zmian: strzelec
+ostrzelany zawsze odpowiada stanem sprzed strzału. Przełącznik `battle.dead_strike_back`.

@@ -13,6 +13,7 @@ local rng = require("combat.rng")
 local grid = require("combat.grid")
 local stats = require("combat.stats")
 local damage = require("combat.damage")
+local magic = require("combat.magic")
 local f32 = num.f32
 local under, has = stats.under, stats.has
 
@@ -20,11 +21,10 @@ local battle = {}
 local Battle = {}
 Battle.__index = Battle
 
--- Decision on the simultaneous exchange (COMBAT.md 8): true -- a melee target killed by the
--- blow still strikes back with the stack it had (the manual's "simultaneous retaliation");
--- false -- the attacker's blow lands first and a killed target does nothing (homm4-mac without
--- animation timings).
-battle.dead_strike_back = true
+-- The simultaneous exchange (decision H9): false -- the attacker's blow lands first and a
+-- melee target it kills does nothing (homm4-mac without animation timings, the exe on equal
+-- hit times); true -- the dead target still strikes back with the stack it had.
+battle.dead_strike_back = false
 
 -- The last round: past it the battle ends (homm4-mac: as an attacker's win)
 battle.MAX_ROUNDS = 60
@@ -36,6 +36,7 @@ battle.hooks = {
   aftermath = nil,       -- (b, a, t, ranged, dmg, health_before)
   on_death = nil,        -- (b, u)
   fears = nil,           -- (b, t, a) -> true when t is too afraid to strike back
+  stone_gaze = nil,      -- (b, a, t) -> extra damage of a blow
 }
 
 -- Deployment cells (exe 0xaae8b8): [formation][side][army slot] = { x, y }; formations
@@ -86,13 +87,15 @@ local DISABLING = { "blind", "stun", "terror", "confusion", "summon stinkbug", "
 -- Setup
 
 -- setup = { seed, field (grid.new_field(), optional),
---           sides = { [0] = { stacks = { st, ... }, formation = 0 }, [1] = ... } }
+--           sides = { [0] = { stacks = { st, ... }, formation = 0 }, [1] = ... },
+--           spells (spells.lua, for abilities and casting) }
 -- Each st comes from stats.creature / stats.hero; st.slot (0..6) picks the deployment cell
 -- (default: the order in the list); st.morale_bonus / st.luck add to the army's.
 function battle.new(setup)
   local b = setmetatable({
     rng = rng.new(setup.seed or 0),
     field = setup.field or grid.new_field(),
+    spells = setup.spells or {},
     units = {}, order = {}, events = {},
     round = 0, version = 0,
     initial_health = { [0] = 0, [1] = 0 }, loss_penalty = { [0] = 0, [1] = 0 },
@@ -130,6 +133,8 @@ function battle.new(setup)
       u.facing = side == 0 and "ne" or "sw"
       u.moved = 0
       u.count_start = u.count
+      u.permanently_lost = 0
+      u.poison, u.plague, u.regeneration = 0, 0, 0   -- stored doses / healing per turn
       b.units[#b.units + 1] = u
       by_slot[slot] = u
     end
@@ -562,6 +567,11 @@ function Battle:hit(a, b, ranged, secondary)
     on_quicksand = self.field:on_quicksand(a.x, a.y, a.size),
   })
   if ranged then dmg = math.max(1, dmg // damage.range_divisor(self.field, a, b)) end
+  local stoned = 0
+  if not secondary and battle.hooks.stone_gaze then
+    stoned = battle.hooks.stone_gaze(self, a, b)
+    dmg = dmg + stoned
+  end
   local lucky
   dmg, lucky = damage.lucky(self.rng, stats.luck(b), dmg)
   if lucky ~= nil then self:emit({ t = "luck", stack = b.id, good = lucky }) end
@@ -578,6 +588,7 @@ function Battle:hit(a, b, ranged, secondary)
     self:emit({ t = "die", stack = b.id })
     b.bound_by = nil
   end
+  if stoned > 0 then self:emit({ t = "effect", stack = b.id, effect = "stone_gaze", left = b.count }) end
   if not secondary and battle.hooks.aftermath then
     if self.held then
       local held = self.held
@@ -587,6 +598,25 @@ function Battle:hit(a, b, ranged, secondary)
     end
   end
   return dmg
+end
+
+-- An ability or spell took hold on u (`name`), with any damage it does
+function Battle:effect(u, name, dmg)
+  local killed = 0
+  if dmg and dmg > 0 then killed = self:wound(u, dmg, nil) end
+  self:emit({ t = "effect", stack = u.id, effect = name, damage = dmg or 0, killed = killed, left = u.count })
+  if dmg and dmg > 0 and u.count <= 0 then self:emit({ t = "die", stack = u.id }) end
+end
+
+-- Hit points back to a stack (Resurrection, Rebirth): its wounds, then its dead
+function Battle:resurrect(u, power, spell)
+  local before = u.count
+  local amt = magic.restore(self, u, power)
+  if u.count > before then
+    self:emit({ t = "revived", stack = u.id, spell = spell, count = u.count - before, rose = before == 0 })
+  elseif amt > 0 then
+    self:emit({ t = "heal", stack = u.id, spell = spell, amount = amt, left = u.count })
+  end
 end
 
 function Battle:extra_targets(a, t, ranged)

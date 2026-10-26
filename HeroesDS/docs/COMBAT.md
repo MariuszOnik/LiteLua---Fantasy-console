@@ -198,10 +198,9 @@ odegrać. Stan po `act()` jest już końcowy — animacja tylko go pokazuje.
 `left` w `damage` pozwala UI pokazywać liczebność w trakcie animacji, zanim dojdzie do
 końcowego stanu (tak robi homm4-mac).
 
-**Wymiana jednoczesna (§7, otwarte z C1)** — **nie** odwzorowujemy szczegółu „zabity przed
-klatką trafienia nie zadaje obrażeń” (zaakceptowane). Wiązałby zasady z liczbą klatek
-i fps animacji, które na DS są uproszczone (H2, H4). Liczymy czystą wymianę jednoczesną
-z manualu (+ pierwsze uderzenie, blok).
+**Wymiana jednoczesna (§7, otwarte z C1)** — nie wiążemy zasad z klatkami animacji (fps
+i klatki na DS są uproszczone, H2, H4). Zmienione decyzją **H9**: cios atakującego ląduje
+pierwszy, cel zabity w wymianie wręcz nie oddaje (jak exe przy równych czasach trafienia).
 
 ## 9. Ekrany i sterowanie (H6, H8)
 
@@ -259,14 +258,21 @@ dziennik ostatnich zdarzeń; przy czarach — lista z kosztem i opis.
   `attack_positions` / `checksum`; testy `tests/battle_test.lua` (powtórka z ziarna daje tę
   samą sumę kontrolną). Hooki dla C3c–C3e: `battle.hooks` (`start_of_turn`,
   `extra_targets`, `aftermath`, `on_death`, `fears`).
-  - **Przełącznik `battle.dead_strike_back`** (domyślnie `true`, zgodnie z §8): zabity cel
-    i tak oddaje cios. `false` = jak homm4-mac bez czasów animacji: cios atakującego ląduje
-    pierwszy, zabity nie oddaje.
+  - **Przełącznik `battle.dead_strike_back`** (domyślnie `false`, decyzja H9): cios
+    atakującego ląduje pierwszy, zabity nie oddaje; `true` — zabity oddaje pełnym oddziałem.
   - **Wydajność (do C4)**: na PC zasięg ruchu na turę (ruch 27, rozmiar 4) = 7 ms, szukanie
     na 12 tur (atak na daleki cel) = 21 ms. DS jest wielokrotnie wolniejszy — zmierzyć;
     w razie potrzeby: mapa zajętości liczona raz na turę (sumy prefiksowe zamiast
     `fits`/`overlaps` po kwadracie), kopiec bez tabel na węzeł, krótszy zasięg „12 tur”.
-- **C3c** — zdolności (§12) jako hooki.
+- **C3c ✅** — `magic` (rdzeń czarów wspólny z C3e: cele, odporność, nakładanie / zdejmowanie
+  z przeciwieństwami i czasem trwania, obrażenia czaru, przywracanie PW, moc czaru istoty),
+  `abilities` (`abilities.install(battle)`: dodatkowe cele — hydra, cerber, zionięcie, strzał
+  obszarowy; efekty po ciosie w kolejności exe; kamienne spojrzenie; strach; początek tury —
+  regeneracja, trucizna, zaraza; śmierć — czyszczenie czarów, odrodzenie feniksa); testy
+  `tests/abilities_test.lua` (+ `real_battles`: 25 pełnych bitew na prawdziwych danych, gdy są).
+  Bitwa dostaje `spells` (z `spells.lua`) w `battle.new`. Uwaga do testów: kolejne ziarna
+  (1, 2, 3…) dają w LCG bardzo podobne rzuty po tej samej liczbie kroków — pętle po ziarnach
+  rozrzucamy (`seed * 7919 + 13`).
 - **C3d** — bohater, umiejętności, artefakty (§13).
 - **C3e** — czary i efekty (§14).
 - **C3f** — prosty AI (najbliższy/najsłabszy cel, strzelcy strzelają, czary z obrażeniami).
