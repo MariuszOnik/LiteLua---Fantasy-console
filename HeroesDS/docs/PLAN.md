@@ -12,7 +12,7 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
 **Stan:** tor A (grafika) do H2 włącznie, tor B: C1 (mechanika) i **C2 (projekt walki,
 `docs/COMBAT.md`, zaakceptowany)** zamknięte, **C3a zrobione** — `HeroesDS/combat/`:
 `num` (float32 jak oryginał — `f32`), `rng`, `grid` (pole, droga ze strefami kontroli),
-`stats`, `damage`; testy `tests/combat_test.lua` (16 przypadków, przez `lupa`).
+`stats`, `damage`; testy `tests/combat_test.lua` (17 przypadków, przez `lupa`).
 Ustalone w C2: pole bitwy na dolnym ekranie (H6), dzielenie obrony przez Walkę wręcz /
 Łucznictwo liczymy (H7), całe pole w skali 3/16 + lupa ×2 na L/R (H8).
 
