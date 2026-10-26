@@ -273,7 +273,10 @@ dziennik ostatnich zdarzeń; przy czarach — lista z kosztem i opis.
   Bitwa dostaje `spells` (z `spells.lua`) w `battle.new`. Uwaga do testów: kolejne ziarna
   (1, 2, 3…) dają w LCG bardzo podobne rzuty po tej samej liczbie kroków — pętle po ziarnach
   rozrzucamy (`seed * 7919 + 13`).
-- **C3d** — bohater, umiejętności, artefakty (§13).
+- **C3d ✅** — `heroes`: arkusz bohatera (umiejętności, artefakty, komplety, zdolności
+  z opisów — H10), premie armii, czary z przedmiotów na wroga, `heroes.build(spec, data)` →
+  `setup` dla `battle.new` (bohaterowie w pierwszych slotach). Testy `tests/heroes_test.lua`
+  (+ `real_artifacts`: każdy artefakt z gry na bohaterze).
 - **C3e** — czary i efekty (§14).
 - **C3f** — prosty AI (najbliższy/najsłabszy cel, strzelcy strzelają, czary z obrażeniami).
 

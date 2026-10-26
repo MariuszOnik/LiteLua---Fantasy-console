@@ -356,6 +356,19 @@ Poziomy: podstawowy, zaawansowany, ekspercki, mistrzowski, arcymistrzowski (1–
 - Klasa bohatera (awansowana) może mieć własną premię jak artefakt (`CLASS_EFFECTS`, np.
   Ochrona przed Chaosem, Trucizna, Wyssanie życia, +morale dla armii).
 
+### 13.3a Liczenie (C3d, `combat/heroes.lua`)
+- **Ruch na ekranie = pola siatki / 3** (bandyta 27 pól = „9”). Taktyka: +3 / 4 / 6 / 7 / 9
+  pól (`3 × (1 + 0,5 × (poziom − 1))`, ucięte); przedmioty: punkty ruchu / 100 (H10).
+- Premie armii: atak i obrona × (100 + %) / 100 (ucięte), szybkość +, morale + Dowodzenie,
+  szczęście + Dowodzenie (H10), odporność `r += (100 − r) × % / 100`; przedmioty z celem
+  `own_creatures` / `all` (`damage_pct` w exe to procent **ataku** armii).
+- Bohater: przedmioty `attack` / `defense` w dziesiątych, osobno wręcz i dystans; `extra_damage`
+  = `amount + per_level × poziom` do obu końców obrażeń; PW × (100 + %) / 100; odporność jak
+  wyżej od umiejętności (0 / 30 / 50 / 70 / 80 / 100); ruch 24 + przedmioty; komplety
+  (`set_bonus`) działają, gdy założone są wszystkie części.
+- Czary z przedmiotów na wroga (`enemy_creatures` / `enemy_heroes`, np. Fizbin Nieszczęścia)
+  — od początku bitwy.
+
 ### 13.4 Ekwipunek — sloty
 14 miejsc: łuk, stopy, głowa, pierścień lewy i prawy, szyja, lewa ręka (tarcza), prawa ręka
 (broń; „obie ręce” zajmuje lewą i prawą), ramiona (płaszcz), tors (zbroja), 4 × różne

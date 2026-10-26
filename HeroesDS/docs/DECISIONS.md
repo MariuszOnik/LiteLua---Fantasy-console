@@ -74,3 +74,12 @@ nie oddaje (tak liczy homm4-mac bez czasów animacji i exe przy równych czasach
 Zastępuje propozycję z `COMBAT.md` §8, by zabity oddawał pełnym oddziałem — przy przewadze
 atakującego dawało to obrażenia od oddziału, który już nie żyje. Strzały bez zmian: strzelec
 ostrzelany zawsze odpowiada stanem sprzed strzału. Przełącznik `battle.dead_strike_back`.
+
+## H10 (2026-10-26) — Bohater: reguły z opisów umiejętności, ruch z przedmiotów w punktach
+- Zdolności bohatera z opisów Walki wręcz i Łucznictwa (pierwsze uderzenie, drugi cios, bez
+  kar za przeszkody / odległość, pierwszy i drugi strzał) liczymy jak opis (H2, H7) —
+  homm4-mac ich nie ma. Przełącznik `heroes.skill_abilities`.
+- Dowodzenie daje armii także szczęście (+1…+5, jak opis; homm4-mac liczy, ale nie nakłada).
+- Ruch z przedmiotów w punktach ruchu (100 = 1 pole siatki; 300 = „+1” na ekranie) —
+  homm4-mac dzieli przez 300, co przeczy Taktyce (+1 na ekranie = 3 pola). Obrona
+  bohatera z przedmiotów osobno wręcz i przed strzałami (pola `melee` / `ranged`).

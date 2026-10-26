@@ -50,7 +50,7 @@ end
 
 -- The target's defense before spells, divided by an attacking hero's Melee / Archery (H7)
 local function natural_defense(a, b, ranged)
-  local d = b.defense
+  local d = ranged and b.ranged_defense or b.defense   -- heroes: items may differ by kind
   if a.is_hero and not b.is_hero and damage.hero_divides_defense and d > 10 then
     local lvl = a.skills[ranged and "archery" or "combat"] or 0
     local div = lvl > 0 and (ranged and ARCHERY_DIV or MELEE_DIV)[math.min(lvl, 5)] or 100
