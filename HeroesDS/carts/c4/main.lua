@@ -146,6 +146,7 @@ local function show(e)
     fx.walk(u)
   elseif e.t == "melee" or e.t == "shoot" then
     local u, t = b.units[e.stack], b.units[e.target]
+    if u and t then u.facing = grid.facing(grid.delta2(u, t)) end   -- toward the target (visual)
     anim = { frames = 10, t = 0, clear = {}, at = {} }
     local len, m = act(u, "melee")
     fx.stack(u, e.t == "shoot" and "ranged" or "melee")
@@ -175,6 +176,8 @@ local function show(e)
   elseif e.t == "cast" then
     local u = b.units[e.stack]
     fx.spell(e.spell)
+    local first = b.units[(e.targets or {})[1]]
+    if u and first and first ~= u then u.facing = grid.facing(grid.delta2(u, first)) end
     anim = { frames = 8, t = 0, clear = {} }
     act(u, "melee")
     local longest = 0
@@ -712,7 +715,7 @@ local function draw_bottom()
   view.draw_field({ units = b.units, active = not b.finished and b:current() or nil,
                     dots = turn and not aiming and dots or nil, path = sel and sel.path,
                     ghost = sel and sel.ghost, target = sel and sel.target,
-                    marked = sel and sel.marked, at = moving_at(), pose = pose, corpse = dying,
+                    marked = sel and sel.marked, at = moving_at(), pose = pose, corpse = dying, height = fx.height,
                     blink = frame % 20 < 12 })
   local k = view.zoom
   local function raised(u, h)   -- a stack's centre, h of its height up

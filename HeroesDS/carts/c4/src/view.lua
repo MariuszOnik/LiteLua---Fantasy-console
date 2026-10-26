@@ -1,7 +1,8 @@
 -- HeroesDS C4: the battlefield on the bottom screen (H6, H8). The whole H4 scene
 -- (1180x1024) at 3/16 is 221x192 px, centred; a grid cell is a 6x3 px diamond. A stack is
--- its animation from the game (sprites.lua) over a thin outline of its footprint in its
--- side's colour, with its count in a box; a coloured diamond when it has no graphics.
+-- its animation from the game (sprites.lua) with its count in a box of its side's colour
+-- above its head; a coloured diamond when it has no graphics. The active stack pulses
+-- gold, a target red (tint).
 
 local grid = require("combat.grid")
 local sprites = require("sprites")
@@ -95,7 +96,8 @@ end
 -- The field: the scene, the move dots, the stacks (farther first), the active one and the
 -- selection on top. st = { units, active (stack), dots, path, ghost, target, marked
 -- ([stack] = true), at ([stack] = { wx, wy } while it moves), pose (function(stack) ->
--- animation, frame), corpse ([stack] = true: drawn though dead, until its death is shown), blink }
+-- animation, frame), corpse ([stack] = true: drawn though dead, until its death is shown),
+-- height (function(stack) -> px at 3/16, for the count), blink }
 function view.draw_field(st)
   local x0, y0 = view.OX - camx * K, view.OY - camy * K
   rectfill(x0, y0, grid.SCENE_W * K, grid.SCENE_H * K, view.GROUND)
@@ -124,14 +126,18 @@ function view.draw_field(st)
   local k = view.zoom
   for _, u in ipairs(list) do
     local col = view.stack_color(u)
-    if (st.target == u or (st.marked and st.marked[u])) and st.blink then col = 12 end
+    -- the selection: the sprite pulses, gold the active stack, red a target
+    local targeted = st.target == u or (st.marked and st.marked[u])
+    local pulse = st.blink and u.count > 0 and (targeted and 0xff5050 or (u == st.active and not at[u] and 0xffd040))
+    if targeted and st.blink then col = 12 end
     local x, y = pos(u)
     local m, f
     if st.pose then m, f = st.pose(u) end
     if m then
-      if u.count > 0 then outline(x, y, u.size, col) end
       local gx, gy = view.to_screen(x + u.size / 2, y + u.size / 2)
+      if pulse then tint(pulse) end
       sprites.draw(m, f, gx // 1, gy // 1, k)
+      if pulse then tint() end
     elseif u.count > 0 then
       diamond(x, y, u.size, col)
     end
@@ -145,12 +151,17 @@ function view.draw_field(st)
       px, py = qx, qy
     end
   end
-  if st.ghost then outline(st.ghost[1], st.ghost[2], st.active.size, 4) end
-  if st.active and st.blink and not at[st.active] then outline(st.active.x, st.active.y, st.active.size, 12) end
+  if st.ghost then   -- where it goes: a small cross, not its whole footprint
+    local gx, gy = view.to_screen(st.ghost[1] + st.active.size / 2, st.ghost[2] + st.active.size / 2)
+    gx, gy = gx // 1, gy // 1
+    line(gx - 3, gy, gx + 3, gy, 4)
+    line(gx, gy - 2, gx, gy + 2, 4)
+  end
   for _, u in ipairs(list) do
-    if u.count > 0 and not u.is_hero then
+    if u.count > 0 and not u.is_hero then   -- the count above the stack's head
       local x, y = pos(u)
-      local cx, cy = view.to_screen(x + u.size / 2, y + u.size)
+      local cx, cy = view.to_screen(x + u.size / 2, y + u.size / 2)
+      cy = math.max(4, cy - (st.height and st.height(u) or 12) * k - 6)
       local s = tostring(u.count)
       local w = #s * 6 + 2
       rectfill(cx - w // 2, cy - 4, w, 9, view.stack_color(u))
