@@ -47,7 +47,7 @@ pomiary DSi), `docs/FORMATS.md`.
   Tylko czytamy (nie uruchamiamy pobranego kodu — blokada auto mode); tabele zbudowane
   w kodzie exe są już przeniesione do `tools/exe_tables.py` i `tools/creature_abilities.py`.
 
-**Testy:** `python -m unittest discover -s HeroesDS/tests` (36 testów Pythona, w tym `test_combat`: 17 + 15 + 18 + 7 + 14 przypadków w Lua przez `lupa`; dane syntetyczne, `real_creatures` także na `extracted/rules/creatures.lua`, gdy jest).
+**Testy:** `python -m unittest discover -s HeroesDS/tests` (36 testów Pythona, w tym `test_combat`: 17 + 15 + 18 + 7 + 15 przypadków w Lua przez `lupa`; dane syntetyczne, `real_creatures` także na `extracted/rules/creatures.lua`, gdy jest).
 
 **Konsola / emulator:** kartridże HeroesDS w `HeroesDS/carts/` (grafika generowana lokalnie);
 melonDS: `tools/melon.py` (w skrypcie `tap 28 178` = Play w launcherze — klawisze bywają
