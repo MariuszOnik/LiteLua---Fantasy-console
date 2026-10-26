@@ -29,6 +29,7 @@ shadows, "oldschool" is 16 colors with more contrast and a 1 px outline
 (DS_GRAPHICS.md).
 """
 import argparse
+import json
 import os
 import sys
 
@@ -91,21 +92,37 @@ class Style:
                                    # pixels blended with `ground`, alpha >= 40 opaque
     alpha_cut: int = 128
     ground: tuple = (112, 104, 66) # Battlefield-like dirt for "matte"
+    brightness: float = 1.0
     contrast: float = 1.0
     saturation: float = 1.0
-    sharpen: bool = False
+    sharpen: int = 0               # Unsharp mask strength in percent, 0 = off
     outline: tuple = None          # RGB of a 1 px outline, or None
     shadow: str = "half"           # "half": half size, drawn enlarged; "dither":
                                    # full size checkerboard
     shadow_alpha: float = 0.45     # alpha() to draw the shadow with
+    vivid: int = 12                # Extra weight of saturated colors in the palette
 
 
 STYLES = {
     "current": Style(),
     "smooth": Style(edge="matte", shadow="dither", shadow_alpha=0.6),
-    "oldschool": Style(colors=15, alpha_cut=110, contrast=1.35, saturation=1.3, sharpen=True,
+    "oldschool": Style(colors=15, alpha_cut=110, contrast=1.35, saturation=1.3, sharpen=60,
                        outline=(24, 16, 12), shadow="dither", shadow_alpha=0.6),
 }
+# Styles saved by tools/style_tuner.py (name -> Style fields)
+STYLES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "styles.json")
+
+
+def load_styles(path=STYLES_FILE):
+    if os.path.exists(path):
+        with open(path, encoding="utf-8") as f:
+            known = Style.__dataclass_fields__
+            for name, saved in json.load(f).items():  # Keys like "_note" are comments
+                STYLES[name] = Style(**{k: tuple(v) if isinstance(v, list) else v
+                                        for k, v in saved.items() if k in known})
+
+
+load_styles()
 
 
 def resize(img, scale):
@@ -118,13 +135,14 @@ def resize(img, scale):
 
 def finish_frame(img, style):
     """Scaled RGBA frame -> RGBA with alpha 0/255 in the given style."""
-    if style.contrast != 1 or style.saturation != 1 or style.sharpen:
+    if style.brightness != 1 or style.contrast != 1 or style.saturation != 1 or style.sharpen:
         alpha = img.getchannel("A")
         rgb = img.convert("RGB")
+        rgb = ImageEnhance.Brightness(rgb).enhance(style.brightness)
         rgb = ImageEnhance.Contrast(rgb).enhance(style.contrast)
         rgb = ImageEnhance.Color(rgb).enhance(style.saturation)
         if style.sharpen:
-            rgb = rgb.filter(ImageFilter.UnsharpMask(radius=1, percent=60, threshold=2))
+            rgb = rgb.filter(ImageFilter.UnsharpMask(radius=1, percent=int(style.sharpen), threshold=2))
         img = rgb.convert("RGBA")
         img.putalpha(alpha)
     if style.edge == "matte":
@@ -207,23 +225,23 @@ def pack(sizes):
     return best
 
 
-def saturation_weight(rgb):
+def saturation_weight(rgb, vivid=12):
     """How many times a color counts when the palette is chosen: bright,
     saturated colors (fire, magic, blood) cover few pixels next to a big dark
     creature, and with plain pixel counts a 16-color palette loses them."""
     hi, lo = max(rgb), min(rgb)
     sat = (hi - lo) / hi if hi else 0
-    return 1 + int(12 * sat * min(1, hi / 128))
+    return 1 + int(vivid * sat * min(1, hi / 128))
 
 
-def to_palette(atlas, colors):
+def to_palette(atlas, colors, vivid=12):
     """RGBA (alpha 0/255) -> 'P' image: index 0 transparent, 1..colors opaque."""
     px = pixels(atlas)
     opaque = [p[:3] for p in px if p[3]]
     weights = {}
     weighted = []
     for p in opaque:
-        w = weights.get(p) or weights.setdefault(p, saturation_weight(p))
+        w = weights.get(p) or weights.setdefault(p, saturation_weight(p, vivid))
         weighted.extend([p] * w)
     sample = Image.new("RGB", (max(1, len(weighted)), 1))
     sample.putdata(weighted or [(0, 0, 0)])
@@ -237,13 +255,13 @@ def to_palette(atlas, colors):
     return out
 
 
-def build_atlas(pieces, colors):
+def build_atlas(pieces, colors, vivid=12):
     """pieces: list of RGBA images. Returns ('P' image, [(x, y)])."""
     W, H, pos = pack([p.size for p in pieces])
     atlas = Image.new("RGBA", (W, H))
     for p, xy in zip(pieces, pos):
         atlas.paste(p, xy)
-    return to_palette(atlas, colors), pos
+    return to_palette(atlas, colors, vivid), pos
 
 
 def convert(lib, actor, state, direction, scale=0.5, colors=None, kind="combat", style="current"):
@@ -288,7 +306,7 @@ def convert(lib, actor, state, direction, scale=0.5, colors=None, kind="combat",
         if prefix == "shadow":
             atlas, pos = build_atlas(pieces, 1)
         else:
-            atlas, pos = build_atlas(pieces, colors)
+            atlas, pos = build_atlas(pieces, colors, style.vivid)
         rects = [[x, y, p.width, p.height, ox, oy] for (x, y), p, (ox, oy) in zip(pos, pieces, rects)]
         result[prefix] = (atlas, rects, frames)
     atlas, meta["rects"], meta["frames"] = result["frame"]
