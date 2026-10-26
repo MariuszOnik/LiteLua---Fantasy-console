@@ -19,3 +19,14 @@ tests/carts/sound/music/rock.wav
 # Copied from docs/api by build.ps1 (help of the code editor)
 /nitrofs/system/code/api/
 /assets/*/raw/
+
+# HeroesDS: original Heroes IV assets and third-party tools stay local (private use only, H1)
+/HeroesDS/Data/
+/HeroesDS/H4ResHelper_v096a/
+/HeroesDS/resedit2/
+/HeroesDS/HoMM4_Manuals/
+/HeroesDS/HoMM4_Reference/
+/HeroesDS/homm4_ost/
+/HeroesDS/extracted/
+/HeroesDS/*.ora
+/HeroesDS/*.png
