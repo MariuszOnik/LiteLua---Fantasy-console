@@ -43,6 +43,16 @@ można przeciągać, wybór idzie za nim; zatwierdza przycisk OK (prawy dolny r�
 a drugi dotyk tego samego wroga / celu czaru. Szczyt pamięci Lua w grze na DSi 1,57 MB
 (wyniki `flood` po 2×41 KB czekają na GC) — pilnować.
 
+**H3/H4 w C4 (2026-10-26):** grafika z gry na polu: `make_c4.py --gfx` (74 stwory + 2
+bohaterów × wait/walk/melee/flinch/die × 8 kierunków, styl `test2` użytkownika, skala 3/16,
+tło pola = kolor ziemi stylu), `--fx` (`tools/h4fx.py`: pociski `missile.*` wg tabeli
+homm4-mac, 111 efektów `animation.spell.*` z kotwicą z pliku, 408 dźwięków jako WAV 8-bit
+11 kHz, `data/actors.lua` — wysokości i pociski). Kartridż jako jeden `c4.lcart` (~17 MB,
+bez kompresji). `src/sprites.lua` (leniwe wczytywanie, zwalnianie po ~10 s), `src/fx.lua`
+(dźwięki). Pokaz: cios w klatce trafienia, pocisk leci do celu, efekt czaru nad celami,
+dźwięki ciosu / strzału / wzdrygnięcia / śmierci / czaru (potwierdzone nagraniem wyjścia
+melonDS, loopback `soundcard`); zabity gra tylko śmierć i znika.
+
 **Następny krok:** dalsza gra na DSi i poprawki z rozgrywki; potem H3 (konwerter grafiki) i H4 (pole z prawdziwymi sprite'ami) — albo
 decyzja o innym polu walki, jeśli sterowanie na drobnej siatce się nie sprawdzi.
 

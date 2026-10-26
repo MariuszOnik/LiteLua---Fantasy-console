@@ -32,16 +32,31 @@ local function meta_of(base, state, dir)
   return (next(m)) and m[next(m)]
 end
 
--- The animation (meta with its images) of an actor, or nil when there is none
-function sprites.get(actor, state, dir)
-  local m = meta_of(sprites.base(actor), state, dir or "sw")
-  if not m then return nil end
+local function load(m)
   if not used[m] then
     m.img = image(m.image)
     m.simg = m.shadow and image(m.shadow) or nil
   end
   used[m] = clock
   return m
+end
+
+-- The animation (meta with its images) of an actor, or nil when there is none
+function sprites.get(actor, state, dir)
+  local m = meta_of(sprites.base(actor), state, dir or "sw")
+  return m and load(m)
+end
+
+-- A spell's effect (data/fx/<spell>.lua, animation.spell in the game), or nil
+local effects = {}
+function sprites.effect(spell)
+  local m = effects[spell]
+  if m == nil then
+    local f = loadfile("data/fx/" .. sprites.base(spell) .. ".lua")
+    m = f and f() or false
+    effects[spell] = m
+  end
+  return m and load(m)
 end
 
 -- Frames of an animation, and how long it plays in game frames (30 a second)

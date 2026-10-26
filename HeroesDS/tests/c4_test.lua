@@ -14,12 +14,14 @@ function touch() if input.touch then return input.touch[1], input.touch[2] end e
 function btn(n) return input.held[n] or false end
 function btnp(n) return input.pressed[n] or false end
 for _, f in ipairs({ "cls", "text", "rect", "rectfill", "line", "pset", "trifill", "log",
-                    "sspr", "alpha" }) do
+                    "sspr", "alpha", "sfx" }) do
   _G[f] = function() end
 end
 local images = 0
 function image(name) images = images + 1; return { name = name } end
 function collectgarbage() end
+local sounds = 0
+function sound(name) sounds = sounds + 1; return { name = name } end
 TOP, BOTTOM = 0, 1
 local t0 = os.clock()
 function micros() return math.floor((os.clock() - t0) * 1e6) end

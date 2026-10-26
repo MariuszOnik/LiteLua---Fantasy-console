@@ -18,6 +18,7 @@ local grid = require("combat.grid")
 local ai = require("combat.ai")
 local view = require("view")
 local sprites = require("sprites")
+local fx = require("fx")
 local setup = require("setup")
 abilities.install(battle)
 casting.install(battle)
@@ -42,6 +43,7 @@ local anim        -- the event being shown: { frames, t, at = { [stack] = path }
 local popups = {} -- { wx, wy, text, col, t }
 local acting = {} -- [stack] = { state, dir, start, loop }: not waiting
 local dying = {}  -- [stack] = true: killed, still drawn until its death has been shown
+local effects = {} -- spell effects playing: { m, stack, start, len }
 local log_lines = {}
 local frame = 0
 local touching = false
@@ -101,7 +103,28 @@ local function popup(id, s, col)
   popups[#popups + 1] = { u.x + u.size / 2, u.y + u.size / 2, s, col, 0 }
 end
 
--- Starts showing one event: the log line, and an animation that holds the next ones
+-- Starts a stack's animation for the show; returns its length in frames (nil: none)
+local function act(u, state)
+  if not u then return nil end
+  acting[u] = { state = state, dir = u.facing, start = frame, loop = false }
+  if anim and anim.clear then anim.clear[#anim.clear + 1] = u end
+  local m = sprites.get(fx.actor(u), state, u.facing)
+  if not m then return nil end
+  local _, len = sprites.length(m)
+  return len, m
+end
+
+-- A spell's effect over a stack
+local function effect(key, u)
+  local m = sprites.effect(key)
+  if not (m and u) then return 0 end
+  local _, len = sprites.length(m)
+  effects[#effects + 1] = { m, u, frame, len }
+  return len
+end
+
+-- Starts showing one event: the log line, and an animation that holds the next ones.
+-- anim.at[n] runs n frames after the start (a blow or a missile landing).
 local function show(e)
   local f = EVENT[e.t]
   if f then say(f(e)) end
@@ -115,25 +138,45 @@ local function show(e)
     anim = { frames = math.max(6, math.min(30, n * 2)), t = 0, stack = u, pts = pts, len = n,
              clear = { u } }
     acting[u] = { state = "walk", start = frame, loop = true }
-  elseif e.t == "melee" or e.t == "shoot" or (e.t == "spell" and e.damage ~= 0) then
-    local hit = e.t == "spell" and e.stack or e.target
-    if e.damage > 0 then popup(hit, "-" .. e.damage, 2)
-    elseif e.damage < 0 then popup(e.stack, "+" .. -e.damage, 5)
-    else popup(hit, "0", 13) end
-    anim = { frames = 10, t = 0, clear = {} }
-    local function act(u, state)
-      if not u then return end
-      acting[u] = { state = state, dir = u.facing, start = frame, loop = false }
-      anim.clear[#anim.clear + 1] = u
-      local m = sprites.get(u.actor or u.kind, state, u.facing)
-      if m then
-        local _, len = sprites.length(m)
-        anim.frames = math.max(anim.frames, math.min(len, 30))
+  elseif e.t == "melee" or e.t == "shoot" then
+    local u, t = b.units[e.stack], b.units[e.target]
+    anim = { frames = 10, t = 0, clear = {}, at = {} }
+    local len, m = act(u, "melee")
+    fx.stack(u, e.t == "shoot" and "ranged" or "melee")
+    -- the blow lands in the animation's hit frame
+    local hit = 6
+    if m and m.hit and m.hit > 0 then hit = (m.hit - 1) * 30 // m.fps end
+    local kw = e.t == "shoot" and fx.missile(u)
+    if kw and t then
+      local dx, dy = t.x - u.x, t.y - u.y
+      local fly = math.max(6, math.min(16, (math.abs(dx) + math.abs(dy)) // 4))
+      anim.missile = { kw, u, t, hit, fly }
+      hit = hit + fly
+    end
+    anim.at[hit] = function()
+      if e.damage > 0 then popup(e.target, "-" .. e.damage, 2) else popup(e.target, "0", 13) end
+      if t and e.damage > 0 and t.count > 0 then
+        act(t, "flinch")
+        fx.stack(t, "flinch")
       end
     end
-    if e.t ~= "spell" then act(b.units[e.stack], "melee") end
-    local t = b.units[hit]
-    if t and e.damage > 0 and t.count > 0 then act(t, "flinch") end   -- the killed: only die
+    anim.frames = math.max(math.min(len or 10, 30), hit + 10)
+  elseif e.t == "spell" and e.damage ~= 0 then
+    if e.damage > 0 then popup(e.stack, "-" .. e.damage, 2) else popup(e.stack, "+" .. -e.damage, 5) end
+    local t = b.units[e.stack]
+    anim = { frames = 4, t = 0, clear = {} }
+    if t and e.damage > 0 and t.count > 0 then act(t, "flinch") end
+  elseif e.t == "cast" then
+    local u = b.units[e.stack]
+    fx.spell(e.spell)
+    anim = { frames = 8, t = 0, clear = {} }
+    act(u, "melee")
+    local longest = 0
+    for _, id in ipairs(e.targets or {}) do longest = math.max(longest, effect(e.spell, b.units[id])) end
+    anim.frames = math.max(anim.frames, math.min(longest, 45))
+  elseif e.t == "resisted" then
+    fx.spell("magic resistance")
+    anim = { frames = math.max(6, math.min(effect("magic resistance", b.units[e.stack]), 30)), t = 0 }
   elseif e.t == "heal" then
     popup(e.stack, "+" .. e.amount, 5)
     anim = { frames = 8, t = 0 }
@@ -141,14 +184,15 @@ local function show(e)
     local u = b.units[e.stack]
     anim = { frames = 6, t = 0, dead = u }
     if u then
+      fx.stack(u, "die")
       acting[u] = { state = "die", dir = u.facing, start = frame, loop = false }
-      local m = sprites.get(u.actor or u.kind, "die", u.facing)
+      local m = sprites.get(fx.actor(u), "die", u.facing)
       if m then
         local _, len = sprites.length(m)
         anim.frames = math.min(len, 30)
       end
     end
-  elseif e.t == "cast" or e.t == "blocked" then
+  elseif e.t == "blocked" then
     anim = { frames = 6, t = 0 }
   end
 end
@@ -200,7 +244,10 @@ local function play(events)
     if e.t == "melee" or e.t == "shoot" then
       need(u, "melee")
       if t and t.count > 0 then need(t, "flinch") end
+      local kw = e.t == "shoot" and u and fx.missile(u)
+      if kw and t then sprites.get(kw, "walk", grid.facing(t.x - u.x, t.y - u.y)) end
     end
+    if e.t == "cast" then sprites.effect(e.spell) end
     if e.t == "move" then need(u, "walk") end
     if e.t == "spell" and e.damage > 0 then need(u, "flinch") end
   end
@@ -213,8 +260,13 @@ local function showing()
     p[5] = p[5] + 1
     if p[5] > 24 then table.remove(popups, i) end
   end
+  for i = #effects, 1, -1 do
+    if frame - effects[i][3] >= effects[i][4] then table.remove(effects, i) end
+  end
   if anim then
     anim.t = anim.t + 1
+    local at = anim.at and anim.at[anim.t]
+    if at then at() end
     if anim.t >= anim.frames then
       for _, u in ipairs(anim.clear or {}) do
         if acting[u] and acting[u].state ~= "die" then acting[u] = nil end
@@ -239,7 +291,7 @@ end
 local function new_battle()
   b = setup.battle(seed, creatures, spells)
   reset_turn()
-  job, anim, queue, popups, acting, dying = nil, nil, {}, {}, {}, {}
+  job, anim, queue, popups, acting, dying, effects = nil, nil, {}, {}, {}, {}, {}
   log_lines = {}
   say(("Bitwa %d"):format(seed))
   play(b:take_events())
@@ -472,6 +524,7 @@ new_battle()
 function _update()
   frame = frame + 1
   sprites.tick()
+  fx.tick()
   local tx, ty = touch()
   local pressed = tx and not touching
   touching = tx ~= nil
@@ -628,6 +681,29 @@ local function draw_bottom()
                     ghost = sel and sel.ghost, target = sel and sel.target,
                     marked = sel and sel.marked, at = moving_at(), pose = pose, corpse = dying,
                     blink = frame % 20 < 12 })
+  local k = view.zoom
+  local function raised(u, h)   -- a stack's centre, h of its height up
+    local x, y = view.to_screen(u.x + u.size / 2, u.y + u.size / 2)
+    return x, y - fx.height(u) * h * k
+  end
+  if anim and anim.missile then
+    local kw, u, t, start, fly = table.unpack(anim.missile)
+    local f = anim.t - start
+    if f >= 0 and f < fly then
+      local x0, y0 = raised(u, 0.5)
+      local x1, y1 = raised(t, 0.5)
+      local m = sprites.get(kw, "walk", grid.facing(t.x - u.x, t.y - u.y))
+      if m then
+        sprites.draw(m, sprites.frame(m, f, true), (x0 + (x1 - x0) * f / fly) // 1,
+                     (y0 + (y1 - y0) * f / fly) // 1, k)
+      end
+    end
+  end
+  for _, ef in ipairs(effects) do
+    local m, u, start = ef[1], ef[2], ef[3]
+    local x, y = raised(u, 1)
+    sprites.draw(m, sprites.frame(m, frame - start, false), x // 1, y // 1, k)
+  end
   for _, p in ipairs(popups) do
     local px, py = view.to_screen(p[1], p[2])
     text(p[3], px - #p[3] * 3, py - 12 - p[5] // 2, p[4])
