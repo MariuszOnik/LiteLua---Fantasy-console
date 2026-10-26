@@ -27,8 +27,9 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   `Combat.swift`, `Spells.swift`, `Tables.swift` …) z adresami w `heroes4.exe` —
   główne źródło dla C1. W nowym czacie, jeśli brak: `git clone --depth 1
   https://github.com/Anbrose/homm4-mac.git ref/homm4-mac`.
-- **Następny krok: do wyboru H2** (możliwości LiteLua: sprite'y, palety, VRAM na dwie
-  duże animacje) **albo C1** (mechanika walki → `docs/MECHANICS.md`).
+- **Następny krok: H2** (możliwości LiteLua: sprite'y, palety, VRAM na dwie duże
+  animacje), potem C1 (mechanika walki → `docs/MECHANICS.md`).
+- Mapa świata: ustalenia o terenie 2.5D zapisane w `docs/FORMATS.md` (sekcja „Ważne na później”).
 - Otwarte w formatach (`FORMATS.md`): pole `?` palety, sekwencje bohaterów.
 - Pobrany kod z sieci (`ref/`) — nie uruchamiamy go (blokada auto mode); czytamy opis
   i piszemy własny.
@@ -83,4 +84,6 @@ Folder w repo LuaDS (H1), wykluczenia w `.gitignore`, plan i decyzje.
 - **C4 — Podpięcie do kartridża** ze stubami grafiki (dolny ekran mapa walki, górny starcie).
 
 ### Później
-Tryb mapy kontynentu — osobny plan, gdy walka będzie stała.
+Tryb mapy kontynentu — osobny plan, gdy walka będzie stała. **Najpierw przeczytać
+sekcję „Ważne na później: mapa przygody i teren” w `docs/FORMATS.md`** (teren 2.5D
+z mapą wysokości, tekstury rombów, format `.h4c`, test z dwiema mapami z edytora).

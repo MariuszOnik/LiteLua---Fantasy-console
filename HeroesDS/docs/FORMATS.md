@@ -130,3 +130,25 @@ Nie rozpracowane, bo na razie niepotrzebne: `animation` (efekty czarów, flagi),
 inny nagłówek), `combat_header_table_cache` (lista przeszkód), `battlefield_preset_map`,
 `terrain`, `sound` (nagłówek opisany w AKuHAK/mh4 `header_info.txt`), tabele (`table`).
 Wzory dla nich są w `ref/homm4-mac` (`tools/*.py`, `native/Sources/H4Engine/*.swift`).
+
+## ⚠ Ważne na później: mapa przygody i teren (wstępne, niesprawdzone w plikach)
+
+Ustalenia z 2026-10-26 — do trybu mapy kontynentu i ewentualnie terenu walki.
+
+- **Teren to 2.5D, nie 3D.** Edytor podnosi teren (pagórki ze światłem i cieniem), ale
+  nie ma tu modeli 3D. Najpewniej: **mapa wysokości** (wysokość w narożnikach pól) +
+  **płaska tekstura** terenu wyginana na podniesionych narożnikach + **cieniowanie z
+  nachylenia** stoku. Kamera stała; jednostki i obiekty to sprite'y stawiane na wysokości pola.
+- **Tekstury terenu**: `terrain.<rodzaj>.<a>.<b>.h4d` — 100 rombów 64×32 (paleta 256,
+  RLE), razem jedna większa łata terenu (10 rzędów po 10, przesunięte co drugi), żeby
+  teren się nie powtarzał. Opis: `ref/homm4-mac/tools/h4terrain.py`.
+- **Plik mapy** `.h4c`: `"H4CAMPAIGN"` + gzip; siatka 76/152/228/304, 1–2 poziomy
+  (powierzchnia/podziemia — to nie wysokość). Pole: u8 rodzaj (19 terenów), u8 wariant,
+  **5 nieznanych bajtów**, nakładki przejść terenu (maski `transition.Transitions`),
+  drogi. Opis: `ref/homm4-mac/tools/h4map.py` (niepełny).
+- **Hipoteza**: wysokość siedzi w tych 5 nieznanych bajtach pola. **Test**: w edytorze
+  zrobić dwie małe mapy — płaską i z jednym pagórkiem — i porównać pliki.
+- **Na DS**: LiteLua rysuje przez sprzętowe 3D (D5, gl2d), więc teren z wysokością da się
+  narysować jako siatkę z teksturą i jasnością w wierzchołkach (cieniowanie prawie za
+  darmo). Alternatywa: prerender mapy na PC do płaskich obrazków (dużo pamięci).
+  Romby 64×32 trzeba zmniejszyć (np. 32×16). Decyzja przy trybie mapy.
