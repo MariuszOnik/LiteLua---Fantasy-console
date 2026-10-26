@@ -133,7 +133,7 @@ local function show(e)
     end
     if e.t ~= "spell" then act(b.units[e.stack], "melee") end
     local t = b.units[hit]
-    if t and e.damage > 0 and (t.count > 0 or dying[t]) then act(t, "flinch") end
+    if t and e.damage > 0 and t.count > 0 then act(t, "flinch") end   -- the killed: only die
   elseif e.t == "heal" then
     popup(e.stack, "+" .. e.amount, 5)
     anim = { frames = 8, t = 0 }
@@ -196,8 +196,11 @@ local function play(events)
   for _, e in ipairs(events or {}) do
     queue[#queue + 1] = e
     local u, t = b.units[e.stack], e.target and b.units[e.target]
-    if e.t == "die" and u then dying[u] = true; need(u, "die"); need(u, "flinch") end
-    if e.t == "melee" or e.t == "shoot" then need(u, "melee"); need(t, "flinch") end
+    if e.t == "die" and u then dying[u] = true; need(u, "die") end
+    if e.t == "melee" or e.t == "shoot" then
+      need(u, "melee")
+      if t and t.count > 0 then need(t, "flinch") end
+    end
     if e.t == "move" then need(u, "walk") end
     if e.t == "spell" and e.damage > 0 then need(u, "flinch") end
   end
