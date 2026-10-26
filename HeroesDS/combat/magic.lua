@@ -40,6 +40,12 @@ function magic.spell(b, key)
 end
 
 local function flag(s, f) return s.flags and s.flags[f] == true end
+magic.flag = flag
+
+local RAISING = { ["raise ghost"] = true, ["raise skeletons"] = true, ["raise vampires"] = true,
+                  ["animate dead"] = true, ["death call"] = true }
+-- Cast on friends only (the Enemy flag is for the struck attacker)
+local ON_FRIENDS = { ["holy retribution"] = true, fear = true, ["vampiric touch"] = true, ["pain mirror"] = true }
 
 -- Creatures of a stack that died and could come back
 function magic.dead_count(t)
@@ -101,18 +107,63 @@ function magic.can_target(b, key, u, t, any_side)
     if flag(s, "mind") and (has(t, "undead") or has(t, "mechanical") or has(t, "elemental")
         or has(t, "mind_immunity")) then return false end
   end
+  -- raising needs dead creatures and no Necromancy Ward; Animate Dead the undead only
+  if RAISING[key] then
+    if magic.dead_count(t) == 0 or under(t, "sacred ground") then return false end
+    if key == "animate dead" and not has(t, "undead") then return false end
+  end
+  if (key == "resurrection" or key == "rebirth") and magic.dead_count(t) == 0 and t.wounds == 0 then return false end
+  if key == "divine intervention" and t.count <= 0 and not t.is_hero then return false end
+  if not any_side and enemy and ON_FRIENDS[key] then return false end
+  if key == "holy water" and not enemy and t.id ~= u.id then return false end
+  if key == "celestial armor" and t.id ~= u.id then return false end
   if flag(s, "fire") and has(t, "fire_resistance") then return false end
   if flag(s, "cold") and has(t, "cold_resistance") then return false end
   if key == "blind" and has(t, "blind") then return false end
   if (key == "bless" or key == "curse") and t.dmg_lo == t.dmg_hi then return false end
   if key == "bind flyer" and not has(t, "flying") then return false end
   if key == "precision" and not t.shooter then return false end
+  if (key == "holy word" or key == "divine retribution")
+      and (t.is_hero or not (t.alignment == "death" or has(t, "undead"))) then return false end
+  if (key == "prayer" or key == "evil hour") and t.alignment ~= "life" then return false end
+  if key == "life drain" and (t.id == u.id or not (t.alignment == "life" or t.alignment == "nature")) then return false end
+  if key == "plague" and t.alignment == "death" then return false end
+  if key == "banish" and (not t.summoned
+      or magic.spell_damage(b, t, magic.power(b, key, u), key, u) < stats.hit_points(t)) then return false end
   return true
+end
+
+-- Spells that take something off (exe 0x5f03d8 / 0x5f02fc / 0x61ca30): kind "all", "good"
+-- (blessings and summons) or "bad" (curses); never those that cannot be dispelled. A
+-- summoned stack whose summon goes vanishes.
+function magic.dispel(b, t, kind)
+  local keys = {}
+  for key in pairs(t.effects) do keys[#keys + 1] = key end
+  table.sort(keys)
+  for _, key in ipairs(keys) do
+    local s = magic.spell(b, key)
+    if s and not flag(s, "no_dispel") then
+      local ok = kind == "all"
+        or (kind == "good" and (flag(s, "blessing") or flag(s, "summoning")))
+        or (kind == "bad" and flag(s, "curse"))
+      if ok then
+        magic.remove(b, t, key)
+        if t.summoned and t.summoned_by == key and t.count > 0 then
+          t.permanently_lost, t.count, t.wounds = t.count_start, 0, 0
+          b:emit({ t = "die", stack = t.id }); b:emit({ t = "bodies_gone", stack = t.id })
+        end
+      end
+    end
+  end
 end
 
 -- A spell taken off a stack (exe 0x5f23d0)
 function magic.remove(b, t, key)
+  if t.effects[key] == nil then return end
   t.effects[key] = nil
+  -- a hit point spell gone leaves the top creature alive
+  if t.count > 0 and t.wounds >= stats.hit_points(t) then t.wounds = stats.hit_points(t) - 1 end
+  if key == "martyr" then t.martyr = nil end
   if key == "binding" then t.bound_by = nil end
   if key == "hypnotize" or key == "short hypnotism" then t.hypnotized = false end
   if key == "poison" then t.poison = 0 end
@@ -133,6 +184,23 @@ function magic.apply(b, t, key, power)
       return
     end
     t.hypnotized = true
+  end
+  if key == "guardian angel" then   -- lives, at most its count
+    t.effects[key] = { power = math.min(power or 0, t.count) }
+    return
+  end
+  if key == "hand of death" then   -- exactly min(power, count) creatures die
+    local n = math.min(power or 0, t.count)
+    t.count = t.count - n
+    if t.count == 0 then t.wounds = 0 end
+    if t.side == 1 then b.experience = b.experience + n * (t.xp or 0) end
+    b:emit({ t = "spell", stack = t.id, spell = key, damage = 0, killed = n, left = t.count })
+    if t.count <= 0 then b:emit({ t = "die", stack = t.id }) end
+    return
+  end
+  if key == "mana" then   -- spell points for the target
+    if t.caster then t.spell_points = (t.spell_points or 0) + (power or 0) end
+    return
   end
   local n = LENGTH[key]
   local cur = b:current()
@@ -171,7 +239,7 @@ function magic.restore(b, t, hp)
 end
 
 -- A creature's spell power (exe 0x865200): level 0; damage, summoning and Resurrection
--- x Spell Power x count / 100; Rebirth x the starting count. (Heroes: C3d / C3e.)
+-- x Spell Power x count / 100; Rebirth x the starting count
 function magic.creature_power(b, key, u)
   local s = magic.spell(b, key)
   if not s then return 0 end
@@ -181,7 +249,33 @@ function magic.creature_power(b, key, u)
   elseif key == "rebirth" then
     pct = pct * u.count_start
   end
-  return s.base * pct // 100
+  return magic.scale(b, s, key, pct, 0)
+end
+
+-- (base + increase x level) x pct / 100; Guardian Angel and Hand of Death (10 + level) x pct
+-- / 1000; a summons divides by the creature's experience
+function magic.scale(b, s, key, pct, level)
+  local p = s.base * pct // 100
+  if (s.increase or 0) ~= 0 then p = (s.base + s.increase * level) * pct // 100 end
+  if key == "guardian angel" or key == "hand of death" then p = (10 + level) * pct // 1000 end
+  if flag(s, "summoning") and not flag(s, "bodies") and s.creature and s.creature ~= "" then
+    local cr = b.creatures and b.creatures[s.creature]
+    if cr and (cr.xp or 0) > 0 then p = math.max(1, p // cr.xp) end
+  end
+  return p
+end
+
+-- A spell's power for its caster (exe 0x865200): a hero (b.caster set on the stack) casts at
+-- its level, pct = 100 + 20 per level of the school's power skill (+ Sorcery 20 a level on
+-- damage spells) + its items; a creature at level 0 (creature_power)
+function magic.power(b, key, u)
+  local c = u.caster
+  if not c or c.creature then return magic.creature_power(b, key, u) end
+  local s = magic.spell(b, key)
+  if not s then return 0 end
+  local pct = 100 + 20 * (c.skills[magic.POWER_SKILL[s.school] or ""] or 0) + (c.power_bonus[key] or 0)
+  if flag(s, "damage") then pct = pct + 20 * (c.skills.sorcery or 0) end
+  return magic.scale(b, s, key, pct, c.level)
 end
 
 return magic

@@ -300,9 +300,9 @@ end
 function T.on_death_clears_spells()
   local b, a, d = duel({ dmg = { 100, 100 } }, {}, 10, 1)
   d.effects.bless = { power = 0 }
-  d.effects["guardian angel"] = { power = 1 }
+  d.effects["sacred ground"] = { power = 0 }
   b:act({ type = "melee", target = d.id })
-  eq(d.effects.bless, nil); assert(d.effects["guardian angel"], "kept")
+  eq(d.effects.bless, nil); assert(d.effects["sacred ground"], "kept")
 end
 
 -- Real data, when generated locally: whole battles between many kinds of creatures with all

@@ -36,6 +36,9 @@ class CombatTest(unittest.TestCase):
     def test_heroes(self):
         self.assertGreater(run_lua("heroes_test.lua"), 5)
 
+    def test_casting(self):
+        self.assertGreater(run_lua("casting_test.lua"), 10)
+
 
 if __name__ == "__main__":
     unittest.main()

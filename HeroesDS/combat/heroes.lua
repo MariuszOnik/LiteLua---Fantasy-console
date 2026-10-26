@@ -85,6 +85,8 @@ function heroes.stack(h, db)
   st.hp = st.hp * (100 + hp_pct) // 100
   st.magic_resistance = math.min(100, resist)
   st.move = math.max(1, 24 + move // 100)
+  st.caster = heroes.caster(h, db)
+  st.spell_points = st.caster.mana
   if heroes.skill_abilities then
     local melee, archery = skill(h, "combat"), skill(h, "archery")
     if melee >= 3 then st.abilities.first_strike = true end
@@ -95,6 +97,49 @@ function heroes.stack(h, db)
     if archery >= 5 then st.abilities.shoots_twice = true end
   end
   return st
+end
+
+-- A hero's spell book (BattleSpells.swift Caster, Artifacts.swift): known spells
+-- (h.spells), those of worn spell books (cast with the school skill) and scrolls (without),
+-- spell points h.mana or the maximum (10 + 10 per level of Healing, Enchantment,
+-- Occultism, Conjuration, Herbalism + items), power bonuses of items per spell
+function heroes.caster(h, db)
+  local effects = heroes.artifact_effects(h, db)
+  local spells, free, power_bonus, items_points = {}, {}, {}, 0
+  for _, k in ipairs(h.spells or {}) do spells[k] = true end
+  local cost_items = {}
+  for _, e in ipairs(effects) do
+    if on_self(e) then
+      if e.type == "spellbook" and type(e.spells) == "table" then
+        for _, k in ipairs(e.spells) do spells[k] = true end
+      elseif e.type == "scroll_spell" and type(e.spell) == "string" then
+        spells[e.spell] = true; free[e.spell] = true
+      elseif e.type == "spell_points" then items_points = items_points + (e.amount or 0)
+      elseif e.type == "spell_power_pct" then
+        power_bonus[#power_bonus + 1] = e
+      elseif e.type == "spell_cost" then cost_items[#cost_items + 1] = e
+      end
+    end
+  end
+  local list = {}
+  for k in pairs(spells) do list[#list + 1] = k end
+  table.sort(list)
+  local bonus = {}
+  for _, k in ipairs(list) do
+    for _, e in ipairs(power_bonus) do
+      local all = e.spells == "all"
+      if not all and type(e.spells) == "table" then
+        for _, x in ipairs(e.spells) do if x == k then all = true end end
+      end
+      if all then bonus[k] = (bonus[k] or 0) + (e.amount or 0) end
+    end
+  end
+  local max = 10 + 10 * (skill(h, "healing") + skill(h, "enchantment") + skill(h, "black")
+    + skill(h, "conjuration") + skill(h, "herbalism")) + (h.spell_point_bonus or 0) + items_points
+  local known = {}
+  for _, k in ipairs(h.spells or {}) do known[k] = true end
+  return { level = h.level, skills = h.skills or {}, spells = list, free = free, known = known,
+           power_bonus = bonus, cost_items = cost_items, mana = h.mana or max, max_mana = max }
 end
 
 -- Bonuses of an army's heroes for its creatures (HeroSkills.swift ArmyBonuses): the best

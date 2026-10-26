@@ -19,19 +19,19 @@ kontratak, strzał, obrona, koniec, zdarzenia, powtórki), testy `tests/battle_t
 (zdolności jako hooki, `abilities.install(battle)`), testy `tests/abilities_test.lua`. Decyzja H9:
 zabity w wymianie wręcz nie oddaje (`battle.dead_strike_back = false`). **C3d zrobione** —
 `combat/heroes.lua` (bohater z umiejętności i artefaktów, premie armii, `heroes.build`), testy
-`tests/heroes_test.lua`; decyzja H10.
+`tests/heroes_test.lua`; decyzja H10. **C3e zrobione** — `combat/casting.lua` (rzucanie: koszt,
+siła, celowanie, obszar, masowe, wyjątki, przywołania, lustro), księga w `heroes.caster`,
+`magic.lua` rozszerzone; w `battle.wound` tarcza, męczennik, anioł stróż, lustro bólu; testy
+`tests/casting_test.lua`.
 Ustalone w C2: pole bitwy na dolnym ekranie (H6), dzielenie obrony przez Walkę wręcz /
 Łucznictwo liczymy (H7), całe pole w skali 3/16 + lupa ×2 na L/R (H8).
 
-**Następny krok: C3e** — czary w bitwie (`MECHANICS.md` §14): księga i punkty czarów
-bohatera (umiejętności szkół, `spell_points`, `spell_cost`, `spell_power_pct`), czary istot
-(`cast_by`), akcja `cast` w `options` / `act` / `preview`, siła (§14.2), koszt (§14.3), cele
-i obszar (§14.5 — Kula Ognia, Inferno, łańcuch, Iskry, masowe), obsługa per `type` (damage,
-curse, blessing, healing, summoning, resurrection) + wyjątki z `BattleSpells.swift` `cast()`
-(Wygnanie, Poświęcenie, Męczennik, Kradzież zaklęć, Ruchome piaski, Dym, Wzrost skał,
-Teleport…), Magiczne lustro, Anioł Stróż / Niebiańska Tarcza / Lustro Bólu w `wound`.
-`magic.lua` ma już cele, odporność, nakładanie efektów. Potem C3f (AI), C4 (kartridż +
-pomiar szybkości szukania drogi na DS).
+**Następny krok: C3f** — prosty przeciwnik komputerowy (`combat/ai.lua`): strzelcy strzelają
+w najgroźniejszego, reszta atakuje osiągalnych albo idzie do najbliższego, rzucający rzucają,
+gdy czar jest wart więcej niż cios (`Battle.swift` `autoAct`, `berserkAct`; `BattleSpells.swift`
+`aiTargets`, `aiAffected`, `aiValue`, `aiSpell`, `aiBlowValue`); Szał (berserk) działa sam.
+Potem C4: kartridż ze stubami grafiki (H6, H8) i **pomiar szybkości na DS** (szukanie drogi,
+cała tura AI) — to największe ryzyko toru B.
 
 **Przeczytaj najpierw:** `docs/DECISIONS.md` (H1–H8), `docs/COMBAT.md` (architektura walki),
 `docs/MECHANICS.md` (zasady walki 1:1, §1–14), `docs/DS_GRAPHICS.md` (pamięć wideo, style,
@@ -47,7 +47,7 @@ pomiary DSi), `docs/FORMATS.md`.
   Tylko czytamy (nie uruchamiamy pobranego kodu — blokada auto mode); tabele zbudowane
   w kodzie exe są już przeniesione do `tools/exe_tables.py` i `tools/creature_abilities.py`.
 
-**Testy:** `python -m unittest discover -s HeroesDS/tests` (35 testów Pythona, w tym `test_combat`: 17 + 15 + 18 + 7 przypadków w Lua przez `lupa`; dane syntetyczne, `real_creatures` także na `extracted/rules/creatures.lua`, gdy jest).
+**Testy:** `python -m unittest discover -s HeroesDS/tests` (36 testów Pythona, w tym `test_combat`: 17 + 15 + 18 + 7 + 14 przypadków w Lua przez `lupa`; dane syntetyczne, `real_creatures` także na `extracted/rules/creatures.lua`, gdy jest).
 
 **Konsola / emulator:** kartridże HeroesDS w `HeroesDS/carts/` (grafika generowana lokalnie);
 melonDS: `tools/melon.py` (w skrypcie `tap 28 178` = Play w launcherze — klawisze bywają

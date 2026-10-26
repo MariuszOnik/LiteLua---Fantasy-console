@@ -473,6 +473,20 @@ Trucizna, Wskrzeszanie szkieletów, Rozmycie · koszmar i mroczny czempion: Groz
 Ruchome piaski, Spowolnienie, Osłabienie · czarodziejka: Implozja, Masowe anulowanie,
 Wygnanie, Masowe spowolnienie. (Nazwy polskie — z `spells.lua`.)
 
+### 14.9 Rzucanie (C3e, `combat/casting.lua`)
+- Bohater rzuca czar, gdy go zna (lub ma go w założonej księdze z umiejętnością szkoły na
+  poziomie czaru, albo w zwoju — bez umiejętności, za pół kosztu, jeśli go nie zna). Punkty
+  czarów: 10 + 10 za każdy poziom Leczenia, Zaklinania, Okultyzmu, Przywoływania, Zielarstwa
+  + przedmioty. Istota: czary z `cast_by`, punkty czarów na oddział.
+- Rzut czaru jest akcją (kończy turę) i kończy Sanktuarium rzucającego (atak i strzał też).
+- Obszar: środek pola × 16 + 8 (jednostki świata), oddział w środku, gdy
+  `round(odległość do środka kwadratu) − rozmiar × 8 < promień` (64 = 4 pola, Inferno 112);
+  Krąg ognia: 72 wokół pola albo 48 + rozmiar × 8 wokół oddziału (bez niego).
+- Łańcuch błyskawic skacze do najbliższego nietrafionego oddziału, **także własnego** (i do
+  samego rzucającego), siła / 2 przed każdym skokiem, maks. 5 celów, remis losowy.
+- Przywołanie dołącza do oddziału z tego samego czaru, jeśli jest; nowy staje na najbliższym
+  wolnym miejscu (remis losowy) i w tej rundzie już nie działa.
+
 ## Otwarte (do C3)
 - ~~Dzielenie obrony wroga przez Walkę wręcz / Łucznictwo bohatera (§13.2)~~ — liczymy (H7).
 - Wymiana jednoczesna bez szczegółu „klatki trafienia” (§7) — propozycja w `COMBAT.md` §8.

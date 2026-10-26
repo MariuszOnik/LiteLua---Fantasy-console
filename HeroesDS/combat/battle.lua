@@ -37,6 +37,9 @@ battle.hooks = {
   on_death = nil,        -- (b, u)
   fears = nil,           -- (b, t, a) -> true when t is too afraid to strike back
   stone_gaze = nil,      -- (b, a, t) -> extra damage of a blow
+  prepare = nil,         -- (b): before the first round (casters)
+  cast = nil,            -- (b, u, cmd) -> true or nil, reason
+  spell_options = nil,   -- (b, u) -> { [key] = { aim, cost } }
 }
 
 -- Deployment cells (exe 0xaae8b8): [formation][side][army slot] = { x, y }; formations
@@ -88,7 +91,8 @@ local DISABLING = { "blind", "stun", "terror", "confusion", "summon stinkbug", "
 
 -- setup = { seed, field (grid.new_field(), optional),
 --           sides = { [0] = { stacks = { st, ... }, formation = 0 }, [1] = ... },
---           spells (spells.lua, for abilities and casting) }
+--           spells (spells.lua, for abilities and casting),
+--           creatures (creatures.lua, for summons), sizes ({ [key] = footprint }) }
 -- Each st comes from stats.creature / stats.hero; st.slot (0..6) picks the deployment cell
 -- (default: the order in the list); st.morale_bonus / st.luck add to the army's.
 function battle.new(setup)
@@ -96,6 +100,9 @@ function battle.new(setup)
     rng = rng.new(setup.seed or 0),
     field = setup.field or grid.new_field(),
     spells = setup.spells or {},
+    creatures = setup.creatures,   -- creatures.lua, for summoned stacks
+    sizes = setup.sizes,           -- footprints by creature key (combat_actor), when known
+    deferred = {},
     units = {}, order = {}, events = {},
     round = 0, version = 0,
     initial_health = { [0] = 0, [1] = 0 }, loss_penalty = { [0] = 0, [1] = 0 },
@@ -146,6 +153,7 @@ function battle.new(setup)
     end
   end
   for side = 0, 1 do b.initial_health[side] = b:side_health(side) end
+  if battle.hooks.prepare then battle.hooks.prepare(b) end
   b:start_round()
   return b
 end
@@ -181,6 +189,16 @@ end
 -- Queries
 
 function Battle:emit(e) self.events[#self.events + 1] = e end
+
+-- What the damage function did besides the blow (Martyr, Guardian Angel, Pain Mirror): shown
+-- right after it
+function Battle:flush()
+  local d = self.deferred
+  if #d > 0 then
+    for i = 1, #d do self:emit(d[i]) end
+    self.deferred = {}
+  end
+end
 
 function Battle:current()
   local id = self.order[1]
@@ -548,13 +566,64 @@ function Battle:roll_block(u)
   if self.rng:next() % 100 < 30 then u.blocking = true end
 end
 
--- Damage taken by a stack: whole creatures die from the front; the attacking side gets the
--- experience for the defender's dead
+-- Damage taken by a stack (exe 0x5f2c50): Heavenly Shield's pool soaks it first, Martyr
+-- passes it to its partner as far as the partner's hit points go; whole creatures die from
+-- the front; any damage ends Blind; Guardian Angel brings back what the blow killed while it
+-- has lives; Pain Mirror sends half of it (after the attacker's resistance) back. The
+-- attacking side gets the experience for the defender's dead.
 function Battle:wound(t, dmg, by)
   if dmg <= 0 or t.count <= 0 then return 0 end
-  local killed = stats.take(t, math.min(dmg, total_health(t)))
-  if dmg > 0 then t.effects.blind = nil end
+  local d = dmg
+  local shield = t.effects["celestial armor"]
+  if shield and (shield.power or 0) > 0 then
+    local soak = math.min(shield.power, d)
+    d = d - soak
+    shield.power = shield.power - soak
+    if shield.power == 0 then magic.remove(self, t, "celestial armor") end
+  end
+  local transfer = 0
+  local partner = t.effects.martyr and t.martyr and self.units[t.martyr]
+  if partner and partner.count > 0 then
+    transfer = math.min(d, total_health(partner))
+    d = d - transfer
+  end
+  local before = total_health(t)
+  local killed = stats.take(t, math.min(d, before))
+  local dealt = before - total_health(t)
+  t.effects.blind = nil
   if t.side == 1 then self.experience = self.experience + killed * (t.xp or 0) end
+  if transfer > 0 then
+    local k = self:wound(partner, transfer, nil)
+    self.deferred[#self.deferred + 1] = { t = "effect", stack = partner.id, effect = "martyr",
+                                          damage = transfer, killed = k, left = partner.count }
+    if partner.count <= 0 then
+      self.deferred[#self.deferred + 1] = { t = "die", stack = partner.id }
+      magic.remove(self, t, "martyr")
+    end
+  end
+  local angel = t.effects["guardian angel"]
+  if killed > 0 and angel and (angel.power or 0) > 0 then
+    local n = math.min(killed, angel.power, magic.dead_count(t))
+    if n > 0 then
+      local rose = t.count <= 0
+      if rose then t.wounds = 0; t.death_handled = false end
+      t.count = t.count + n
+      angel.power = angel.power - n
+      if angel.power == 0 then magic.remove(self, t, "guardian angel") end
+      self.deferred[#self.deferred + 1] = { t = "revived", stack = t.id, spell = "guardian angel", count = n, rose = rose }
+    end
+  end
+  if by and by.count > 0 and t.effects["pain mirror"] and magic.can_target(self, "pain mirror", t, by, true) then
+    local r = magic.resistance(self, by, "pain mirror")
+    local back = r >= 100 and 0 or ((100 - r) * (dealt + transfer) + 99) // 100
+    local mirrored = math.min((back + 1) // 2, total_health(by))
+    if mirrored > 0 then
+      local k = self:wound(by, mirrored, nil)
+      self.deferred[#self.deferred + 1] = { t = "effect", stack = by.id, effect = "pain mirror",
+                                            damage = mirrored, killed = k, left = by.count }
+      if by.count <= 0 then self.deferred[#self.deferred + 1] = { t = "die", stack = by.id } end
+    end
+  end
   return killed
 end
 
@@ -588,6 +657,7 @@ function Battle:hit(a, b, ranged, secondary)
     self:emit({ t = "die", stack = b.id })
     b.bound_by = nil
   end
+  self:flush()
   if stoned > 0 then self:emit({ t = "effect", stack = b.id, effect = "stone_gaze", left = b.count }) end
   if not secondary and battle.hooks.aftermath then
     if self.held then
@@ -606,6 +676,7 @@ function Battle:effect(u, name, dmg)
   if dmg and dmg > 0 then killed = self:wound(u, dmg, nil) end
   self:emit({ t = "effect", stack = u.id, effect = name, damage = dmg or 0, killed = killed, left = u.count })
   if dmg and dmg > 0 and u.count <= 0 then self:emit({ t = "die", stack = u.id }) end
+  self:flush()
 end
 
 -- Hit points back to a stack (Resurrection, Rebirth): its wounds, then its dead
@@ -756,6 +827,7 @@ function Battle:act_melee(u, t, x, y)
     if not best then return fail("no way to the target") end
     return self:act_move(u, grid.xy(best))
   end
+  if under(u, "sanctuary") then magic.remove(self, u, "sanctuary") end   -- an attack begins
   local sx, sy = u.x, u.y
   local moved_cells = 0
   local px, py = grid.xy(pos)
@@ -779,6 +851,7 @@ end
 function Battle:act_shoot(u, t)
   if not self:may_strike(u, t) then return fail("not a target") end
   if not self:can_shoot(u) then return fail("cannot shoot") end
+  if under(u, "sanctuary") then magic.remove(self, u, "sanctuary") end
   u.facing = grid.facing(grid.delta2(u, t))
   -- a shooter shot at shoots back once a round, at once with the stack it has before the
   -- shot lands; only Ranged First Strike against one without it shoots first
@@ -807,12 +880,13 @@ function Battle:can_wait(u) return not u.waited and not under(u, "berserk") end
 
 -- What the current stack can do: { stack, move = { [key] = cost }, melee = { [id] = cheapest
 -- key or false (only by walking further than this turn) }, shoot = { [id] = divisor },
--- wait, defend }
+-- spells = { [key] = { aim, cost } }, wait, defend }
 function Battle:options()
   local u = self:current()
   if self.finished or not u then return nil end
   local o = { stack = u.id, move = self:reachable(u), melee = {}, shoot = {},
-              wait = self:can_wait(u), defend = true }
+              wait = self:can_wait(u), defend = true,
+              spells = battle.hooks.spell_options and battle.hooks.spell_options(self, u) or {} }
   local shooting = self:can_shoot(u)
   for _, t in ipairs(self.units) do
     if self:may_strike(u, t) then
@@ -826,7 +900,8 @@ end
 
 -- Perform a command for the current stack and return the events to play:
 -- { type = "move", x, y } · { type = "melee", target, x?, y? } · { type = "shoot", target }
--- · { type = "wait" } · { type = "defend" }. A bad command changes nothing: nil, reason.
+-- · { type = "cast", spell, target?, x?, y?, second? } (casting.lua) · { type = "wait" }
+-- · { type = "defend" }. A bad command changes nothing: nil, reason.
 function Battle:act(cmd)
   local u = self:current()
   if self.finished or not u then return fail("the battle is over") end
@@ -840,6 +915,9 @@ function Battle:act(cmd)
   elseif cmd.type == "shoot" then
     if not t then return fail("no target") end
     ok, err = self:act_shoot(u, t)
+  elseif cmd.type == "cast" then
+    if not battle.hooks.cast then return fail("no spells") end
+    ok, err = battle.hooks.cast(self, u, cmd)
   elseif cmd.type == "wait" then
     if not self:can_wait(u) then return fail("cannot wait") end
     u.waited = true

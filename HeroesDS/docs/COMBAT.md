@@ -277,7 +277,17 @@ dziennik ostatnich zdarzeń; przy czarach — lista z kosztem i opis.
   z opisów — H10), premie armii, czary z przedmiotów na wroga, `heroes.build(spec, data)` →
   `setup` dla `battle.new` (bohaterowie w pierwszych slotach). Testy `tests/heroes_test.lua`
   (+ `real_artifacts`: każdy artefakt z gry na bohaterze).
-- **C3e** — czary i efekty (§14).
+- **C3e ✅** — `casting` (`casting.install(battle)`, polecenie `{ type = "cast", spell, target?,
+  x?, y?, second? }`, `options().spells = { [klucz] = { aim, cost } }`): księga bohatera
+  (`heroes.caster`: znane czary, księgi i zwoje z przedmiotów, punkty czarów, premie siły
+  i kosztu), czary istot (`cast_by`), koszt, siła (`magic.power`), celowanie (`aim`: none / unit /
+  cell / unit_or_cell / unit_and_point / two_units / unit_then_cell), obszar, czary masowe,
+  obsługa per `type` + wyjątki z `cast()` homm4-mac (łańcuch, Iskry, Wygnanie, rozpraszanie,
+  kradzież zaklęć, Teleport, Przemieszczenie, Ruchome piaski, Dym, Wzrost skał, przywołania
+  i ożywianie, fantomy, Męczennik, Poświęcenie, leczenie), Magiczne lustro, Kajdany. W `wound`:
+  Niebiańska Tarcza, Męczennik, Anioł Stróż, Lustro Bólu (zdarzenia odroczone jak w exe).
+  Testy `tests/casting_test.lua` (+ `real_spells`: każdy czar bojowy z gry rzucony przez
+  arcymistrza na prawdziwych danych).
 - **C3f** — prosty AI (najbliższy/najsłabszy cel, strzelcy strzelają, czary z obrażeniami).
 
 Potem C4 (kartridż: pole bitwy ze stubami grafiki, H6/H8) i H4 (prawdziwe sprite'y).
