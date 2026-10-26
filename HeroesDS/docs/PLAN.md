@@ -9,31 +9,27 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
 
 ## Gdzie skończyliśmy (notka dla nowego czatu, 2026-10-26)
 
-**Stan:** tor A (grafika) do H2 włącznie, tor B: C1 (mechanika) i **C2 (projekt walki,
-`docs/COMBAT.md`, zaakceptowany)** zamknięte, **C3a zrobione** — `HeroesDS/combat/`:
-`num` (float32 jak oryginał — `f32`), `rng`, `grid` (pole, droga ze strefami kontroli),
-`stats`, `damage`; testy `tests/combat_test.lua` (17 przypadków, przez `lupa`). **C3b
-zrobione** — `combat/battle.lua` (rozstawienie, rundy, kolejka, morale, ruch, wręcz,
-kontratak, strzał, obrona, koniec, zdarzenia, powtórki), testy `tests/battle_test.lua`
-(15 przypadków). **C3c zrobione** — `combat/magic.lua` (rdzeń czarów) i `combat/abilities.lua`
-(zdolności jako hooki, `abilities.install(battle)`), testy `tests/abilities_test.lua`. Decyzja H9:
-zabity w wymianie wręcz nie oddaje (`battle.dead_strike_back = false`). **C3d zrobione** —
-`combat/heroes.lua` (bohater z umiejętności i artefaktów, premie armii, `heroes.build`), testy
-`tests/heroes_test.lua`; decyzja H10. **C3e zrobione** — `combat/casting.lua` (rzucanie: koszt,
-siła, celowanie, obszar, masowe, wyjątki, przywołania, lustro), księga w `heroes.caster`,
-`magic.lua` rozszerzone; w `battle.wound` tarcza, męczennik, anioł stróż, lustro bólu; testy
-`tests/casting_test.lua`.
-Ustalone w C2: pole bitwy na dolnym ekranie (H6), dzielenie obrony przez Walkę wręcz /
-Łucznictwo liczymy (H7), całe pole w skali 3/16 + lupa ×2 na L/R (H8).
+**Stan:** tor A (grafika) do H2 włącznie; tor B: C1 (mechanika), C2 (projekt walki,
+`docs/COMBAT.md`, zaakceptowany) i **C3 (silnik walki w czystym Lua) zamknięte**.
+`HeroesDS/combat/`: `num` (float32 jak oryginał), `rng`, `grid` (pole, droga, strefy
+kontroli), `stats`, `damage`, `battle` (rundy, kolejka, akcje, zdarzenia, powtórki —
+jedyne API dla ekranu), `magic` (rdzeń czarów), `abilities` (zdolności jako hooki),
+`heroes` (bohater, artefakty, premie armii, `heroes.build`), `casting` (czary), `ai`
+(przeciwnik komputerowy). Szczegóły i podział C3a–C3f: `COMBAT.md` §11. Decyzje H6–H10
+(ekrany, dzielenie obrony, skala pola + lupa, zabity nie oddaje, reguły bohatera z opisów).
 
-**Następny krok: C3f** — prosty przeciwnik komputerowy (`combat/ai.lua`): strzelcy strzelają
-w najgroźniejszego, reszta atakuje osiągalnych albo idzie do najbliższego, rzucający rzucają,
-gdy czar jest wart więcej niż cios (`Battle.swift` `autoAct`, `berserkAct`; `BattleSpells.swift`
-`aiTargets`, `aiAffected`, `aiValue`, `aiSpell`, `aiBlowValue`); Szał (berserk) działa sam.
-Potem C4: kartridż ze stubami grafiki (H6, H8) i **pomiar szybkości na DS** (szukanie drogi,
-cała tura AI) — to największe ryzyko toru B.
+**Następny krok: C4 — kartridż walki ze stubami grafiki** (H6, H8): dolny ekran = całe pole
+w skali 3/16 (prostokąty / romby zamiast sprite'ów), dotyk = wybór celu / ruchu, dwa
+dotknięcia (podgląd + potwierdzenie), lupa ×2 na L/R; górny = aktywny oddział, podgląd
+obrażeń, kolejka, dziennik; komputer gra jedną stroną (`ai.run`). Dane reguł do kartridża:
+`make_rules.py` bez opisów (`help`) — do ustalenia. **Najpierw pomiar szybkości na DS**
+(melonDS i DSi): `battle:reachable`, tura `ai.act`, cała bitwa komputer–komputer — na PC
+średnia tura AI 4–17 ms, najgorsza do 61 ms (`COMBAT.md` §11, C3f); jeśli na DS za wolno,
+przyspieszyć (zajętość raz na turę, mniej kandydatów dla czarów obszarowych, krótsze
+szukanie drogi „na 12 tur”). Potem H3 (konwerter grafiki) i H4 (makieta pola bitwy z
+prawdziwymi sprite'ami).
 
-**Przeczytaj najpierw:** `docs/DECISIONS.md` (H1–H8), `docs/COMBAT.md` (architektura walki),
+**Przeczytaj najpierw:** `docs/DECISIONS.md` (H1–H10), `docs/COMBAT.md` (architektura walki, §11 — stan C3),
 `docs/MECHANICS.md` (zasady walki 1:1, §1–14), `docs/DS_GRAPHICS.md` (pamięć wideo, style,
 pomiary DSi), `docs/FORMATS.md`.
 
@@ -47,7 +43,7 @@ pomiary DSi), `docs/FORMATS.md`.
   Tylko czytamy (nie uruchamiamy pobranego kodu — blokada auto mode); tabele zbudowane
   w kodzie exe są już przeniesione do `tools/exe_tables.py` i `tools/creature_abilities.py`.
 
-**Testy:** `python -m unittest discover -s HeroesDS/tests` (36 testów Pythona, w tym `test_combat`: 17 + 15 + 18 + 7 + 15 przypadków w Lua przez `lupa`; dane syntetyczne, `real_creatures` także na `extracted/rules/creatures.lua`, gdy jest).
+**Testy:** `python -m unittest discover -s HeroesDS/tests` (37 testów Pythona, w tym `test_combat`: 17 + 15 + 18 + 7 + 15 + 7 przypadków w Lua przez `lupa`; dane syntetyczne, `real_creatures` także na `extracted/rules/creatures.lua`, gdy jest).
 
 **Konsola / emulator:** kartridże HeroesDS w `HeroesDS/carts/` (grafika generowana lokalnie);
 melonDS: `tools/melon.py` (w skrypcie `tap 28 178` = Play w launcherze — klawisze bywają
@@ -102,7 +98,7 @@ Folder w repo LuaDS (H1), wykluczenia w `.gitignore`, plan i decyzje.
 - **C1 — Mechanika ✅** Wynik: `docs/MECHANICS.md` (C1a rdzeń, C1b-1 dane jednostek,
   C1b-2 zdolności, C1b-3 bohater i artefakty, C1c czary) + generator `tools/make_rules.py`.
 - **C2 — Projekt systemu walki ✅** Wynik: `docs/COMBAT.md`, decyzje H6–H8.
-- **C3 — Silnik walki w czystym Lua** + testy na PC: C3a wzory i siatka, C3b bitwa i akcje,
+- **C3 — Silnik walki w czystym Lua ✅** + testy na PC: C3a wzory i siatka, C3b bitwa i akcje,
   C3c zdolności, C3d bohater i artefakty, C3e czary, C3f prosty AI (`COMBAT.md` §11).
 - **C4 — Podpięcie do kartridża** ze stubami grafiki (pole bitwy + ekran informacji, H5).
 

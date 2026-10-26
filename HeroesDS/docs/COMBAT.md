@@ -288,6 +288,17 @@ dziennik ostatnich zdarzeń; przy czarach — lista z kosztem i opis.
   Niebiańska Tarcza, Męczennik, Anioł Stróż, Lustro Bólu (zdarzenia odroczone jak w exe).
   Testy `tests/casting_test.lua` (+ `real_spells`: każdy czar bojowy z gry rzucony przez
   arcymistrza na prawdziwych danych).
-- **C3f** — prosty AI (najbliższy/najsłabszy cel, strzelcy strzelają, czary z obrażeniami).
+- **C3f ✅** — `ai` (za homm4-mac; AI exe nie jest prześledzone): `ai.act(b)` gra turę
+  bieżącego oddziału — czar, gdy jego wartość w PW (obrażenia wrogom, swoje straty ×2 na
+  minus, leczenie i wskrzeszanie swoich, przywołane PW, część PW celu za klątwę /
+  błogosławieństwo) przewyższa średni cios; strzelcy w najgroźniejszego; reszta atakuje
+  osiągalnego najgroźniejszego albo idzie do najbliższego; Szał działa sam (`ai.must_act`);
+  `ai.run(b, sides)` gra, dopóki tura należy do komputera. Testy `tests/ai_test.lua`
+  (+ `real_auto_battles`: 12 bitew komputer–komputer na prawdziwych danych, powtórki).
+  - **Pomiar na PC** (bohaterowie z czarami, po 3 oddziały na stronę): średnia tura AI
+    4–17 ms, najgorsza 10–61 ms (czary obszarowe: ocena każdego pola; atak na daleki cel:
+    szukanie drogi na 12 tur). Na DS to może być pół sekundy do kilku sekund — w C4
+    zmierzyć i przyspieszyć (patrz C3b: zajętość liczona raz na turę, mniej kandydatów
+    na pola czarów obszarowych, krótsze szukanie „na 12 tur”).
 
 Potem C4 (kartridż: pole bitwy ze stubami grafiki, H6/H8) i H4 (prawdziwe sprite'y).
