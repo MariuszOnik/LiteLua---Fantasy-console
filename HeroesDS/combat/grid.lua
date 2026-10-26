@@ -78,7 +78,40 @@ end
 -- Block movement and shots through a cell (obstacles, Rock Growth)
 function Field:block(x, y)
   self.blocked[x * N + y] = true
+  self:changed()
+end
+
+-- The empty field as a pathgrid: cells off the field closed (made once, ~0.7 s on a DS)
+local shape
+function grid.shape()
+  if not shape then
+    shape = pathgrid(N, N)
+    for x = 0, N - 1 do
+      for y = 0, N - 1 do
+        if not on_field(x, y) then shape:set(x, y, 1) end
+      end
+    end
+  end
+  return shape
+end
+
+-- Call after changing blocked, quicksand or moat cells: drops what was made from them
+function Field:changed()
   self.closed_sums = nil
+  self.nav = nil
+end
+
+-- The field for LiteLua's pathgrid (D57): keys x * N + y with `columns`; flags
+-- 1 closed (off the field or blocked), 2 slow (moat), 4 mire (quicksand)
+function Field:pathgrid()
+  local g = self.nav
+  if g then return g end
+  g = grid.shape():clone()
+  for k in pairs(self.blocked) do g:set(k // N, k % N, 1) end
+  for k in pairs(self.moat) do g:set(k // N, k % N, g:get(k // N, k % N) | 2) end
+  for k in pairs(self.quicksand) do g:set(k // N, k % N, g:get(k // N, k % N) | 4) end
+  self.nav = g
+  return g
 end
 
 function Field:is_open(x, y)
@@ -303,6 +336,7 @@ function grid.reachable(field, stacks, m)
     return out
   end
 
+  if grid.native then return grid.native_reachable(field, stacks, m) end
   local flies = m.flies
   local limit = fixed(m.budget)   -- the original's budget + 0.001 in floats
   local occ = occupied(stacks, size, m.id)
@@ -416,6 +450,43 @@ function grid.flight(m, gx, gy)
     line[i] = { m.x + num.round(f32((gx - m.x) * f)), m.y + num.round(f32((gy - m.y) * f)) }
   end
   return line
+end
+
+-- The same search in C (LiteLua's pathgrid, D57), about 50 times faster on the DS. Gives
+-- the same costs and parents as the Lua code above (same heap, same step order); tests on
+-- a PC run the Lua code, grid.native is set only where pathgrid exists.
+grid.native = pathgrid ~= nil
+local STEPS_FLAT = {}
+for i = 1, 8 do
+  STEPS_FLAT[#STEPS_FLAT + 1] = SDX[i]; STEPS_FLAT[#STEPS_FLAT + 1] = SDY[i]
+  STEPS_FLAT[#STEPS_FLAT + 1] = SCOST[i]
+end
+
+function grid.native_reachable(field, stacks, m)
+  local blockers, zones = {}, {}
+  for i = 1, #stacks do
+    local u = stacks[i]
+    if u.count > 0 and u.id ~= m.id then
+      blockers[#blockers + 1] = u.x; blockers[#blockers + 1] = u.y; blockers[#blockers + 1] = u.size
+    end
+  end
+  for _, e in ipairs(m.zoc or {}) do
+    if e.count > 0 then
+      zones[#zones + 1] = e.x; zones[#zones + 1] = e.y; zones[#zones + 1] = e.size
+    end
+  end
+  local zoc_cost = fixed(m.zoc_cost or 0)
+  local zone_costs = {}
+  for i = 1, 8 do
+    local z = zoc_cost * SCOST[i]
+    zone_costs[i] = z % SCALE == 0 and z // SCALE or error("zone of control cost not in 1/32")
+  end
+  return field:pathgrid():flood({
+    x = m.x, y = m.y, size = m.size, budget = fixed(m.budget), steps = STEPS_FLAT,
+    blockers = blockers, zones = zones, zone_costs = zone_costs,
+    slow = m.moat_cost and fixed(m.moat_cost), mire = m.sand_cost and fixed(m.sand_cost),
+    fly = m.flies or false, columns = true, div = SCALE,
+  })
 end
 
 -- The path to (gx, gy) as a list of { x, y } (without the start), or nil when out of reach.

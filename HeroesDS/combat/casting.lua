@@ -221,15 +221,27 @@ end
 function casting.free_spot(b, near, size)
   local best, best_d = {}, nil
   local cx, cy = near.x * 16 + near.size * 8, near.y * 16 + near.size * 8
-  for x = 0, grid.SIZE - 1 do
-    for y = 0, grid.SIZE - 1 do
-      if b.field:fits(x, y, size) and not grid.overlaps(b.units, x, y, size, nil) then
-        local dx, dy = x * 16 + size * 8 - cx, y * 16 + size * 8 - cy
-        local d = dx * dx + dy * dy
-        if best_d == nil or d < best_d then best_d = d; best = { { x, y } }
-        elseif d == best_d then best[#best + 1] = { x, y } end
+  -- the cells whose centre is at most 16 r from (cx, cy) along each axis, growing r: once
+  -- the nearest free place is that close, nothing outside can be nearer or as near, and the
+  -- ones found come in the same order as a scan of the whole field
+  local n, r = grid.SIZE, 4
+  while true do
+    best, best_d = {}, nil
+    local x0, x1 = math.max(0, -((size * 8 + 16 * r - cx) // 16)), math.min(n - 1, (cx - size * 8 + 16 * r) // 16)
+    local y0, y1 = math.max(0, -((size * 8 + 16 * r - cy) // 16)), math.min(n - 1, (cy - size * 8 + 16 * r) // 16)
+    for x = x0, x1 do
+      grid.tick()
+      for y = y0, y1 do
+        if b.field:fits(x, y, size) and not grid.overlaps(b.units, x, y, size, nil) then
+          local dx, dy = x * 16 + size * 8 - cx, y * 16 + size * 8 - cy
+          local d = dx * dx + dy * dy
+          if best_d == nil or d < best_d then best_d = d; best = { { x, y } }
+          elseif d == best_d then best[#best + 1] = { x, y } end
+        end
       end
     end
+    if (best_d and best_d <= (16 * r) ^ 2) or r >= n then break end
+    r = r * 2
   end
   if #best == 0 then return nil end
   local p = best[b.rng:next() % #best + 1]
@@ -661,6 +673,7 @@ function casting.cast(b, u, cmd)
       if casting.quicksand_ok(b, c[1], c[2]) then
         painted[#painted + 1] = { c[1], c[2] }
         b.field.quicksand[grid.key(c[1], c[2])] = true
+        b.field:changed()
       end
       for _, d in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
         local nx, ny = c[1] + d[1], c[2] + d[2]

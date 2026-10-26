@@ -6,7 +6,7 @@
 -- engine must give the same battle bit for bit.
 
 local SLICE = 20000   -- us of work per frame during the computer's turn
-local BATTLES = 3
+local BATTLES = 12
 
 local out = {}
 local function say(s)
@@ -31,16 +31,25 @@ local function run()
   collectgarbage()
   say(("load: code %s ms, rules %s ms, %d KB"):format(ms(t1 - t0), ms(t2 - t1),
     (collectgarbage("count") - m0) // 1))
+  if pathgrid then
+    local t = micros()
+    require("combat.grid").shape()
+    say(("field shape for pathgrid: %s ms"):format(ms(micros() - t)))
+  end
   local pcf = loadfile("data/pc.lua")
   local pc = pcf and pcf() or {}
 
   local env = { clock = micros, creatures = creatures, spells = spells, slice = SLICE,
                 yield = function(r) coroutine.yield(r) end }
   status = "path search"
-  local r = bench.reachable(env, 1)
+  local r = bench.reachable(env, 5)
   say(("reachable: avg %s ms, worst %s ms%s"):format(ms(r.avg), ms(r.worst),
     pc.reach and (" (PC x%d)"):format(r.avg // math.max(1, pc.reach.avg)) or ""))
+  say(r.diff and ("C vs Lua search: %d differences"):format(r.diff) or "no pathgrid: Lua search")
 
+  collectgarbage()
+  say(("Lua memory now %d KB, peak so far %d KB"):format(collectgarbage("count") // 1,
+    sys.stats().mem_peak // 1024))
   local same, sum_avg, worst, stall = 0, 0, 0, 0
   for seed = 1, BATTLES do
     status = "battle " .. seed
