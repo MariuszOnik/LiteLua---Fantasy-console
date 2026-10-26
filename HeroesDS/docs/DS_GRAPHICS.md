@@ -111,6 +111,30 @@ kopiuje też na kartę emulatora). Atlasy przez `tools/h4atlas.py`, skala 0,5.
    do decyzji po pomiarze na DSi.
 3. Duże jednostki (smok) wymagają mniejszej skali lub 16 kolorów — do decyzji w H3.
 
-## Następny pomiar — konsola DSi
-Ten sam kartridż na konsoli (ROM `litelua.nds` + `litelua/carts/h2b`), wynik
-z `litelua/log.txt` (FTP).
+## Trzy style (2026-10-26)
+
+`tools/h4atlas.py --style`: **current** (alfa progowana, cień ½ rozdzielczości),
+**smooth** (krawędzie mieszane z kolorem ziemi, cień z kropek), **oldschool** (16 kolorów,
+mocniejszy kontrast, kontur 1 px, cień z kropek). Kartridż `h2b`: bandyta (ne) vs czarny
+smok (sw), styl przełączany L/R; skala bandyty 0,5 (oldschool 0,375), smoka 0,35 (0,3).
+
+Poprawki po pierwszym teście:
+- **Falowanie postaci o 1 px** — klatki skalowane osobno miały różne zaokrąglenia.
+  Teraz wszystkie klatki animacji są skalowane na wspólnym płótnie; szachownica cienia
+  jest przypięta do punktu zaczepienia (nie mruga).
+- **Ogień smoka jako szara chmurka** (oldschool) — paleta 16 kolorów dobierana według
+  liczby pikseli oddawała wszystkie kolory ciemnym łuskom. Teraz kolory nasycone ważą
+  przy doborze palety do 13× więcej (`saturation_weight`).
+
+### Pomiary na DSi (log z konsoli)
+
+| Styl | przestój przy ataku | VRAM w ataku | uwagi |
+|---|---|---|---|
+| oldschool | 171–201 ms | 88–100 KB | (melonDS: 255–273 ms) |
+| smooth | 243–263 ms | 178–186 KB | komplet 6 animacji naraz: **brak pamięci** (>256 KB) |
+
+Smooth na DSi, pojedyncze animacje: smok wait 56 ms / 24 KB, melee 176 ms / 96 KB,
+flinch 98 ms / 48 KB; bandyta wait 48 ms / 20 KB, melee 142 ms / 80 KB, flinch 80 ms / 40 KB.
+**DSi jest ~25–35 % szybsze od melonDS** przy wczytywaniu.
+
+Ocena użytkownika na konsoli: **oldschool „wygląda naprawdę bardzo fajnie”**.

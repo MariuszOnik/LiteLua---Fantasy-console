@@ -207,12 +207,26 @@ def pack(sizes):
     return best
 
 
+def saturation_weight(rgb):
+    """How many times a color counts when the palette is chosen: bright,
+    saturated colors (fire, magic, blood) cover few pixels next to a big dark
+    creature, and with plain pixel counts a 16-color palette loses them."""
+    hi, lo = max(rgb), min(rgb)
+    sat = (hi - lo) / hi if hi else 0
+    return 1 + int(12 * sat * min(1, hi / 128))
+
+
 def to_palette(atlas, colors):
     """RGBA (alpha 0/255) -> 'P' image: index 0 transparent, 1..colors opaque."""
     px = pixels(atlas)
     opaque = [p[:3] for p in px if p[3]]
-    sample = Image.new("RGB", (max(1, len(opaque)), 1))
-    sample.putdata(opaque or [(0, 0, 0)])
+    weights = {}
+    weighted = []
+    for p in opaque:
+        w = weights.get(p) or weights.setdefault(p, saturation_weight(p))
+        weighted.extend([p] * w)
+    sample = Image.new("RGB", (max(1, len(weighted)), 1))
+    sample.putdata(weighted or [(0, 0, 0)])
     pal = sample.quantize(colors=colors, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
     idx = atlas.convert("RGB").quantize(palette=pal, dither=Image.Dither.NONE)
     out = Image.new("P", atlas.size)

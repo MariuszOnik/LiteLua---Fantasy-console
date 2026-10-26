@@ -36,9 +36,15 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   ładuj–zwolnij bez wycieków, starcie działa, dociąganie przy ataku ~290 ms.
   Uruchamianie w melonDS: launcher czasem gubi pierwsze klawisze — `tap 28 178`
   (przycisk Play) w skrypcie `tools/melon.py` działa pewnie.
-- **Następny krok: pomiar H2b na DSi** (potrzebny użytkownik: konsola + FTP), potem
-  C1 (mechanika walki → `docs/MECHANICS.md`) albo H3 (konwerter dla wszystkich jednostek,
-  skala per jednostka).
+- **H2c ✅** trzy style grafiki (current / smooth / oldschool) w `tools/h4atlas.py --style`,
+  kartridż `h2b` z przełączaniem L/R (bandyta vs smok), poprawki falowania i palety (ogień);
+  pomiar na DSi: oldschool 171–201 ms przestoju przy ataku, smooth nie mieści kompletu.
+  Wyniki: `DS_GRAPHICS.md`, sekcja „Trzy style”. **Użytkownikowi podoba się oldschool** —
+  do potwierdzenia jako decyzja (H5) i dostrojenia (kontrast, 16 vs 32 kolory?).
+- Wysyłanie na konsolę: FTP `192.168.1.86:5000` (DHCP), pliki kartridża do
+  `litelua/carts/h2b/` (`curl --ftp-create-dirs -T`), log: `litelua/log.txt`.
+- **Następny krok:** decyzja o stylu (H5), potem C1 (mechanika walki → `docs/MECHANICS.md`)
+  albo H3 (konwerter dla wszystkich jednostek, skala per jednostka).
 - Mapa świata: ustalenia o terenie 2.5D zapisane w `docs/FORMATS.md` (sekcja „Ważne na później”).
 - Otwarte w formatach (`FORMATS.md`): pole `?` palety, sekwencje bohaterów.
 - Pobrany kod z sieci (`ref/`) — nie uruchamiamy go (blokada auto mode); czytamy opis
