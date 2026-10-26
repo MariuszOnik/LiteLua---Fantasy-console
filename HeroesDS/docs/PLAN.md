@@ -49,9 +49,14 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   Użytkownik dostroił styl **`test1`** (skala 0,19, bez obrysu) — sprawdzony w `h2b`.
 - **Decyzja H5:** bez zbliżenia starcia — walka na polu bitwy z małymi sprite'ami
   w stylu `test1`. Kartridż `h2b` (zbliżenie) jest już tylko historią pomiarów.
-- **Następny krok: C1** (mechanika walki → `docs/MECHANICS.md`), potem C2 (projekt walki,
-  w tym podział ekranów). Test graficzny do zrobienia przy okazji: makieta pola bitwy
-  z 14 oddziałami w stylu `test1` (pamięć, czytelność, dotyk).
+- **C1a ✅** rdzeń mechaniki walki → `docs/MECHANICS.md`: pole 102×102, ruch, kolejność
+  (klucz Speed+1000, czekanie, obrona), morale, szczęście, wzór obrażeń, strzał (dzielniki),
+  kontratak i wymiana jednoczesna, First Strike, kontrstrzał, bohater w walce.
+  Źródło: `ref/homm4-mac` (`Combat.swift`, `Battle.swift`) + manual (tekst:
+  `pdftotext` do `extracted/text/`, poza repo).
+- **Następny krok: C1b** — statystyki jednostek z tabel gry (`text.h4r`, własny czytnik
+  tabel jak `ref/homm4-mac/tools/h4table.py`) + zdolności jednostek + umiejętności bohaterów;
+  wyjaśnić Block (−30 % czy szansa na pełny blok). Potem C1c (czary).
 - Mapa świata: ustalenia o terenie 2.5D zapisane w `docs/FORMATS.md` (sekcja „Ważne na później”).
 - Otwarte w formatach (`FORMATS.md`): pole `?` palety, sekwencje bohaterów.
 - Pobrany kod z sieci (`ref/`) — nie uruchamiamy go (blokada auto mode); czytamy opis
