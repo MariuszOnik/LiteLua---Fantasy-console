@@ -5,6 +5,8 @@
 -- 3. A duel on the top screen: bandit (ne) vs bandit (sw). Only "wait" stays
 --    loaded; an attack loads the attacker's melee and the defender's flinch
 --    (the stall is shown), and frees the previous ones.
+-- The duel starts at once; X runs the measurement step by step (one load per
+-- frame, as a coroutine), so the screens keep showing the progress.
 -- Results on the bottom screen and in litelua/log.txt.
 
 local CYCLES = 20
@@ -74,16 +76,23 @@ local function measure()
     local back = vram() == base and "ok" or ("+" .. (vram() - base) // 1024)
     say(("%-21s %5.1f %4d %s"):format(name:sub(1, 21), us / 1000, used // 1024, back))
     say(info)
+    coroutine.yield()
   end
-  local t0, peak = micros(), 0
-  for _ = 1, CYCLES do
+  local t0, peak, idle = micros(), 0, 0
+  local progress = #out + 1 -- A line of the screen only, not logged
+  for c = 1, CYCLES do
     local keep = {}
     for i, n in ipairs(CYCLE_SET) do keep[i] = load_anim(n) end
     peak = math.max(peak, vram() - base)
     keep = nil
     free_all()
+    out[progress] = ("cycle %d/%d"):format(c, CYCLES)
+    local t1 = micros()
+    coroutine.yield()
+    idle = idle + micros() - t1
   end
-  local us = micros() - t0
+  out[progress] = nil
+  local us = micros() - t0 - idle
   say(("%d cycles of %d anims: %.0f ms each"):format(CYCLES, #CYCLE_SET, us / CYCLES / 1000))
   say(("peak %d KB, after: %s"):format(peak // 1024,
       vram() == base and "VRAM back" or ("LEAK " .. (vram() - base) // 1024 .. " KB")))
@@ -134,20 +143,33 @@ local function step(u)
   if f > #a.frames then play(u, "wait") end
 end
 
-local function start()
-  measure()
+local job -- The measurement coroutine while it runs
+
+local function start_duel()
   units = { left = unit("bandit", "ne", 64, 172), right = unit("bandit", "sw", 186, 92) }
-  say(("duel loaded: VRAM %d KB"):format(vram() // 1024))
 end
 
-start()
+start_duel()
+print(("duel loaded: VRAM %d KB"):format(vram() // 1024))
+out = { "X: measure load times and video memory", "(the duel is paused meanwhile)" }
 
 function _update()
+  if job then
+    local ok, err = coroutine.resume(job)
+    if not ok then error(err) end
+    if coroutine.status(job) == "dead" then
+      job = nil
+      start_duel()
+      say(("duel loaded: VRAM %d KB"):format(vram() // 1024))
+    end
+    return
+  end
   if btnp("a") then attack(units.left, units.right) end
   if btnp("b") then attack(units.right, units.left) end
   if btnp("x") then
     units = nil
-    start()
+    job = coroutine.create(measure)
+    return
   end
   step(units.left)
   step(units.right)
@@ -156,6 +178,10 @@ end
 function _draw(screen)
   if screen == TOP then
     cls(4)
+    if not units then
+      text("measuring...", 90, 90, 12)
+      return
+    end
     for _, u in ipairs({ units.right, units.left }) do -- Farther unit first
       local f, a = frame_of(u)
       draw_anim(a, math.min(f, #a.frames), u.x, u.y)
