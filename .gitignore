@@ -33,3 +33,5 @@ tests/carts/sound/music/rock.wav
 /HeroesDS/carts/*/gfx/
 /HeroesDS/carts/*/data/
 /HeroesDS/carts/*/src/combat/
+/HeroesDS/carts/*/sfx/
+/HeroesDS/carts/*/music/
