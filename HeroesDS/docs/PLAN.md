@@ -54,9 +54,12 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   kontratak i wymiana jednoczesna, First Strike, kontrstrzał, bohater w walce.
   Źródło: `ref/homm4-mac` (`Combat.swift`, `Battle.swift`) + manual (tekst:
   `pdftotext` do `extracted/text/`, poza repo).
-- **Następny krok: C1b** — statystyki jednostek z tabel gry (`text.h4r`, własny czytnik
-  tabel jak `ref/homm4-mac/tools/h4table.py`) + zdolności jednostek + umiejętności bohaterów;
-  wyjaśnić Block (−30 % czy szansa na pełny blok). Potem C1c (czary).
+- **C1b-1 ✅** dane jednostek z gry: czytnik tabel `tools/h4table.py` (cp1250 — polska
+  wersja), generator `tools/make_rules.py` → `extracted/rules/creatures.lua` (74 jednostki:
+  statystyki, polskie nazwy, zdolności z exe — `tools/creature_abilities.py`, rozmiar,
+  odporność na magię). Block rozstrzygnięty: 30 % szansy na pełny blok.
+- **Następny krok: C1b-2** — działanie zdolności (efekty po ciosie, dodatkowe cele, początek
+  tury) do `MECHANICS.md`; potem C1b-3 umiejętności bohaterów; C1c czary.
 - Mapa świata: ustalenia o terenie 2.5D zapisane w `docs/FORMATS.md` (sekcja „Ważne na później”).
 - Otwarte w formatach (`FORMATS.md`): pole `?` palety, sekwencje bohaterów.
 - Pobrany kod z sieci (`ref/`) — nie uruchamiamy go (blokada auto mode); czytamy opis

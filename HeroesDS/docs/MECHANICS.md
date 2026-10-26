@@ -107,9 +107,10 @@ Po stosunku:
 - **Ochrona przed charakterem** atakującego (Ward): ×2/3;
 - ogień (fire / breath / arc breath / Greek fire) przeciw *Fire Resistance*: ½;
   zimno przeciw *Cold Resistance*: ½;
-- *Block*: −30 % (×7/10) — **uwaga**: `Battle.swift` opisuje Block też jako 30 % szansy
-  na **całkowite** zablokowanie ciosu (0 obrażeń). Do wyjaśnienia w C1b, która wersja
-  jest prawdziwa (może obie: blok zawsze −30 %, a rzut na zablokowanie osobno).
+- *Block*: **30 % szansy na całkowite zablokowanie** ciosu (0 obrażeń; wręcz, strzał i atak
+  obszarowy) — tak mówi opis zdolności w tabeli gry i tak liczy `Battle.swift` (rzut przed
+  ciosem, exe 0x5f3f20; nie działa, gdy jednostka jest ogłuszona/zamrożona). Stałe −30 %
+  w `Combat.swift` to tylko średnia do szybkiego rozstrzygania walki (auto-walka).
 
 ### 6.3 Strzał
 - Strzelać może oddział z pociskami (`shots`; *Unlimited Shots* — bez limitu), **gdy żaden
@@ -182,11 +183,26 @@ mur (oblężenie) → Stone Gaze → **szczęście celu** → ograniczenie do PW
   atakującego kończy walkę porażką (manual: pokonani bohaterowie trafiają do więzienia).
 - Przywołane jednostki znikają po walce.
 
+## 11. Dane jednostek (C1b)
+
+- **Generator**: `python HeroesDS/tools/make_rules.py` → `extracted/rules/creatures.lua`
+  (plik danych Lua dla silnika walki; z plików gry, więc poza repo).
+- **Statystyki** z `table.creatures` (najnowsza wersja: `updates.h4r`; tekst w cp1250 —
+  polska wersja GOG, nazwy jednostek po polsku): poziom, charakter, PW, obrażenia min–max,
+  atak, obrona, **Move** (pola na turę), **Speed** (kolejka), pociski, punkty i moc czarów,
+  przyrost, koszt, doświadczenie. 74 jednostki: 67 z gry podstawowej, 4 z dodatku 1, 3 z 2.
+- **Zdolności** z tabeli w `heroes4.exe` (`tools/creature_abilities.py`, dane za homm4-mac,
+  MIT). Tabela gry ma tylko nazwy wyświetlane i w polskiej wersji nie zawsze pasują do
+  tabeli zdolności; logika gry bywa też inna niż opis (czarny smok: pełna niewrażliwość na
+  magię, modliszka: spętanie, feniks: odporność na ogień + odrodzenie).
+- **Rozmiar** na siatce z `combat_actor` (1–7 pól). **Odporność na magię** w % z opisu
+  (krasnolud 50, złoty golem 75; niewrażliwość = 100).
+- Opisy zdolności po polsku: `table.creature_abilities` (słowo kluczowe → nazwa, opis).
+
 ## Do ustalenia (C1b / C1c)
 
-- Statystyki jednostek z tabel gry (`text.h4r`, format jak `ref/homm4-mac/tools/h4table.py`).
-- Lista zdolności i ich działanie; które pochodzą z tabeli w exe (`creatureAbilities`).
+- Działanie każdej zdolności (efekty po ciosie: trucizna, ogłuszenie, spętanie, wyssanie
+  życia, strach, …) — `Battle.swift`: `aftermath`, `extraTargets`, `startOfTurn`.
 - Umiejętności bohatera (Taktyka: ruch i kolejność; Atak/Obrona: % do statystyk jednostek;
-  Dowodzenie: morale/szczęście).
+  Dowodzenie: morale/szczęście) — `HeroSkills.swift`, `table.skills`.
 - Czary: obrażenia, obszar, odporność na magię, czasy trwania.
-- Block: −30 % czy szansa 30 % na pełny blok (6.2).
