@@ -26,6 +26,7 @@
 #include "ll_input.h"
 #include "ll_log.h"
 #include "ll_map.h"
+#include "ll_path.h"
 #include "ll_mem.h"
 #include "ll_pause.h"
 #include "ll_runtime.h"
@@ -130,9 +131,24 @@ static int watched_pcall(lua_State *L, int nargs, int nresults)
 }
 
 // Elapsed microseconds since boot (wraps after ~128 s)
+// The CPU timing counter (33.5 MHz, 32 bits) turns over every 128 s; this keeps
+// a 64-bit count, updated at least once a frame
+static u64 clock_ticks;
+static u32 clock_last;
+
+static u64 clock_now(void)
+{
+    u32 t = cpuGetTiming();
+    clock_ticks += (u32)(t - clock_last);
+    clock_last = t;
+    return clock_ticks;
+}
+
+// Microseconds since start. On 32-bit Lua integers the value wraps after ~35
+// minutes, but a difference of two calls stays right (integers wrap too).
 static int l_micros(lua_State *L)
 {
-    lua_pushinteger(L, (lua_Integer)timerTicks2usec(cpuGetTiming()));
+    lua_pushinteger(L, (lua_Integer)(clock_now() * 1000000 / BUS_CLOCK));
     return 1;
 }
 
@@ -292,6 +308,7 @@ static void register_api(lua_State *L, const LLCart *cart)
     ll_gfx_register(L);
     ll_image_register(L);
     ll_map_register(L, cart);
+    ll_path_register(L);
     ll_sound_register(L);
 }
 
@@ -485,6 +502,7 @@ static void frame_loop(lua_State *L)
         ll_stats_frame(&fs);
         ll_log_flush();
 
+        clock_now();
         t0 = cpuGetTiming();
         if (!read_input(L) || !call_hook(L, "_update", -1))
             return;

@@ -8,6 +8,8 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 ## Gdzie skończyliśmy
 - **Nowy projekt (2026-10-26): HeroesDS** — gra w stylu Heroes IV na LiteLua, folder
   `HeroesDS/`. Ma własny plan: **zacznij od `HeroesDS/docs/PLAN.md`** („Gdzie skończyliśmy”).
+- **D57 (2026-10-26):** szukanie drogi w C — `pathgrid(w, h)`, `grid:flood(opts)` (z HeroesDS,
+  ogólne API); poprawka `micros()` (przekręcał się co 128 s).
 - **Przerwa na grę (2026-10-20):** robimy `examples/carts/runedeck` (roguelike z lochem
   ASCII i walką kartami, grafika z lokalnego AI). **Jutro zacznij od
   `examples/carts/runedeck/NEXT.md`** — stan, narzędzia i lista do zrobienia.

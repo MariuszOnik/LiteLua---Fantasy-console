@@ -1318,3 +1318,22 @@ użytkownik wybrał **B, jako funkcję**.
 - Kotwica należy do obiektu obrazu: `image(name)` zwraca zawsze ten sam obraz (wspólna
   kotwica), widoki z `sub()` i `image(name, fw, fh)` mają własną i nie dziedziczą jej.
 - Pasuje do atlasów z D48 (kotwica na klatkę): kotwica obrazu będzie wtedy domyślną.
+
+## D57 (2026-10-26) — Szukanie drogi w C: `pathgrid(w, h)`, `grid:flood(opts)`
+Pomiar HeroesDS (C4a, `HeroesDS/carts/c4bench`): Lua na DS wykonuje ~1 mln instrukcji VM/s,
+Dijkstra po siatce 102×102 z odciskiem jednostki ~500–1200 instrukcji na pole → jedno
+szukanie ~1 s, tura komputera do kilku sekund. Propozycja agenta, użytkownik za.
+- **Ogólne API, nie kod jednej gry:** siatka z flagami pól (1 zamknięte, 2 wolne, 4 grząskie),
+  Dijkstra dla jednostki size×size, kroki i koszty podawane przez grę (liczby całkowite —
+  DS nie ma FPU), inne jednostki jako przeszkody, strefy kontroli (wyjście nie wprost do/od
+  strefy kosztuje więcej), latanie, opcja `columns` (klucze `x * h + y`) i `div`.
+- **Ten sam wynik co Lua:** ten sam kopiec binarny i kolejność kroków, więc remisy idą tak
+  samo; HeroesDS zostawia wersję w Lua jako wzorzec (PC, testy), na DS woła C. Sprawdzone na
+  DS: 0 różnic kosztów i rodziców, 12/12 bitew z tym samym stanem końcowym co PC.
+- Wynik w melonDS (DS): jedno szukanie 3,2 s → 80 ms, tura komputera średnio ~0,1 s.
+- Pamięć robocza szukania w C poza limitem Lua (statyczne bufory, rosną w razie potrzeby,
+  ~0,2 MB dla 102×102); komórki siatki w userdata (liczą się w limicie).
+- `grid:clone()` — HeroesDS buduje kształt pola raz (0,6 s w Lua) i kopiuje go na bitwę.
+- **Poprawka `micros()`:** licznik taktów 33,5 MHz (32 bity) przekręca się co 128 s, więc
+  pomiary dłuższe niż 128 s dawały ujemne czasy. Teraz licznik 64-bitowy, aktualizowany w
+  każdej klatce; wartość w Lua (32 bity) zawija się po ~35 min, ale różnice są poprawne.

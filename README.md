@@ -448,6 +448,25 @@ Only the tiles on the screen are drawn; with 8×8 tiles a full screen is about 8
 tiles per layer, and the DS draws at most about 2000 per screen, so keep 8×8 maps to two
 layers.
 
+### Path search
+
+`pathgrid(w, h)` gives you a grid for finding paths, and `grid:flood(opts)` finds every
+place a unit can reach and how to get there. The search runs in the engine, about 50 times
+faster than the same code in Lua (on a DS one Lua search over a few thousand cells can take
+a second). Units can stand on a square of cells; costs are whole numbers.
+
+```lua
+local g = pathgrid(32, 24)
+g:set(10, 5, 1)                         -- 1 = a wall (2 slow, 4 mire)
+local cost, parent = g:flood({ x = hx, y = hy, budget = 10 })
+-- cost[y * 32 + x]: the cost to get there (nil = out of reach)
+-- parent[key]: the cell it came from, back to the start
+```
+
+By default a straight step costs 2 and a diagonal one 3. Options: `size` (the unit's
+square), `steps`, `blockers` (other units), `zones` (zones of control), `slow`, `mire`,
+`fly`, `div` — see the API reference.
+
 ### Sound
 
 Put sound effects in the cartridge's `sfx/` folder as WAV files and music in `music/`:
