@@ -33,3 +33,18 @@ cienie jako osobny 1-kolorowy atlas rysowany z `alpha()`; animacje ładowane prz
 i zwalniane po nim; tekstury z alfą (A5I3) w silniku dopiero, gdy pierwsza wersja zadziała.
 Uzupełnienie z H2b: cień przechowywany w połowie rozdzielczości i rysowany powiększony
 (`sspr`) — inaczej dwa komplety animacji nie mieszczą się w 256 KB VRAM.
+
+## H5 (2026-10-26) — Walka na polu bitwy z małymi sprite'ami, bez zbliżenia starcia
+Rezygnujemy z osobnej sceny „zbliżenia” (dwie duże jednostki na górnym ekranie). Walka
+toczy się na polu bitwy, jak w oryginalnym H4: wszystkie oddziały (do 7 na 7) jako małe
+animowane sprite'y. Uzasadnienie (pomiary H2b/H2c): styl `test1` (skala ~0,19, 16 kolorów,
+bez obrysu, cień z kropek) — `wait` bandyty 2 KB, smoka 4 KB na kierunek; akcje dociągane
+na żądanie (~90 ms w melonDS); jedna skala zamiast dwóch = połowa konwersji i pamięci.
+- Styl bazowy: `test1` z `tools/styles.json` (dostrojony przez użytkownika w `style_tuner.py`).
+- Zaznaczenie celu / obszaru czaru: najpierw za darmo (znacznik na ziemi + pulsujący `tint`),
+  prawdziwy obrys (atlas sylwetki rysowany 4× z przesunięciem) tylko jeśli to za mało czytelne.
+- Otwarte do C2: który ekran pokazuje pole bitwy (dotyk!), a który informacje (aktywny
+  oddział, cel, kolejka tur, dziennik, ewentualnie portret 2×).
+- Propozycja dla silnika LiteLua (osobny punkt w planie LiteLua, gdy będzie potrzebna):
+  zamiana ekranów (`sys.swap()` — odwrócenie `lcdMainOnTop/Bottom` w dual30); dotyk zostaje
+  na fizycznie dolnym ekranie.

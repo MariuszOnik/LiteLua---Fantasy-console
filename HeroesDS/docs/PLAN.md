@@ -4,7 +4,8 @@ Fanowska gra w stylu Heroes of Might and Magic IV na LiteLua (DS/DSi), na orygin
 zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
 - **mapa kontynentu** — prowincje, miasta, armie (jak w Imperial Glory),
 - **walka** — jak w H4: dolny ekran = mapa walki, górny = animowane starcie dwóch jednostek
-  w przeciwległych narożnikach (duże sprite'y bojowe ładowane i zwalniane w locie).
+  w przeciwległych narożnikach — **zmienione decyzją H5**: walka na polu bitwy z małymi
+  sprite'ami, bez zbliżenia.
 
 ## Gdzie skończyliśmy
 - **H1a ✅** czytnik archiwów `tools/h4r.py` + testy (`python -m unittest discover -s HeroesDS/tests`).
@@ -43,8 +44,14 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   do potwierdzenia jako decyzja (H5) i dostrojenia (kontrast, 16 vs 32 kolory?).
 - Wysyłanie na konsolę: FTP `192.168.1.86:5000` (DHCP), pliki kartridża do
   `litelua/carts/h2b/` (`curl --ftp-create-dirs -T`), log: `litelua/log.txt`.
-- **Następny krok:** decyzja o stylu (H5), potem C1 (mechanika walki → `docs/MECHANICS.md`)
-  albo H3 (konwerter dla wszystkich jednostek, skala per jednostka).
+- **H2d ✅** narzędzie `tools/style_tuner.py` (okno z suwakami, presety, Reset, ograniczenia
+  DS: 16/256 kolorów, kolory 15-bit, ocena pamięci; zapis do `tools/styles.json`).
+  Użytkownik dostroił styl **`test1`** (skala 0,19, bez obrysu) — sprawdzony w `h2b`.
+- **Decyzja H5:** bez zbliżenia starcia — walka na polu bitwy z małymi sprite'ami
+  w stylu `test1`. Kartridż `h2b` (zbliżenie) jest już tylko historią pomiarów.
+- **Następny krok: C1** (mechanika walki → `docs/MECHANICS.md`), potem C2 (projekt walki,
+  w tym podział ekranów). Test graficzny do zrobienia przy okazji: makieta pola bitwy
+  z 14 oddziałami w stylu `test1` (pamięć, czytelność, dotyk).
 - Mapa świata: ustalenia o terenie 2.5D zapisane w `docs/FORMATS.md` (sekcja „Ważne na później”).
 - Otwarte w formatach (`FORMATS.md`): pole `?` palety, sekwencje bohaterów.
 - Pobrany kod z sieci (`ref/`) — nie uruchamiamy go (blokada auto mode); czytamy opis
@@ -87,8 +94,9 @@ Folder w repo LuaDS (H1), wykluczenia w `.gitignore`, plan i decyzje.
 - **H3 — Konwerter PC → LiteLua.** Profile: *mapa* (małe sprite'y, mało klatek) i *walka*
   (większe klatki, skala pod 256×192). Paleta, atlas klatek, meta `.lua` (animacje,
   kierunki, offsety, czasy).
-- **H4 — Przeglądarka animacji (kartridż).** Dwie jednostki w rogach górnego ekranu:
-  ładowanie, animacja, zwalnianie, pomiar pamięci.
+- **H4 — Makieta pola bitwy (kartridż).** 14 oddziałów w stylu `test1`, animacje,
+  dociąganie akcji, zaznaczanie celu (H5). (Wcześniej: zbliżenie dwóch jednostek — zrobione
+  w H2b i porzucone.)
 
 ### Tor B — walka (bez grafiki)
 - **C1 — Mechanika.** Manuale, Monster Manual, h4.heroes.net.pl: statystyki, wzór obrażeń,
