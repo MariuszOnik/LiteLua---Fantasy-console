@@ -2,8 +2,10 @@
 -- Bottom screen: the terrain; drag the stylus or use the d-pad to scroll.
 -- A: heights on/off, X: light on/off, B: shade strength, L/R: flatter/steeper
 -- hills, Y: isogrid (C) or one quad() per cell from Lua (to compare).
--- Objects (T.objects) are drawn over the terrain: all shadows (alpha), then the
--- pictures back to front.
+-- Objects (T.objects) are drawn over the terrain back to front, one picture per
+-- model (gfx/obj/<n>.png, shadow included). A model is loaded when it comes near
+-- the screen; past the budget the least recently seen one is dropped.
+-- SELECT: budget 96 KB / 20 KB (to watch models being dropped and loaded again).
 -- Top screen: the cost of drawing it. Data: HeroesDS/tools/make_m1.py.
 
 local T = dofile("data/terrain.lua")
@@ -15,8 +17,14 @@ local FRAMES, HEIGHTS, SLOPE = T.frames, T.heights, T.slope
 local FLAT = 25                 -- light level of flat ground (31 = white; tint only darkens)
 local STRENGTHS = { 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.6 }
 
-local img, grid, plain, objimg
-local OBJECTS = T.objects or {}
+local img, grid, plain
+local OBJECTS, MODELS = T.objects or {}, T.models or {}
+local BUDGETS = { 96 * 1024, 20 * 1024 }
+local budget = 1                -- index into BUDGETS
+local MARGIN = 64               -- pixels around the screen that count as near
+local cache = {}                -- model -> { img =, seen = frame }
+local cached, frame_no = 0, 0   -- bytes in the cache, frames drawn
+local loads, drops, load_us = 0, 0, 0
 local gray = {}                 -- light level 0..31 -> tint color
 local LIGHT = {}                -- corner -> light level, from SLOPE and the strength
 local strength = 6              -- index into STRENGTHS (0.4; B changes it)
@@ -53,7 +61,6 @@ end
 
 function _init()
   img = image("terrain", T.tex)
-  if #OBJECTS > 0 then objimg = image("objects") end
   for l = 0, 31 do
     gray[l] = (l * 255 // 31) * 0x10101
   end
@@ -88,6 +95,7 @@ function _update()
   if btnp("r") then set_scale(math.min(8, scale + 0.125)) end
   if btnp("y") then use_c = not use_c end
   if btnp("b") then set_strength(strength % #STRENGTHS + 1) end
+  if btnp("select") then budget = budget % #BUDGETS + 1 end
 end
 
 -- The same in Lua, one quad() per cell. Cells back to front: s = c + r is the
@@ -127,21 +135,54 @@ local function draw_lua()
   return n
 end
 
--- Each object at the top corner of its anchor cell, raised with the ground there
-local function draw_objects()
-  if not objimg then return end
-  local k = heights_on and scale or 0
-  alpha(0.4)
-  for _, o in ipairs(OBJECTS) do
-    local x = (o.c - o.r) * HW + o.dx
-    local y = (o.c + o.r) * HH - HH - HEIGHTS[o.r * W1 + o.c + 1] * k + o.dy
-    sspr(objimg, o.hx, o.hy, o.w, o.h, x, y)
+-- Video memory of a model's picture: sides padded to powers of two, 4 bits a pixel
+local function cost(k)
+  local m = MODELS[k]
+  local w, h = 8, 8
+  while w < m.w do w = w * 2 end
+  while h < m.h do h = h * 2 end
+  return w * h // 2
+end
+
+-- The picture of model k, loaded if needed. Room is made by dropping the models
+-- seen longest ago, but never one seen in this frame.
+local function picture(k)
+  local e = cache[k]
+  if not e then
+    local need, dropped = cost(k), false
+    while cached + need > BUDGETS[budget] do
+      local oldest
+      for j, c in pairs(cache) do
+        if not oldest or c.seen < cache[oldest].seen then oldest = j end
+      end
+      if not oldest or cache[oldest].seen == frame_no then break end
+      cache[oldest] = nil
+      cached = cached - cost(oldest)
+      drops, dropped = drops + 1, true
+    end
+    if dropped then collectgarbage() end   -- frees the dropped textures now
+    local t0 = micros()
+    e = { img = image("obj/" .. k) }
+    load_us = micros() - t0
+    cache[k], cached, loads = e, cached + need, loads + 1
   end
-  alpha()
+  e.seen = frame_no
+  return e.img
+end
+
+-- Each object at the top corner of its anchor cell, raised with the ground there;
+-- only the ones near the screen (camera camx, camy) are drawn and kept loaded
+local function draw_objects()
+  frame_no = frame_no + 1
+  local k = heights_on and scale or 0
   for _, o in ipairs(OBJECTS) do
+    local m = MODELS[o.m]
     local x = (o.c - o.r) * HW + o.dx
     local y = (o.c + o.r) * HH - HH - HEIGHTS[o.r * W1 + o.c + 1] * k + o.dy
-    sspr(objimg, o.sx, o.sy, o.w, o.h, x, y)
+    if x < camx + 256 + MARGIN and x + m.w > camx - MARGIN
+        and y < camy + 192 + MARGIN and y + m.h > camy - MARGIN then
+      spr(picture(o.m), x, y)
+    end
   end
 end
 
@@ -169,6 +210,11 @@ function _draw(screen)
     text(("heights: %s  x%.3f"):format(heights_on and "on" or "off", scale), 8, 64, 6)
     text(("light: %s  shade (B): %.2f"):format(light_on and "on" or "off", STRENGTHS[strength]), 8, 76, 6)
     text(("camera: %d, %d"):format(camx, camy), 8, 88, 6)
+    local n = 0
+    for _ in pairs(cache) do n = n + 1 end
+    text(("objects: %d models, %d/%d KB (SELECT)"):format(n, cached // 1024, BUDGETS[budget] // 1024), 8, 100, 6)
+    text(("loaded %d, dropped %d, last load %.1f ms"):format(loads, drops, load_us / 1000), 8, 112, 6)
+    text(("video memory: %d KB"):format(sys.stats().vram // 1024), 8, 124, 6)
     text("stylus/d-pad scroll, A heights", 8, 160, 5)
     text("X light, B shade, L/R hills, Y C/Lua", 8, 172, 5)
   end

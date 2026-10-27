@@ -9,16 +9,19 @@ with quad().  Equal squares are stored once; all of them make one 256-colour she
   carts/m1/gfx/terrain.png    the squares, FRAME x FRAME frames (index 0 stays transparent)
   carts/m1/data/terrain.lua   window size, frame per cell (-1 outside the map), corner
                               heights and slopes toward the light for (rows+1) x (cols+1),
-                              and the objects back to front (h4objects.py)
-  carts/m1/gfx/objects.png    the objects' pictures at half size and their shadows as black
-                              shapes (the cart draws those with alpha: a palette image has
-                              no soft transparency)
+                              and the objects back to front (h4objects.py) with the
+                              models they use
+  carts/m1/gfx/obj/<n>.png    one picture per model at half size in the creatures' style
+                              (STYLE in tools/styles.json, as make_c4.py): few colours (4 bpp),
+                              hard edges, the shadow a black checkerboard in the picture.
+                              The cart loads them when they come near the screen.
 
 Usage (from the repo root):
   python HeroesDS/tools/make_m1.py [--map M.h4c] [--heights H.h4c] [--window r,c,rows,cols]
 """
 import argparse
 import os
+import shutil
 import sys
 
 import numpy as np
@@ -28,9 +31,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import cartkit  # noqa: E402
 import h4map  # noqa: E402
 import h4mapview  # noqa: E402
+import h4atlas  # noqa: E402
 import h4objects  # noqa: E402
 
 CART = cartkit.cart_dir("m1")
+STYLE = "test2"      # the creatures' style (make_c4.py)
 TEX = 16             # texels per cell side
 FRAME = TEX + 2      # a frame is the square with its edge texels repeated around it, so a
                      # stretched quad never samples the next frame or the sheet's padding
@@ -69,48 +74,46 @@ def palette_image(rgba):
     return out
 
 
-def object_sheet(m, archive, r0, c0, rows, cols):
-    """The objects anchored in the window, back to front: (sheet, records). A record is
-    the anchor cell (window coordinates), picture and shadow rectangles in the sheet and
-    their offset from the top corner of the anchor cell, at half size."""
+def styled(pic, shade, style):
+    """Half-size picture in the style, its shadow a checkerboard under it: a 'P' image."""
+    pic = h4atlas.finish_frame(h4atlas.resize(pic, 0.5), style)
+    out = h4atlas.finish_shadow(h4atlas.resize(shade, 0.5), style)
+    out.alpha_composite(pic)
+    return h4atlas.to_palette(out, style.colors + 1, style.vivid)   # + black for the shadow
+
+
+def object_images(m, archive, r0, c0, rows, cols):
+    """The objects anchored in the window, back to front, and the models they use:
+    (records, models). A record: model number (1-based), anchor cell in the window and
+    the offset of the picture from the top corner of that cell."""
     arch = h4objects.h4r.Archive(archive)
     models = h4objects.Models(arch)
+    style = h4atlas.STYLES[STYLE]
     objs = [o for o in h4map.find_objects(m, h4objects.names(arch))
             if o.level == 0 and r0 <= o.row < r0 + rows and c0 <= o.col < c0 + cols]
 
     def front(o):
         cells = models.get(o.name).occupied or [(0, 0)]
         return max(o.row + dr + o.col + dc for dr, dc in cells), o.col - o.row
-    pieces, recs = [], []
+    folder = os.path.join(CART, "gfx", "obj")
+    shutil.rmtree(folder, ignore_errors=True)
+    os.makedirs(folder)
+    used, recs, index = [], [], {}
     for o in sorted(objs, key=front):
         p = models.parts(o.name)
         if p is None:
             continue
-        pic, shade, x, y = p
-        size = (max(1, pic.width // 2), max(1, pic.height // 2))
-        pic, shade = pic.resize(size, Image.LANCZOS), shade.resize(size, Image.LANCZOS)
-        black = np.zeros((size[1], size[0], 4), np.uint8)
-        black[..., 3] = np.where(np.asarray(shade)[..., 3] >= 48, 255, 0)
-        recs.append({"r": o.row - r0, "c": o.col - c0, "dx": x // 2, "dy": y // 2,
-                     "w": size[0], "h": size[1], "name": o.name})
-        pieces.append((pic, Image.fromarray(black, "RGBA")))
-    # shelves 256 wide: each picture, then its shadow
-    W, x, y, shelf = 256, 0, 0, 0
-    places = []
-    for pic, shade in pieces:
-        for im in (pic, shade):
-            if x + im.width > W:
-                x, y, shelf = 0, y + shelf, 0
-            places.append((x, y))
-            x += im.width
-            shelf = max(shelf, im.height)
-    sheet = Image.new("RGBA", (W, max(1, y + shelf)))
-    for i, (pic, shade) in enumerate(pieces):
-        sheet.alpha_composite(pic, places[2 * i])
-        sheet.alpha_composite(shade, places[2 * i + 1])
-        recs[i]["sx"], recs[i]["sy"] = places[2 * i]
-        recs[i]["hx"], recs[i]["hy"] = places[2 * i + 1]
-    return palette_image(sheet), recs
+        key = o.name.lower()
+        if key not in index:
+            pic, shade, x, y = p
+            img = styled(pic, shade, style)
+            index[key] = len(used) + 1
+            img.save(os.path.join(folder, f"{index[key]}.png"))
+            used.append({"name": o.name, "w": img.width, "h": img.height, "dx": x // 2, "dy": y // 2})
+        u = used[index[key] - 1]
+        recs.append({"m": index[key], "r": o.row - r0, "c": o.col - c0, "dx": u["dx"], "dy": u["dy"],
+                     "name": o.name})
+    return recs, used
 
 
 def main(argv):
@@ -163,8 +166,10 @@ def main(argv):
 
     heights = [lv.height(r, c) for r in range(r0, r0 + rows + 1) for c in range(c0, c0 + cols + 1)]
     slope = slopes(lv, (0.0, 1.0), rows, cols, r0, c0)   # light as in h4mapview
-    objects, recs = object_sheet(m, a.archive, r0, c0, rows, cols)
-    objects.save(os.path.join(CART, "gfx", "objects.png"))
+    recs, used = object_images(m, a.archive, r0, c0, rows, cols)
+    old = os.path.join(CART, "gfx", "objects.png")
+    if os.path.exists(old):
+        os.remove(old)
 
     def arr(xs):
         return "{" + ",".join(str(x) for x in xs) + "}"
@@ -172,14 +177,15 @@ def main(argv):
         f.write(f"-- made by HeroesDS/tools/make_m1.py from {os.path.basename(a.map)}\n")
         f.write(f"return {{\n  rows = {rows}, cols = {cols}, row0 = {r0}, col0 = {c0}, tex = {FRAME},\n")
         f.write(f"  frames = {arr(frames)},\n  heights = {arr(heights)},\n  slope = {arr(slope)},\n")
-        f.write("  objects = {   -- back to front; r, c: anchor cell; dx, dy: from its top corner\n")
+        f.write("  models = {    -- gfx/obj/<n>.png\n")
+        for u in used:
+            f.write("    {{ w = {w}, h = {h} }},  -- {name}\n".format(**u))
+        f.write("  },\n  objects = {   -- back to front; m: model; r, c: anchor cell; dx, dy: from its top corner\n")
         for o in recs:
-            f.write("    {{ r = {r}, c = {c}, dx = {dx}, dy = {dy}, w = {w}, h = {h}, sx = {sx}, "
-                    "sy = {sy}, hx = {hx}, hy = {hy} }},  -- {name}\n".format(**o))
-        f.write("  },\n}}\n".replace("}}", "}"))
+            f.write("    {{ m = {m}, r = {r}, c = {c}, dx = {dx}, dy = {dy} }},  -- {name}\n".format(**o))
+        f.write("  },\n}\n")
     print(f"  {rows}x{cols} cells, {n} different squares, sheet {out.width}x{out.height} "
-          f"({out.width * out.height // 1024} KB); {len(recs)} objects, sheet "
-          f"{objects.width}x{objects.height}")
+          f"({out.width * out.height // 1024} KB); {len(recs)} objects, {len(used)} models")
     cartkit.deploy(CART, a.sd)
 
 
