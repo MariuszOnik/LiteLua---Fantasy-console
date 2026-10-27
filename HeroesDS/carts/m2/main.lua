@@ -1,7 +1,9 @@
 -- HeroesDS M2: the political map of an invented land (data: HeroesDS/tools/make_m2.py).
 -- Bottom screen: the map; drag the stylus or use the d-pad to scroll, tap a province
 -- to select it. A: paper map / relief, X: give the selected province to the next
--- faction (to try the colours). Top screen: the selected province.
+-- faction (to try the colours). Top screen: the selected province or sea zone.
+-- Sea zones (provinces with sea = true, no owner) are where fleets sail: their
+-- neighbours are the next zones and the coastal provinces (ports).
 --
 -- The ground is an isogrid per view: its frames are light grain with the ink of the
 -- borders in them, all colour comes from the corners (paper: parchment mixed with the
@@ -148,7 +150,7 @@ function _update()
   if btn("up") then camy = camy - 3 end
   if btn("down") then camy = camy + 3 end
   if btnp("a") then relief = not relief end
-  if btnp("x") and selected then
+  if btnp("x") and selected and not M.provinces[selected + 1].sea then
     local pr = M.provinces[selected + 1]
     pr.owner = (pr.owner + 1) % #M.factions
     recolor(CELLS_OF[selected])
@@ -173,9 +175,10 @@ function _draw(screen)
         local x = (pr.c - pr.r) * HW
         local y = (pr.c + pr.r + 1) * HH
         if x > camx - 40 and x < camx + 296 and y > camy - 10 and y < camy + 200 then
-          rectfill(x - 1, y - 1, 3, 3, 0x302018)
           local w = textw(pr.name)
-          text(pr.name, x - w // 2, y + 3, i - 1 == selected and 0xffffff or 0x302018)
+          local col = i - 1 == selected and 0xffffff or pr.sea and 0x46648c or 0x302018
+          if not pr.sea then rectfill(x - 1, y - 1, 3, 3, 0x302018) end
+          text(pr.name, x - w // 2, y + 3, col)
         end
       end
     end
@@ -190,19 +193,34 @@ function _draw(screen)
     if selected then
       local pr = M.provinces[selected + 1]
       text(pr.name, 8, 60, 7)
-      text("owner: " .. M.factions[pr.owner + 1].name .. "  (X: change)", 8, 72, 6)
-      local names = {}
-      for _, j in ipairs(pr.neighbours) do names[#names + 1] = M.provinces[j + 1].name end
-      text("neighbours:", 8, 88, 6)
-      local line, y = "", 100
-      for _, nm in ipairs(names) do
-        if #line + #nm + 2 > 40 then
-          text(line, 8, y, 6)
-          line, y = "", y + 12
-        end
-        line = line == "" and nm or line .. ", " .. nm
+      if pr.sea then
+        text("sea zone (no owner)", 8, 72, 6)
+      else
+        text("owner: " .. M.factions[pr.owner + 1].name .. "  (X: change)", 8, 72, 6)
       end
-      if line ~= "" then text(line, 8, y, 6) end
+      local land, seas = {}, {}
+      for _, j in ipairs(pr.neighbours) do
+        local nb = M.provinces[j + 1]
+        table.insert(nb.sea and seas or land, nb.name)
+      end
+      -- a list of names wrapped at 40 characters; returns the next free line
+      local function list(title, names, y)
+        if #names == 0 then return y end
+        text(title, 8, y, 6)
+        local line = ""
+        y = y + 12
+        for _, nm in ipairs(names) do
+          if #line + #nm + 2 > 40 then
+            text(line, 8, y, 6)
+            line, y = "", y + 12
+          end
+          line = line == "" and nm or line .. ", " .. nm
+        end
+        if line ~= "" then text(line, 8, y, 6) end
+        return y + 14
+      end
+      local y = list(pr.sea and "ports:" or "neighbours:", land, 88)
+      list(pr.sea and "sea zones:" or "coast:", seas, y)
     else
       text("tap a province", 8, 60, 6)
     end

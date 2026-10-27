@@ -15,6 +15,9 @@ Steps (all on a rows x cols grid of cells; corners are (rows + 1) x (cols + 1)):
      capitals sit inside; provinces under MIN_CELLS join their biggest neighbour
   4. neighbours (cells touching across an edge), names from syllables, owners: the six
      H4 factions, each growing a compact realm from a seed province
+  5. sea zones: the sea is shared out the same way into SEA_ZONES bigger zones without
+     an owner (fleets, transports, trade); they are numbered after the land provinces,
+     and their neighbours are the next zones and the coastal provinces (ports)
 --png writes a preview: the political view (land tinted with the owner, borders) next to
 the natural one. --style picks how the land looks:
   relief  heights from the terrain, shaded slopes (default)
@@ -24,9 +27,10 @@ the natural one. --style picks how the land looks:
 
 --cart writes the cart carts/m2 (no game data in it):
   gfx/paper.png   16x16 frames of light grain (land: paper, sea: waves); frame
-                  base * 16 + edges, edges = 1 if the cell's -row side is a border
-                  (another province or the coast), 2 for its -col side: the ink line
-                  is part of the frame, so every border is drawn once, by one cell
+                  (base * GRAIN + variant) * 9 + top * 3 + left, where top / left is the
+                  line on the cell's -row / -col side: 0 none, 1 ink (a land border or
+                  the coast), 2 light blue (between sea zones). The line is part of the
+                  frame, so every border is drawn once, by one cell
   data/map.lua    size, corner heights 0..255, terrain per cell, province per cell
                   (-1 none), frame per cell, provinces (name, capital, owner,
                   neighbours), the factions' colours and the corner colours of both
@@ -45,6 +49,8 @@ from PIL import Image, ImageDraw
 LAND = 0.55            # share of the cells that are land
 RELAX = 4              # Lloyd steps for the provinces
 MIN_CELLS = 20         # smaller provinces join a neighbour
+SEA_ZONES = 12         # sea zones before merging small ones
+MIN_SEA_CELLS = 60
 SEA, BEACH, LOW, UP, MOUNT = range(5)
 TERRAIN = ["sea", "beach", "lowland", "upland", "mountain"]
 FACTIONS = [            # name, color (H4: Life, Order, Death, Chaos, Nature, Might)
@@ -105,10 +111,11 @@ def neighbours4(r, c, rows, cols):
             yield r + dr, c + dc
 
 
-def provinces(rng, terr, cell_h, count):
-    """Province number per cell (-1 = sea or no province) and the capitals."""
+def provinces(rng, terr, cell_h, count, sea=False):
+    """Province number per cell (-1 = not shared out) and the capitals: the land, or
+    with sea=True the sea (zones)."""
     rows, cols = terr.shape
-    land = [(r, c) for r in range(rows) for c in range(cols) if terr[r, c] != SEA]
+    land = [(r, c) for r in range(rows) for c in range(cols) if (terr[r, c] == SEA) == sea]
     # capitals: farthest-point sampling over the land, starting anywhere
     caps = [land[rng.integers(len(land))]]
     dist = np.full(len(land), 1e9)
@@ -117,10 +124,10 @@ def provinces(rng, terr, cell_h, count):
         dist = np.minimum(dist, ((pts - caps[-1]) ** 2).sum(1))
         caps.append(tuple(int(v) for v in pts[int(dist.argmax())]))
     for _ in range(RELAX):
-        prov = share(terr, cell_h, caps)
+        prov = share(terr, cell_h, caps, sea)
         caps = [middle(prov, i, caps[i]) for i in range(len(caps))]
-    prov = share(terr, cell_h, caps)
-    return merge_small(prov, caps)
+    prov = share(terr, cell_h, caps, sea)
+    return merge_small(prov, caps, MIN_SEA_CELLS if sea else MIN_CELLS)
 
 
 def middle(prov, i, old):
@@ -133,12 +140,12 @@ def middle(prov, i, old):
     return int(r), int(c)
 
 
-def merge_small(prov, caps):
-    """Provinces under MIN_CELLS join the neighbour they share most border with
+def merge_small(prov, caps, min_cells):
+    """Provinces under min_cells join the neighbour they share most border with
     (islets without one keep no province); the rest are renumbered from 0."""
     while True:
         sizes = np.bincount(prov[prov >= 0], minlength=len(caps))
-        small = [i for i in range(len(caps)) if 0 < sizes[i] < MIN_CELLS]
+        small = [i for i in range(len(caps)) if 0 < sizes[i] < min_cells]
         if not small:
             break
         i = min(small, key=lambda k: sizes[k])
@@ -158,8 +165,9 @@ def merge_small(prov, caps):
     return prov, caps
 
 
-def share(terr, cell_h, caps):
-    """Every land cell to the capital it reaches cheapest: a step costs 1 + climbing."""
+def share(terr, cell_h, caps, sea=False):
+    """Every land cell (sea cell) to the capital it reaches cheapest: a step costs
+    1 + climbing on land, 1 at sea."""
     rows, cols = terr.shape
     best = np.full(terr.shape, np.inf)
     prov = np.full(terr.shape, -1)
@@ -173,9 +181,9 @@ def share(terr, cell_h, caps):
         if cost > best[r, c]:
             continue
         for r2, c2 in neighbours4(r, c, rows, cols):
-            if terr[r2, c2] == SEA:
+            if (terr[r2, c2] == SEA) != sea:
                 continue
-            step = 1 + 12 * max(0.0, cell_h[r2, c2] - cell_h[r, c]) + 4 * (terr[r2, c2] == MOUNT)
+            step = 1 if sea else 1 + 12 * max(0.0, cell_h[r2, c2] - cell_h[r, c]) + 4 * (terr[r2, c2] == MOUNT)
             if cost + step < best[r2, c2]:
                 best[r2, c2] = cost + step
                 prov[r2, c2] = i
@@ -234,11 +242,17 @@ def generate(seed=1, size=72, count=45):
     h, cell_h = heights(rng, size, size)
     terr = terrain(cell_h)
     prov, caps = provinces(rng, terr, cell_h, count)
-    adj = adjacency(prov)
-    own = owners(rng, len(caps), adj, caps)
+    own = owners(rng, len(caps), adjacency(prov), caps)
     names = [name(rng) for _ in caps]
+    n = len(caps)
+    zones, centres = provinces(rng, terr, cell_h, SEA_ZONES, sea=True)
+    prov = np.where(zones >= 0, zones + n, prov)
+    caps = caps + centres
+    own = own + [-1] * len(centres)
+    names = names + [name(rng) + " Sea" for _ in centres]
+    adj = adjacency(prov)
     return dict(seed=seed, rows=size, cols=size, heights=h, cell_h=cell_h, terrain=terr,
-                province=prov, capitals=caps, neighbours=adj, owner=own, names=names)
+                province=prov, capitals=caps, neighbours=adj, owner=own, names=names, land=n)
 
 
 NATURE = {SEA: (40, 80, 150), BEACH: (205, 190, 130), LOW: (95, 140, 60), UP: (125, 120, 70),
@@ -276,7 +290,7 @@ def cell_color(m, r, c, political, style="relief"):
         if t == SEA:
             return PAPER_SEA
         col = PARCHMENT.copy()
-        if political and p >= 0:
+        if political and m["owner"][p] >= 0:
             col = col * 0.5 + np.array(FACTIONS[m["owner"][p]][1]) * 0.5
         if t == MOUNT:
             col *= 0.82
@@ -286,7 +300,7 @@ def cell_color(m, r, c, political, style="relief"):
     if style == "board":
         if t == SEA:
             col = np.array(NATURE[SEA], float)
-        elif political and p >= 0:
+        elif political and p >= 0 and m["owner"][p] >= 0:
             col = np.array(FACTIONS[m["owner"][p]][1], float) * 0.75 + 40
         else:
             col = np.array(NATURE[t], float)
@@ -297,7 +311,7 @@ def cell_color(m, r, c, political, style="relief"):
     if t == MOUNT and m["cell_h"][r, c] > 0.88 * m["cell_h"].max():
         col = np.array((235, 235, 240), float)
     p = m["province"][r, c]
-    if political and p >= 0:
+    if political and p >= 0 and m["owner"][p] >= 0:
         col = col * 0.55 + np.array(FACTIONS[m["owner"][p]][1]) * 0.45
     # light from the right (as the H4 editor): slope along the columns
     h = m["heights"]
@@ -335,14 +349,22 @@ def preview(m, path, cw=16, lift=24, style="relief"):
                 a = prov[r, c]
                 if style == "board":
                     continue        # the grooves are the borders
-                ink = (90, 60, 40) if style == "flat" else (30, 20, 15)
-                if c + 1 < cols and a != prov[r, c + 1] and a >= 0 <= prov[r, c + 1]:
-                    d.line([pt(r, c + 1), pt(r + 1, c + 1)], fill=ink, width=1)
-                if r + 1 < rows and a != prov[r + 1, c] and a >= 0 <= prov[r + 1, c]:
-                    d.line([pt(r + 1, c), pt(r + 1, c + 1)], fill=ink, width=1)
+                for r2, c2, line in ((r, c + 1, [pt(r, c + 1), pt(r + 1, c + 1)]),
+                                     (r + 1, c, [pt(r + 1, c), pt(r + 1, c + 1)])):
+                    if r2 >= rows or c2 >= cols:
+                        continue
+                    b = prov[r2, c2]
+                    if a == b or a < 0 or b < 0:
+                        continue
+                    at_sea = m["terrain"][r, c] == SEA and m["terrain"][r2, c2] == SEA
+                    ink = (120, 160, 200) if at_sea else (90, 60, 40) if style == "flat" else (30, 20, 15)
+                    d.line(line, fill=ink, width=1)
         if political:
             for i, (r, c) in enumerate(m["capitals"]):
                 x, y = pt(r, c)
+                if i >= m["land"]:
+                    d.text((x - 12, y - 6), m["names"][i], fill=(70, 100, 140))
+                    continue
                 d.rectangle([x - 2, y - 2, x + 2, y + 2], fill=(0, 0, 0))
                 d.text((x + 4, y - 6), m["names"][i], fill=(255, 255, 255))
         out.paste(img, (v * W, 0))
@@ -350,6 +372,7 @@ def preview(m, path, cw=16, lift=24, style="relief"):
 
 
 GRAIN = 4      # grain variants per base (land, sea)
+INKS = {1: (0.30, 0.22, 0.16), 2: (0.55, 0.72, 0.85)}   # border lines: ink, sea zones
 
 
 def paper_sheet(rng):
@@ -364,14 +387,15 @@ def paper_sheet(rng):
             else:
                 y = np.arange(tex)[:, None]
                 grain = 0.84 + 0.10 * g + 0.06 * np.sin((y + 6 * g) * 0.8)   # waves
-            for edges in range(4):
-                f = np.repeat(grain[:, :, None], 3, 2)
-                if edges & 1:
-                    f[0, :, :] = (0.30, 0.22, 0.16)    # ink along the -row side
-                if edges & 2:
-                    f[:, 0, :] = (0.30, 0.22, 0.16)    # ink along the -col side
-                frames.append(f)
-    per_row = 8
+            for top in range(3):
+                for left in range(3):
+                    f = np.repeat(grain[:, :, None], 3, 2)
+                    if top:
+                        f[0, :, :] = INKS[top]        # along the -row side
+                    if left:
+                        f[:, 0, :] = INKS[left]       # along the -col side
+                    frames.append(f)
+    per_row = 9
     rows = (len(frames) + per_row - 1) // per_row
     sheet = np.zeros((rows * tex, per_row * tex, 3))
     for i, f in enumerate(frames):
@@ -387,19 +411,21 @@ def cell_frames(m, rng):
     terr, prov = m["terrain"], m["province"]
     rows, cols = terr.shape
 
-    def region(r, c):
-        return prov[r, c] if terr[r, c] != SEA else -2
+    def line(r, c, r2, c2):
+        """0 none, 1 ink, 2 sea-zone line between cell (r, c) and (r2, c2)."""
+        a, b = prov[r, c], prov[r2, c2]
+        if a == b and (terr[r, c] == SEA) == (terr[r2, c2] == SEA):
+            return 0
+        if terr[r, c] == SEA and terr[r2, c2] == SEA:
+            return 2
+        return 1
     out = []
     for r in range(rows):
         for c in range(cols):
-            a = region(r, c)
-            edges = 0
-            if r > 0 and region(r - 1, c) != a and (a >= 0 or region(r - 1, c) >= 0):
-                edges |= 1
-            if c > 0 and region(r, c - 1) != a and (a >= 0 or region(r, c - 1) >= 0):
-                edges |= 2
+            top = line(r, c, r - 1, c) if r > 0 else 0
+            left = line(r, c, r, c - 1) if c > 0 else 0
             base = 1 if terr[r, c] == SEA else 0
-            out.append((base * GRAIN + int(rng.integers(GRAIN))) * 4 + edges)
+            out.append((base * GRAIN + int(rng.integers(GRAIN))) * 9 + top * 3 + left)
     return out
 
 
@@ -470,10 +496,11 @@ def write_cart(m, sd):
         f.write(f"  frames = {arr(cell_frames(m, rng))},\n")
         for view, relief in (("paper", False), ("relief", True)):
             f.write(f"  {view} = {arr(cart_corner_colors(cart_cell_colors(m, hts, relief)))},\n")
-        f.write("  provinces = {   -- 0-based numbers in province; r, c: capital\n")
+        f.write("  provinces = {   -- 0-based numbers in province; r, c: capital (sea zone: centre); owner -1 = none\n")
         for i, (r, c) in enumerate(m["capitals"]):
             nb = ", ".join(str(j) for j in sorted(m["neighbours"].get(i, ())))
-            f.write(f'    {{ name = "{m["names"][i]}", r = {r}, c = {c}, owner = {m["owner"][i]}, '
+            sea = ", sea = true" if i >= m["land"] else ""
+            f.write(f'    {{ name = "{m["names"][i]}", r = {r}, c = {c}, owner = {m["owner"][i]}{sea}, '
                     f'neighbours = {{ {nb} }} }},\n')
         f.write("  },\n}\n")
     print(f"  cart: {cart} (paper.png {sheet.width}x{sheet.height})")
@@ -493,9 +520,12 @@ def main(argv):
     a = p.parse_args(argv[1:])
     m = generate(a.seed, a.size, a.provinces)
     sizes = np.bincount(m["province"][m["province"] >= 0])
-    print(f"seed {a.seed}: {len(m['capitals'])} provinces, cells per province {sizes.min()}..{sizes.max()}, "
-          f"neighbours {min(len(v) for v in m['neighbours'].values())}.."
-          f"{max(len(v) for v in m['neighbours'].values())}")
+    n = m["land"]
+    land_nb = [len([j for j in m["neighbours"].get(i, ()) if j < n]) for i in range(n)]
+    print(f"seed {a.seed}: {n} provinces, cells per province {sizes[:n].min()}..{sizes[:n].max()}, "
+          f"land neighbours {min(land_nb)}..{max(land_nb)}; {len(sizes) - n} sea zones, cells "
+          f"{sizes[n:].min()}..{sizes[n:].max()}, coastal provinces "
+          f"{sum(1 for i in range(n) if any(j >= n for j in m['neighbours'].get(i, ())))}")
     for f, (fname, _) in enumerate(FACTIONS):
         print(f"  {fname}: {sum(1 for o in m['owner'] if o == f)} provinces")
     if a.png:
