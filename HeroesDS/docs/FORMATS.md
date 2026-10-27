@@ -146,8 +146,23 @@ Ustalenia z 2026-10-26 — do trybu mapy kontynentu i ewentualnie terenu walki.
   (powierzchnia/podziemia — to nie wysokość). Pole: u8 rodzaj (19 terenów), u8 wariant,
   **5 nieznanych bajtów**, nakładki przejść terenu (maski `transition.Transitions`),
   drogi. Opis: `ref/homm4-mac/tools/h4map.py` (niepełny).
-- **Hipoteza**: wysokość siedzi w tych 5 nieznanych bajtach pola. **Test**: w edytorze
-  zrobić dwie małe mapy — płaską i z jednym pagórkiem — i porównać pliki.
+- **Wysokość — sprawdzone 2026-10-27** (mapy testowe `plaska mapa.h4c` / `mapa ze
+  wzniesieniem.h4c`, 76×76, bez obiektów; po rozpakowaniu oba po 35 918 B, różnią się
+  tylko w 309 bajtach): wysokość **nie** siedzi w 5 nieznanych bajtach pola. Zaraz po
+  polach terenu jest osobna **siatka wysokości: u8 na narożnik pola**, narożniki rombu
+  mapy w kolejności wierszami (r, potem c), 3117 bajtów dla 76 (= liczba różnych
+  narożników pól rombu; wiersze 3, 5, 7, … 77 … 7, 5, 3). Płaska mapa = same zera;
+  pagórek z edytora to gładki kopiec, szczyt 218, stoki 6–16 na narożnik. Rzut: ekran
+  x = (c − r)·32, y = (c + r)·16 − wysokość·K. Położenie potwierdzone zrzutem z edytora
+  (lewy górny róg mapy, podniesiona górna krawędź). Skala z sylwetki krawędzi na zrzucie:
+  **K ≈ 1 piksel na jednostkę** (przybliżenie ±20%, zrzut zapewne ze skalowaniem
+  Windows 125%). Zakres: pełne 0–255; pędzel podnoszony dalej daje płaskowyż 255
+  (mapa `max poziom.h4c`). **Dwa poziomy** (`podziemia.h4c`, 152×152): najpierw pola
+  poziomu 0, potem pola poziomu 1 (tam rodzaj 8 = podziemia), dopiero potem siatka
+  wysokości poziomu 0 i siatka poziomu 1 (po 12 009 bajtów dla 152; liczba narożników
+  rombu, tak jak 3117 dla 76) — każdy poziom ma własną wysokość. Uwaga:
+  `h4map.find_terrain` na pustej mapie łapie złe przesunięcie (powtarzalny wzór) — w tej
+  mapie pola zaczynają się od bajtu 197, każde 11 B (`01 00 | 5×00 | 08 00 | 00 | 00`).
 - **Na DS**: LiteLua rysuje przez sprzętowe 3D (D5, gl2d), więc teren z wysokością da się
   narysować jako siatkę z teksturą i jasnością w wierzchołkach (cieniowanie prawie za
   darmo). Alternatywa: prerender mapy na PC do płaskich obrazków (dużo pamięci).
