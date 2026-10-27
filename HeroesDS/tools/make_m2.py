@@ -522,10 +522,10 @@ def write_cart(m, sd):
 
 def main(argv):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    p.add_argument("--seed", type=int, default=1)
+    p.add_argument("--seed", type=int, default=77)
     p.add_argument("--size", type=int, default=72)
     p.add_argument("--provinces", type=int, default=45)
-    p.add_argument("--coast", type=float, default=0.0, help="0..1: how broken the shore is")
+    p.add_argument("--coast", type=float, default=1.0, help="0..1: how broken the shore is")
     p.add_argument("--png")
     p.add_argument("--style", default="relief", choices=["relief", "flat", "board"])
     p.add_argument("--cart", action="store_true", help="write carts/m2")
