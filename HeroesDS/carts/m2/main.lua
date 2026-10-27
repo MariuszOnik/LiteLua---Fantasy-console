@@ -1,7 +1,10 @@
--- HeroesDS M2: the political map of an invented land (data: HeroesDS/tools/make_m2.py).
--- Bottom screen: the map; drag the stylus or use the d-pad to scroll, tap a province
--- to select it. A: paper map / relief, X: give the selected province to the next
--- faction (to try the colours). Top screen: the selected province or sea zone.
+-- HeroesDS M2: the political map of an invented land (data: HeroesDS/tools/make_m2.py)
+-- with armies and ships (rules: src/war.lua).
+-- Bottom screen: the map; drag the stylus or use the d-pad to scroll. Tap one of your
+-- armies or war fleets, then a marked place: an army walks to a neighbouring province
+-- or boards your fleet next to its port; a fleet sails up to two sea zones or lands
+-- the army it carries. Tap a province or sea zone to see it. Y: end the turn (trade
+-- ships sail on), A: paper map / relief. Top screen: the turn, the selection, news.
 -- Sea zones (provinces with sea = true, no owner) are where fleets sail: their
 -- neighbours are the next zones and the coastal provinces (ports).
 --
@@ -101,6 +104,12 @@ for k = 0, ROWS * COLS - 1 do
   end
 end
 
+local war = require("war")
+local st                        -- the game (src/war.lua)
+local unit                      -- the selected army or fleet
+local targets = {}              -- place -> "move" | "board" | "sail" | "land"
+local MARK = { move = 0xffffff, board = 0x5080ff, sail = 0x5080ff, land = 0xffd040 }
+
 function _init()
   local img = image("paper", M.tex)
   local opts = { w = HW * 2, h = HH * 2, frames = M.frames, heights = M.heights, colors = M.paper }
@@ -109,9 +118,24 @@ function _init()
   relief_grid = isogrid(img, COLS, ROWS, opts)
   M.paper, M.relief, M.heights, M.frames = nil, nil, nil, nil   -- the grids keep them
   collectgarbage()
-  -- the middle of the map in the middle of the screen
-  camx = -128
-  camy = (ROWS + COLS) // 2 * HH - 96
+  -- the player leads the faction with the most provinces
+  local count = {}
+  for _, pr in ipairs(M.provinces) do
+    if not pr.sea then count[pr.owner] = (count[pr.owner] or 0) + 1 end
+  end
+  local player = 0
+  for f, n in pairs(count) do
+    if n > (count[player] or 0) then player = f end
+  end
+  st = war.new(M, player)
+  -- start at the player's first army
+  local a
+  for _, x in ipairs(st.armies) do
+    if x.owner == player then a = x break end
+  end
+  local pr = M.provinces[(a and a.at or 0) + 1]
+  camx = (pr.c - pr.r) * HW - 128
+  camy = (pr.c + pr.r) * HH - 96
 end
 
 -- The province under a point of the bottom screen (heights ignored)
@@ -130,6 +154,53 @@ local function select(p)
   if p then recolor(CELLS_OF[p]) end
 end
 
+-- World position of a province's capital (a sea zone's centre)
+local function place_xy(p)
+  local pr = M.provinces[p + 1]
+  return (pr.c - pr.r) * HW, (pr.c + pr.r + 1) * HH
+end
+
+-- Every army on land and every fleet with where its token is: { unit, x, y }
+local function tokens()
+  local out, count = {}, {}
+  for _, a in ipairs(st.armies) do
+    if not a.fleet then
+      local x, y = place_xy(a.at)
+      local k = count[a.at] or 0
+      count[a.at] = k + 1
+      out[#out + 1] = { a, x - 3 + k * 9, y - 6 }
+    end
+  end
+  for _, f in ipairs(st.fleets) do
+    local x, y = place_xy(f.at)
+    local k = count[f.at] or 0
+    count[f.at] = k + 1
+    out[#out + 1] = { f, x - 6 + k * 13, y - 4 }
+  end
+  return out
+end
+
+-- A tap that did not drag: an order for the selected unit, a unit, or a place
+local function tap(sx, sy)
+  local p = province_at(sx, sy)
+  local wx, wy = sx + camx, sy + camy
+  for _, t in ipairs(tokens()) do
+    if math.abs(wx - t[2]) <= 6 and wy >= t[3] - 10 and wy <= t[3] + 4 then
+      unit = t[1]
+      targets = war.targets(st, unit)
+      return
+    end
+  end
+  if unit and p and targets[p] then
+    local _, result = war.act(st, unit, p)
+    if result == "taken" then recolor(CELLS_OF[p]) end
+    targets = war.targets(st, unit)
+    return
+  end
+  unit, targets = nil, {}
+  select(p)
+end
+
 function _update()
   local tx, ty = touch()
   if tx then
@@ -142,7 +213,7 @@ function _update()
     end
     drag_x, drag_y = tx, ty
   elseif drag_x then
-    if not drag_moved then select(province_at(drag_x, drag_y)) end
+    if not drag_moved then tap(drag_x, drag_y) end
     drag_x = nil
   end
   if btn("left") then camx = camx - 3 end
@@ -150,14 +221,31 @@ function _update()
   if btn("up") then camy = camy - 3 end
   if btn("down") then camy = camy + 3 end
   if btnp("a") then relief = not relief end
-  if btnp("x") and selected and not M.provinces[selected + 1].sea then
-    local pr = M.provinces[selected + 1]
-    pr.owner = (pr.owner + 1) % #M.factions
-    recolor(CELLS_OF[selected])
+  if btnp("y") then
+    war.end_turn(st)
+    targets = unit and war.targets(st, unit) or {}
   end
 end
 
 local draw_us = 0
+
+local function draw_army(a, x, y)
+  local col = M.factions[a.owner + 1].color
+  line(x, y - 9, x, y + 2, 0x302018)                  -- the pole
+  rectfill(x + 1, y - 9, 7, 5, col)                   -- the banner
+  rect(x + 1, y - 9, 7, 5, 0x302018)
+  if a == unit then rect(x - 2, y - 11, 12, 15, 0xffffff) end
+end
+
+local function draw_fleet(f, x, y)
+  local col = f.trade and 0xf0f0f0 or M.factions[f.owner + 1].color
+  rectfill(x - 5, y, 11, 3, f.trade and 0x8a6a40 or 0x503020)       -- the hull
+  trifill(x, y - 8, x, y - 1, x + 5, y - 1, col)                    -- the sail
+  line(x, y - 9, x, y, 0x302018)
+  if f.trade then rectfill(x - 4, y - 4, 3, 3, M.factions[f.owner + 1].color) end
+  if f.cargo then rectfill(x - 4, y - 7, 3, 3, M.factions[f.owner + 1].color) end
+  if f == unit then rect(x - 7, y - 11, 15, 16, 0xffffff) end
+end
 
 function _draw(screen)
   if screen == BOTTOM then
@@ -182,48 +270,56 @@ function _draw(screen)
         end
       end
     end
+    for p, kind in pairs(targets) do
+      local x, y = place_xy(p)
+      circ(x, y, 6, MARK[kind])
+    end
+    for _, t in ipairs(tokens()) do
+      if t[1].size then draw_army(t[1], t[2], t[3]) else draw_fleet(t[1], t[2], t[3]) end
+    end
     camera()
     draw_us = micros() - t0
   else
     cls(0x181410)
-    text("HeroesDS M2: political map", 8, 8, 7)
-    text(("view (A): %s"):format(relief and "relief" or "paper map"), 8, 24, 6)
-    text(("draw %.1f ms, recolour %.0f ms"):format(draw_us / 1000, recolor_ms), 8, 36, 6)
-    text(("Lua memory %d KB"):format(collectgarbage("count") // 1), 8, 48, 6)
-    if selected then
-      local pr = M.provinces[selected + 1]
-      text(pr.name, 8, 60, 7)
-      if pr.sea then
-        text("sea zone (no owner)", 8, 72, 6)
+    local me = M.factions[st.player + 1]
+    text(("Turn %d - you lead %s"):format(st.turn, me.name), 8, 8, 7)
+    rectfill(230, 6, 16, 10, me.color)
+    text(("view (A): %s   Y: end turn"):format(relief and "relief" or "paper map"), 8, 22, 6)
+    local y = 40
+    if unit then
+      local f = M.factions[unit.owner + 1].name
+      local at = M.provinces[unit.at + 1].name
+      if unit.size then
+        text(("%s army of %d at %s"):format(f, unit.size, at), 8, y, 7)
+      elseif unit.trade then
+        text(("%s trade ship at %s"):format(f, at), 8, y, 7)
+        text(("route %s - %s"):format(M.provinces[unit.trade.from + 1].name,
+          M.provinces[unit.trade.to + 1].name), 8, y + 12, 6)
       else
-        text("owner: " .. M.factions[pr.owner + 1].name .. "  (X: change)", 8, 72, 6)
+        text(("%s fleet at %s%s"):format(f, at, unit.cargo and (" with " .. unit.cargo.size) or ""), 8, y, 7)
       end
+      local n = 0
+      for _ in pairs(targets) do n = n + 1 end
+      if unit.owner == st.player and not unit.trade then
+        text(n > 0 and "tap a marked place" or "no more moves this turn", 8, y + 24, 6)
+      end
+    elseif selected then
+      local pr = M.provinces[selected + 1]
+      text(pr.name, 8, y, 7)
+      text(pr.sea and "sea zone (no owner)" or ("owner: " .. M.factions[pr.owner + 1].name), 8, y + 12, 6)
       local land, seas = {}, {}
       for _, j in ipairs(pr.neighbours) do
         local nb = M.provinces[j + 1]
         table.insert(nb.sea and seas or land, nb.name)
       end
-      -- a list of names wrapped at 40 characters; returns the next free line
-      local function list(title, names, y)
-        if #names == 0 then return y end
-        text(title, 8, y, 6)
-        local line = ""
-        y = y + 12
-        for _, nm in ipairs(names) do
-          if #line + #nm + 2 > 40 then
-            text(line, 8, y, 6)
-            line, y = "", y + 12
-          end
-          line = line == "" and nm or line .. ", " .. nm
-        end
-        if line ~= "" then text(line, 8, y, 6) end
-        return y + 14
+      text((pr.sea and "ports: " or "next: ") .. table.concat(land, ", "):sub(1, 34), 8, y + 24, 6)
+      if #seas > 0 then
+        text((pr.sea and "seas: " or "coast: ") .. table.concat(seas, ", "):sub(1, 34), 8, y + 36, 6)
       end
-      local y = list(pr.sea and "ports:" or "neighbours:", land, 88)
-      list(pr.sea and "sea zones:" or "coast:", seas, y)
     else
-      text("tap a province", 8, 60, 6)
+      text("tap an army or a fleet", 8, y, 6)
     end
-    text("stylus/d-pad scroll, tap to select", 8, 172, 5)
+    for i, msg in ipairs(st.log) do text(msg, 8, 110 + i * 12, i == 1 and 7 or 5) end
+    text(("draw %.1f ms"):format(draw_us / 1000), 8, 180, 5)
   end
 end

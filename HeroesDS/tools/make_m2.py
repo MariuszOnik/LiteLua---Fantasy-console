@@ -218,8 +218,11 @@ def adjacency(prov):
     return adj
 
 
-def owners(rng, n, adj, caps):
-    """The six factions grow realms from far-apart provinces, one province at a time."""
+def owners(rng, n, adj, caps, by_sea=None):
+    """The six factions grow realms from far-apart provinces, one province at a time.
+    A province the realms cannot reach by land (an island) goes to the owner of the
+    nearest capital across one of its sea zones (by_sea: province -> provinces sharing a
+    sea zone with it); only one without any gets a random owner."""
     owner = [-1] * n
     seeds = [int(rng.integers(n))]
     while len(seeds) < len(FACTIONS):
@@ -240,6 +243,18 @@ def owners(rng, n, adj, caps):
                 owner[b] = f
                 fronts[f].append(b)
                 changed = True
+    left = [i for i in range(n) if owner[i] < 0]
+    while left and by_sea:
+        done = False
+        for i in left:
+            near = [j for j in by_sea.get(i, ()) if owner[j] >= 0]
+            if near:
+                j = min(near, key=lambda j: (caps[i][0] - caps[j][0]) ** 2 + (caps[i][1] - caps[j][1]) ** 2)
+                owner[i] = owner[j]
+                done = True
+        left = [i for i in range(n) if owner[i] < 0]
+        if not done:
+            break
     return [o if o >= 0 else int(rng.integers(len(FACTIONS))) for o in owner]
 
 
@@ -254,15 +269,18 @@ def generate(seed=1, size=72, count=45, coast=0.0):
     h, cell_h = heights(rng, size, size, coast)
     terr = terrain(cell_h)
     prov, caps = provinces(rng, terr, cell_h, count)
-    own = owners(rng, len(caps), adjacency(prov), caps)
+    land_adj = adjacency(prov)
     names = [name(rng) for _ in caps]
     n = len(caps)
     zones, centres = provinces(rng, terr, cell_h, SEA_ZONES, sea=True)
     prov = np.where(zones >= 0, zones + n, prov)
+    adj = adjacency(prov)
+    by_sea = {i: {j for z in adj.get(i, ()) if z >= n for j in adj.get(z, ()) if j < n and j != i}
+              for i in range(n)}
+    own = owners(rng, n, land_adj, caps, by_sea)
     caps = caps + centres
     own = own + [-1] * len(centres)
     names = names + [name(rng) + " Sea" for _ in centres]
-    adj = adjacency(prov)
     return dict(seed=seed, coast=coast, rows=size, cols=size, heights=h, cell_h=cell_h, terrain=terr,
                 province=prov, capitals=caps, neighbours=adj, owner=own, names=names, land=n)
 
