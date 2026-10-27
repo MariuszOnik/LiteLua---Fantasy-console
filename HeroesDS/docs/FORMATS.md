@@ -167,12 +167,14 @@ Ustalenia z 2026-10-26 — do trybu mapy kontynentu i ewentualnie terenu walki.
   `tools/h4map.py`, podgląd `tools/h4mapview.py`, test `tests/test_h4map.py`). 5 bajtów
   pola to zawsze zera. Nakładka = inny teren rysowany przez maskę nr 0–92; kod maski to
   cztery cyfry 0–4 = jak daleko kształt sięga ku rogom E, S, W, N pola (rogi rombu na
-  ekranie). Ostatni bajt nakładki (0–19) to nie kolejność — wygląda na losowy wybór
-  wariantu (zestaw 1/2/3, zgadywane). Edytor zapisuje przejście **po obu stronach**
-  granicy, obie maski najmocniejsze na wspólnej krawędzi; podgląd zgodny z edytorem:
-  ląd–ląd: poszarpane ostre `land 1–3`; ląd na polu wody (i bagna): ostre brzegowe
-  `water 1–2`; woda na polu lądu: miękka alfa `land_to_water 1–3` (4 bity, gradient).
-  `water_to_land` i `river` jeszcze nieużyte. Krawędziowe piksele kolumn masek i
+  ekranie). Ostatni bajt nakładki to **kolejność rysowania** (0–19; drogi 10–14, więc
+  teren rysowany po drodze nadgryza jej brzeg). Zestaw masek wg `MapScene.swift`
+  z homm4-mac: ląd na lądzie `land 1–3`, woda na wodzie `water 1–2`, **woda na polu lądu
+  `water_to_land 1–3`, ląd na polu wody `land_to_water 1–3`** (miękka alfa 4 bity);
+  wariant 1–3 z położenia: `(r·3 + c·5) mod 3 + 1`. Edytor zapisuje przejście po obu
+  stronach granicy — tylko to przypisanie daje gradienty, które się spotykają
+  (odwrotne = ostre linie wzdłuż krawędzi pól, sprawdzone). Bagno liczę jak wodę
+  (miękki brzeg jak w edytorze — ustalone z obrazu, nie z kodu gry). Krawędziowe piksele kolumn masek i
   kafelków trzeba rozciągnąć na zewnątrz, inaczej na krawędziach pól wychodzą kropkowane
   linie. Światło do cieniowania stoków: z kierunku (wiersz +1, kolumna −1) wg zrzutu.
 - **Na DS**: LiteLua rysuje przez sprzętowe 3D (D5, gl2d), więc teren z wysokością da się

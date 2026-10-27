@@ -133,38 +133,45 @@ class Assets:
         return self.tilesets[name]
 
 
-WATER = {0, 3}
+WATER = {0, 3, 9}   # water, swamp, water river: swamp too, its soft edges match the editor
+SHORE_SWAP = False  # the other pairing gives hard lines along cell edges (checked)
 
 
-def overlay_set(base, over, pick):
-    """Mask set for an overlay of terrain `over` on a cell of terrain `base`.
-
-    Where water meets land both cells carry an overlay, each strongest at their shared
-    edge, so drawing both the same way swaps the terrains along that edge (hard lines).
-    What matches the editor: land over a water cell uses the hard shoreline masks
-    ("water"), water over a land cell the soft "land_to_water" alpha.  Between land types
-    the ragged "land" masks.  `pick` (the overlay's last byte, 0..19) choosing set
-    1/2/3 is a guess."""
-    n = pick % 3 + 1
-    if (base in WATER) != (over in WATER):
-        return f"water {pick % 2 + 1}" if base in WATER else f"land_to_water {n}"
-    return f"land {n}"
+def overlay_set(base, over, r, c):
+    """Mask set for an overlay of terrain `over` on cell (r, c) of terrain `base`, after
+    MapScene.swift of homm4-mac: water on water "water", land on land "land", water on land
+    "water_to_land", land on water "land_to_water"; the variant 1..3 by position.  Both
+    cells along a shore carry an overlay; only this pairing makes their gradients meet."""
+    n = (r * 3 + c * 5) % 3 + 1
+    if (base in WATER) == (over in WATER):
+        return f"water {min(n, 2)}" if over in WATER else f"land {n}"
+    if (over in WATER) != SHORE_SWAP:
+        return f"water_to_land {n}"
+    return f"land_to_water {n}"
 
 
-def compose(assets, cell, ti):
-    """The cell's flat 32x64 RGBA image: terrain, overlays, roads."""
+def compose(assets, cell, r, c):
+    """The cell's flat 32x64 RGBA image: terrain, then overlays and roads by their order
+    byte (roads sit at 10..14, so terrain drawn after a road nibbles its edges)."""
+    ti = tile_index(r, c)
     img = assets.tiles(terrain_file(cell.type, cell.variant))[ti].copy()
-    for t, v, mask, pick in cell.overlays:
-        name = terrain_file(t, v)
-        if name:
-            a = assets.masks[overlay_set(cell.type, t, pick)][mask][1][..., None]
-            tile = assets.tiles(name)[ti]
-            img[..., :3] = img[..., :3] * (1 - a * tile[..., 3:]) + tile[..., :3] * a * tile[..., 3:]
-    for kind, mask, _ in cell.roads:
-        if kind in ROAD_FILE and mask < 93:
-            a = assets.masks["road 1"][mask][1][..., None]
-            tile = assets.tiles(ROAD_FILE[kind])[ti]
-            img[..., :3] = img[..., :3] * (1 - a * tile[..., 3:]) + tile[..., :3] * a * tile[..., 3:]
+    items = [(o[3], "terrain", o) for o in cell.overlays] + [(rd[2], "road", rd) for rd in cell.roads]
+    for _, kind, item in sorted(items, key=lambda i: i[0]):
+        if kind == "terrain":
+            t, v, mask, _ = item
+            name = terrain_file(t, v)
+            if not name:
+                continue
+            a = assets.masks[overlay_set(cell.type, t, r, c)][mask][1]
+        else:
+            road, mask, _ = item
+            name = ROAD_FILE.get(road)
+            if not name or mask >= 93:
+                continue
+            a = assets.masks["road 1"][mask][1]
+        tile = assets.tiles(name)[ti]
+        a = a[..., None] * tile[..., 3:]
+        img[..., :3] = img[..., :3] * (1 - a) + tile[..., :3] * a
     return img
 
 
@@ -225,7 +232,7 @@ def render(assets, m, level=0, k=1.0, light=(1.0, -1.0)):
     # tile corners: top, right, bottom, left (tile x, y)
     T, R, B, L = (32, 0), (64, 16), (32, 32), (0, 16)
     for r, c in sorted(lv.cells, key=lambda p: (p[0] + p[1], p[1] - p[0])):
-        img = compose(assets, lv.cells[(r, c)], tile_index(r, c))
+        img = compose(assets, lv.cells[(r, c)], r, c)
         x, y = screen(n, r, c, pad)
         corner = {"T": (r, c), "R": (r, c + 1), "B": (r + 1, c + 1), "L": (r + 1, c)}
         sp = {"T": (x, y - 16), "R": (x + 32, y), "B": (x, y + 16), "L": (x - 32, y)}
