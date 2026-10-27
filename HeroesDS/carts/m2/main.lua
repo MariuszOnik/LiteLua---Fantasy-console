@@ -70,6 +70,8 @@ local function cache_cell(k)
 end
 for k = 0, ROWS * COLS - 1 do cache_cell(k) end
 
+local SEL_KEEP, SEL_ADD = 0.5, 125  -- the selected province: half its colour + light
+
 -- A corner takes the mean colour of the cells around it (the selected province lighter)
 local function corner_color(r, c)
   local sr, sg, sb, n = 0, 0, 0, 0
@@ -81,7 +83,7 @@ local function corner_color(r, c)
           local i = rr * COLS + cc + 1
           local r1, g1, b1 = CELL_R[i], CELL_G[i], CELL_B[i]
           if sel and province[i] == sel then
-            r1, g1, b1 = r1 * 0.8 + 60, g1 * 0.8 + 60, b1 * 0.8 + 60
+            r1, g1, b1 = r1 * SEL_KEEP + SEL_ADD, g1 * SEL_KEEP + SEL_ADD, b1 * SEL_KEEP + SEL_ADD
           end
           sr, sg, sb, n = sr + r1, sg + g1, sb + b1, n + 1
         end

@@ -459,7 +459,8 @@ def preview(m, path, cw=16, lift=24, style="relief"):
 
 
 GRAIN = 4      # grain variants per base (land, sea)
-INKS = {1: (0.30, 0.22, 0.16), 2: (0.55, 0.72, 0.85)}   # border lines: ink, sea zones
+INKS = {1: (0.30, 0.22, 0.16), 2: (0.36, 0.50, 0.68)}   # border lines: ink, sea zones
+WIDTH = {1: 1, 2: 2}   # texels: sea-zone lines are wider (they are lighter than ink)
 
 
 def paper_sheet(rng):
@@ -478,9 +479,9 @@ def paper_sheet(rng):
                 for left in range(3):
                     f = np.repeat(grain[:, :, None], 3, 2)
                     if top:
-                        f[0, :, :] = INKS[top]        # along the -row side
+                        f[:WIDTH[top], :, :] = INKS[top]        # along the -row side
                     if left:
-                        f[:, 0, :] = INKS[left]       # along the -col side
+                        f[:, :WIDTH[left], :] = INKS[left]      # along the -col side
                     frames.append(f)
     per_row = 9
     rows = (len(frames) + per_row - 1) // per_row
