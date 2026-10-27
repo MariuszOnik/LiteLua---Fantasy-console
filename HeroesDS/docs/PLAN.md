@@ -32,6 +32,8 @@ i statki handlowe (`src/war.lua`): ruch po prowincjach, zajmowanie, „bitwa” 
 liczebnością, Y = koniec tury, przeciwnicy stoją. Sprawdzone w melonDS, wysłane na DSi.
 Dalej (do ustalenia z użytkownikiem): bitwa → kartridż walki H4, ruch przeciwników,
 widok militarny, powiększenie prowincji (budowle, kopalnie), handel (dochód).
+Ściąga z reguł i AI Imperial Glory (do wglądu, wypakowane lokalnie w `ref/ImperialGlory/`):
+`docs/IMPERIAL_GLORY.md` — na końcu propozycje dla AI przeciwników i bitwy automatycznej.
 
 **Walka (stan z 2026-10-26):**
 
