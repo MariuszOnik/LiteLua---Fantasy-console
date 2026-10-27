@@ -7,7 +7,21 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   w przeciwległych narożnikach — **zmienione decyzją H5**: walka na polu bitwy z małymi
   sprite'ami, bez zbliżenia.
 
-## Gdzie skończyliśmy (notka dla nowego czatu, 2026-10-26)
+## Gdzie skończyliśmy (notka dla nowego czatu, 2026-10-27)
+
+**Dziś: mapa przygody (tor M).** Format `.h4c` rozpracowany (teren, przejścia, drogi,
+wysokość, poziomy, obiekty z obszarem i wejściami) — `docs/FORMATS.md`, narzędzia
+`tools/h4map.py`, `h4mapview.py` (podgląd PNG), `h4objects.py` (obiekty, przechodniość),
+testy `tests/test_h4map.py`. W LiteLua **D58**: `quad` i `isogrid` (teren z wysokością w C,
+~260 pól w 2,4 ms; w Lua 42 ms). Kartridż **`carts/m1`** (`tools/make_m1.py`): cała mapa
+`obiekty.h4c` (teren z cieniowaniem, światło dopasowane do edytora; obiekty w stylu
+stworzeń `test2`, 4 bpp, cień w obrazku, wczytywane przy ekranie z budżetem LRU) —
+**sprawdzone na DSi: płynnie, wygląd ok**. W melonDS wczytanie zamku ~62 ms (drzewo ~13 ms);
+na DSi użytkownik nie widział przycięcia. Mapy testowe użytkownika (`*.h4c` w HeroesDS)
+są poza repo. Dalej: sekcja „Później” niżej (bohaterowie na mapie, animacje obiektów,
+koszty ruchu, wersje zapasowe modeli, malowanie terenu na DS).
+
+**Walka (stan z 2026-10-26):**
 
 **Stan:** tor A (grafika) do H2 włącznie; tor B: C1 (mechanika), C2 (projekt walki,
 `docs/COMBAT.md`, zaakceptowany) i **C3 (silnik walki w czystym Lua) zamknięte**.
@@ -172,7 +186,11 @@ do kwadratów 16×16 z ramką, arkusz 256 kolorów ~62 KB, wysokości i jasnoś�
 rysowany przez `isogrid` z LiteLua (D58): ~260 pól w 2,4 ms (w Lua przez `quad` 42 ms).
 Klawisze: rysik/krzyżak przewijanie, A wysokość, X światło, L/R skala pagórków, Y C/Lua.
 Kolejność dalej:
-0. M1 na DSi (FTP): pomiar i ocena wyglądu (skala wysokości 0,5, jasność cienia).
+0. ~~M1 na DSi~~ — zrobione: płynnie, cień 0,4 (B zmienia), skala wysokości 0,5.
+   Obiekty w M1: styl stworzeń, jeden PNG na model, pamięć podręczna z budżetem (SELECT
+   96/20 KB). Do zrobienia: animacje obiektów (klatki to małe kawałki na bazie — tanie),
+   wersje zapasowe modeli (LOD) i licznik budżetu w edytorze na DS, ew. szybszy format
+   niż PNG, jeśli duże modele zaczną przycinać.
 1. (tylko do malowania na DS) automat przejść i kształty pędzli — test:
    mapa `pedzle.h4c` z czterema kropkami piasku na trawie, po jednej każdym pędzlem;
    do tego składanie kwadratów pola na DS (teren + nakładki przez maski) i podmiana
