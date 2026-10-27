@@ -7,6 +7,8 @@
 //   btnp(name) -> true in the frame the button was pressed
 //   btnr(name) -> true in the frame the button was released
 //   touch()    -> x, y while the screen is touched, otherwise nil
+//   touchp()   -> x, y where the stylus came down, in the frame btnp("touch") is true
+//   touchr()   -> x, y where the stylus last was, in the frame btnr("touch") is true
 //
 // Button names: a b x y l r start select up down left right touch
 
@@ -19,6 +21,10 @@
 static u32 keys_held, keys_down, keys_up;
 static u32 pending_down, pending_up; // From ll_input_sample since the last frame
 static touchPosition touch_pos;
+// Touch positions from every sample (D59): a tap shorter than a game frame still has
+// its place, and touchp/touchr give the press / release point, not the jittery current one
+static bool pending_down_ok, down_ok, up_ok;
+static touchPosition pending_down_pos, down_pos, last_pos, up_pos;
 
 static const struct {
     const char *name;
@@ -33,22 +39,52 @@ static const struct {
     { "touch", KEY_TOUCH },
 };
 
+// Reads the stylus if it is down; remembers the press point of a new touch
+static void sample_touch(bool down, touchPosition *press, bool *press_ok)
+{
+    if ((keysHeld() & KEY_TOUCH) == 0)
+        return;
+    touchRead(&last_pos);
+    if (down)
+    {
+        *press = last_pos;
+        *press_ok = true;
+    }
+}
+
 void ll_input_sample(void)
 {
     scanKeys();
-    pending_down |= keysDown();
+    u32 down = keysDown();
+    if (keysUp() & KEY_TOUCH)
+        up_pos = last_pos;
+    // Only the first press since the last frame keeps its point
+    sample_touch((down & KEY_TOUCH) && !(pending_down & KEY_TOUCH), &pending_down_pos,
+                 &pending_down_ok);
+    pending_down |= down;
     pending_up |= keysUp();
 }
 
 void ll_input_update(void)
 {
     scanKeys();
+    bool new_down = (keysDown() & KEY_TOUCH) && !(pending_down & KEY_TOUCH);
+    if (keysUp() & KEY_TOUCH)
+        up_pos = last_pos;
     keys_held = keysHeld();
     keys_down = keysDown() | pending_down;
     keys_up = keysUp() | pending_up;
+    down_ok = false;
+    if (pending_down & KEY_TOUCH)
+    {
+        down_pos = pending_down_pos;
+        down_ok = pending_down_ok;
+    }
+    sample_touch(new_down, &down_pos, &down_ok);
+    touch_pos = last_pos;
+    up_ok = (keys_up & KEY_TOUCH) != 0;
     pending_down = pending_up = 0;
-    if (keys_held & KEY_TOUCH)
-        touchRead(&touch_pos);
+    pending_down_ok = false;
 }
 
 // Looks up the button mask in the name table stored as upvalue 1
@@ -93,6 +129,28 @@ static int l_touch(lua_State *L)
     return 2;
 }
 
+static int push_pos(lua_State *L, bool ok, const touchPosition *pos)
+{
+    if (!ok)
+    {
+        lua_pushnil(L);
+        return 1;
+    }
+    lua_pushinteger(L, pos->px);
+    lua_pushinteger(L, pos->py);
+    return 2;
+}
+
+static int l_touchp(lua_State *L)
+{
+    return push_pos(L, down_ok, &down_pos);
+}
+
+static int l_touchr(lua_State *L)
+{
+    return push_pos(L, up_ok, &up_pos);
+}
+
 void ll_input_register(lua_State *L)
 {
     static const luaL_Reg funcs[] = {
@@ -114,6 +172,10 @@ void ll_input_register(lua_State *L)
 
     lua_pushcfunction(L, l_touch);
     lua_setfield(L, -2, "touch");
+    lua_pushcfunction(L, l_touchp);
+    lua_setfield(L, -2, "touchp");
+    lua_pushcfunction(L, l_touchr);
+    lua_setfield(L, -2, "touchr");
 
     lua_pop(L, 1);
 }

@@ -53,5 +53,37 @@ if tx then
   px, py = tx, ty
 end]],
     },
+    {
+      name = "touchp", kind = "function",
+      sig = "touchp() -> x, y | nil",
+      since = "D59",
+      ret = {
+        { "integer", "x where the stylus came down (0-255)" },
+        { "integer", "y where the stylus came down (0-191)" },
+      },
+      desc = "In the frame btnp(\"touch\") is true: the point where the stylus "
+          .. "came down, otherwise nil. The stylus is read every screen refresh, "
+          .. "so a tap shorter than a game frame still has its point (touch() "
+          .. "may already be nil then). Use it with touchr() for taps that must "
+          .. "not be lost.",
+      example = [[
+local px, py = touchp()
+if px then press_x, press_y = px, py end
+if btnr("touch") and press_x then
+  click(press_x, press_y)   -- also for a very short tap
+  press_x = nil
+end]],
+    },
+    {
+      name = "touchr", kind = "function",
+      sig = "touchr() -> x, y | nil",
+      since = "D59",
+      ret = {
+        { "integer", "x where the stylus last was (0-255)" },
+        { "integer", "y where the stylus last was (0-191)" },
+      },
+      desc = "In the frame btnr(\"touch\") is true: the last point read before "
+          .. "the stylus was lifted, otherwise nil.",
+    },
   },
 }

@@ -677,6 +677,8 @@ math where you can.
 | `btnp(name)` | `true` in the frame the button was pressed |
 | `btnr(name)` | `true` in the frame the button was released |
 | `touch()` | `x, y` while the bottom screen is touched, otherwise `nil` |
+| `touchp()` | `x, y` where the stylus came down, in the frame `btnp("touch")` is true |
+| `touchr()` | `x, y` where the stylus last was, in the frame `btnr("touch")` is true |
 
 Button names: `a b x y l r start select up down left right touch`.
 
@@ -686,6 +688,12 @@ if tx then
   print("touched at", tx, ty)
 end
 ```
+
+The stylus is read every screen refresh. A tap shorter than a game frame is never seen
+by `touch()`, but `touchp()` still gives its point. For taps (buttons, picking things on a
+map) use the press point from `touchp()` and act on `btnr("touch")`. The press point is
+steadier than the point where the stylus is lifted. Let the map scroll only after the
+stylus has moved a few pixels, because a resting stylus jitters by a pixel or two.
 
 ### Errors
 

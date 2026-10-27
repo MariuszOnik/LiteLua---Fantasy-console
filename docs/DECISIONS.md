@@ -1363,3 +1363,28 @@ Propozycja agenta, użytkownik za (wariant A: jeden kąt kamery, bez obrotu — 
   rogi); podział na trójkąty sam ich nie usunął. Limit DS: 2048 wielokątów na ekran, pole = 2.
 - Pełne 3D (kamera, światło z normalnych, z-bufor) odłożone: grafika H4 to obrazki z jednego kąta,
   a LiteLua rysuje w 2D; API `isogrid` da się później przełączyć bez zmian w grach.
+
+## D59 (2026-10-27) — Dotyk czytany co VBlank: `touchp()` i `touchr()`
+- **Zgłoszenie użytkownika (HeroesDS m2 na DSi):** opóźnienie między stuknięciem rysikiem
+  a zaznaczeniem prowincji, część stuknięć nic nie robi.
+- **Przyczyna 1 (silnik):** D51 sumował naciśnięcia co VBlank, ale pozycję rysika czytał
+  tylko w klatce gry, i to tylko gdy rysik wciąż był dociśnięty. Krótkie stuknięcie
+  (dociśnięcie i puszczenie między klatkami) dawało `btnp("touch")` bez pozycji, więc
+  `touch()` było nil i gra go nie widziała.
+- **Poprawka:** `ll_input_sample` czyta też pozycję rysika co VBlank. Nowe funkcje:
+  `touchp()` (punkt dociśnięcia, w klatce `btnp("touch")`) i `touchr()` (ostatni punkt
+  przed puszczeniem, w klatce `btnr("touch")`). `touch()` bez zmian, więc stare kartridże
+  działają jak dotąd. Stuknięcie krótsze niż odstęp odczytów (~16 ms) nadal może zginąć,
+  ale prawdziwy rysik tak krótko nie stuka.
+- **Przyczyna 2 (kartridż m2):**
+  - Przeciąganie zaczynało się od ruchu o 1 px. Drżenie rysika przesuwało mapę, a samo
+    stuknięcie ginęło. Teraz mapa przewija się dopiero po ruchu o 5 px, a stuknięcie
+    liczy się w punkcie dociśnięcia.
+  - Przekolorowanie prowincji trwało ~145 ms w melonDS. Przez ten czas gra nie czytała
+    wejścia. Po kolorach komórek w pamięci podręcznej i liście narożników prowincji
+    trwa 27–38 ms.
+- **Pomiar (melonDS, `tools/melon.py`, nowe `tap x y hold`):** 8/8 stuknięć po 40–60 ms,
+  co ~0,4 s, w trzy prowincje — każde zaznaczyło właściwą. Na konsoli do sprawdzenia
+  przez użytkownika (także przeciąganie mapy).
+- Wskazówka dla twórców gier w README (Input): stuknięcia przez `touchp()` + `btnr("touch")`,
+  martwa strefa przed przewijaniem.

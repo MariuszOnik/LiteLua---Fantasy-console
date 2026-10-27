@@ -15,7 +15,8 @@ Script lines (# starts a comment):
   boothold <name>                  first line only: hold a key from the
                                    moment the window appears (e.g. SELECT
                                    for the safe mode); let it go with up
-  tap <x> <y>                      bottom screen pixel (0-255, 0-191)
+  tap <x> <y> [hold_seconds]       bottom screen pixel (0-255, 0-191); hold 0.12 s
+                                   by default (0.01: a tap shorter than a frame)
   shot <name>                      both screens as outdir/<name>.png (256x384)
 Needs Pillow."""
 import ctypes, ctypes.wintypes as W, subprocess, sys, time, os
@@ -66,13 +67,13 @@ def press(name, down):
     u.keybd_event(VK[name], 0, flags, 0)
 
 
-def tap(h, x, y):
+def tap(h, x, y, hold=0.12):
     ox, oy, s = screens(h)
     sx, sy = int(ox + (x + 0.5) * s), int(oy + (192 + y + 0.5) * s)
     u.SetCursorPos(sx, sy)
     time.sleep(0.05)
     u.mouse_event(2, 0, 0, 0, 0)
-    time.sleep(0.12)
+    time.sleep(hold)
     u.mouse_event(4, 0, 0, 0, 0)
     time.sleep(0.2)
 
@@ -107,7 +108,7 @@ def main():
             elif c in ("key", "keys"):
                 key(line[1].split("+"), float(line[2]) if len(line) > 2 else 0.1)
             elif c in ("down", "up"): press(line[1], c == "down")
-            elif c == "tap": tap(h, int(line[1]), int(line[2]))
+            elif c == "tap": tap(h, int(line[1]), int(line[2]), *map(float, line[3:4]))
             elif c == "shot": shot(h, os.path.join(out, line[1] + ".png"))
     finally:
         u.PostMessageW(h, 0x0010, 0, 0)  # WM_CLOSE: melonDS syncs the SD folder

@@ -249,6 +249,37 @@ if tx then
 end
 ```
 
+### `touchp`
+
+```lua
+touchp() -> x, y | nil
+```
+
+In the frame btnp("touch") is true: the point where the stylus came down, otherwise nil. The stylus is read every screen refresh, so a tap shorter than a game frame still has its point (touch() may already be nil then). Use it with touchr() for taps that must not be lost.
+
+Returns: integer — x where the stylus came down (0-255); integer — y where the stylus came down (0-191)
+
+Example:
+
+```lua
+local px, py = touchp()
+if px then press_x, press_y = px, py end
+if btnr("touch") and press_x then
+  click(press_x, press_y)   -- also for a very short tap
+  press_x = nil
+end
+```
+
+### `touchr`
+
+```lua
+touchr() -> x, y | nil
+```
+
+In the frame btnr("touch") is true: the last point read before the stylus was lifted, otherwise nil.
+
+Returns: integer — x where the stylus last was (0-255); integer — y where the stylus last was (0-191)
+
 ## Graphics
 
 Drawing shapes and images. Call these in _draw; the screen is redrawn every frame. Colors: 0-15 = palette, or 0xRRGGBB. The settings (cls, color, alpha, camera, clip, tint, stroke) are reset at the start of every _draw and only work inside it.
