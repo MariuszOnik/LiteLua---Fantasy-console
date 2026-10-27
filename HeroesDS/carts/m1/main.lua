@@ -16,7 +16,7 @@ local STRENGTHS = { 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.6 }
 local img, grid, plain
 local gray = {}                 -- light level 0..31 -> tint color
 local LIGHT = {}                -- corner -> light level, from SLOPE and the strength
-local strength = 3              -- index into STRENGTHS (0.2, chosen on the DSi)
+local strength = 6              -- index into STRENGTHS (0.4; B changes it)
 local lift = {}                 -- corner -> pixels up (heights * scale), Lua mode
 local scale = 0.5               -- pixels per height unit (the PC's 1 at 64x32 tiles)
 local heights_on, light_on = true, true
