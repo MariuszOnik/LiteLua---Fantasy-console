@@ -8,7 +8,7 @@ with quad().  Equal squares are stored once; all of them make one 256-colour she
 
   carts/m1/gfx/terrain.png    the squares, FRAME x FRAME frames (index 0 stays transparent)
   carts/m1/data/terrain.lua   window size, frame per cell (-1 outside the map), corner
-                              heights and corner light (0..31) for (rows+1) x (cols+1)
+                              heights and slopes toward the light for (rows+1) x (cols+1)
 
 Usage (from the repo root):
   python HeroesDS/tools/make_m1.py [--map M.h4c] [--heights H.h4c] [--window r,c,rows,cols]
@@ -42,14 +42,14 @@ def straighten(img):
     return s.reshape(TEX, 4, TEX, 4, 3).mean(axis=(1, 3))
 
 
-def light(level, light_dir, rows, cols, r0, c0):
-    """Corner light 10..31: 22 on flat ground, lighter facing the light, darker away (tint
-    can only darken, so flat ground is not full white)."""
+def slopes(level, light_dir, rows, cols, r0, c0):
+    """Corner slope toward the light, -100..100: 0 flat, > 0 facing the light. The cart
+    turns it into a shade with a strength it can change."""
     lum = h4mapview.corner_light(level, light_dir)
     out = []
     for r in range(r0, r0 + rows + 1):
         for c in range(c0, c0 + cols + 1):
-            out.append(int(round(np.clip(22 + (lum.get((r, c), 1.0) - 1) * 60, 10, 31))))
+            out.append(int(round(np.clip((lum.get((r, c), 1.0) - 1) * 100, -100, 100))))
     return out
 
 
@@ -57,9 +57,9 @@ def main(argv):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--archive", default=os.path.join(cartkit.HEROES, "Data", "heroes4.h4r"))
     p.add_argument("--map", default=os.path.join(cartkit.HEROES, "droga i rzeka.h4c"))
-    p.add_argument("--heights", default=os.path.join(cartkit.HEROES, "mapa ze wzniesieniem.h4c"),
+    p.add_argument("--heights", default="",
                    help="take the corner heights from this map instead (same size)")
-    p.add_argument("--window", default="24,0,32,26", help="first row, first column, rows, columns")
+    p.add_argument("--window", default="22,0,36,30", help="first row, first column, rows, columns")
     p.add_argument("--sd", default=cartkit.SD)
     a = p.parse_args(argv[1:])
     r0, c0, rows, cols = (int(v) for v in a.window.split(","))
@@ -102,14 +102,14 @@ def main(argv):
     out.save(os.path.join(CART, "gfx", "terrain.png"))
 
     heights = [lv.height(r, c) for r in range(r0, r0 + rows + 1) for c in range(c0, c0 + cols + 1)]
-    lights = light(lv, (1.0, -1.0), rows, cols, r0, c0)
+    slope = slopes(lv, (0.0, 1.0), rows, cols, r0, c0)   # light as in h4mapview
 
     def arr(xs):
         return "{" + ",".join(str(x) for x in xs) + "}"
     with open(os.path.join(CART, "data", "terrain.lua"), "w", encoding="utf-8", newline="\n") as f:
         f.write(f"-- made by HeroesDS/tools/make_m1.py from {os.path.basename(a.map)}\n")
         f.write(f"return {{\n  rows = {rows}, cols = {cols}, row0 = {r0}, col0 = {c0}, tex = {FRAME},\n")
-        f.write(f"  frames = {arr(frames)},\n  heights = {arr(heights)},\n  light = {arr(lights)},\n}}\n")
+        f.write(f"  frames = {arr(frames)},\n  heights = {arr(heights)},\n  slope = {arr(slope)},\n}}\n")
     print(f"  {rows}x{cols} cells, {n} different squares, sheet {out.width}x{out.height} "
           f"({out.width * out.height // 1024} KB)")
     cartkit.deploy(CART, a.sd)

@@ -183,7 +183,11 @@ Ustalenia z 2026-10-26 — do trybu mapy kontynentu i ewentualnie terenu walki.
   z terenu — rzeka/woda blokuje nawet pod drogą — i z obiektów. Pozostałe 4 bajty pola
   wciąż zera. Krawędziowe piksele kolumn masek i
   kafelków trzeba rozciągnąć na zewnątrz, inaczej na krawędziach pól wychodzą kropkowane
-  linie. Światło do cieniowania stoków: z kierunku (wiersz +1, kolumna −1) wg zrzutu.
+  linie. **Światło** do cieniowania stoków: kierunek (wiersz 0, kolumna +1) — jaśniejsze
+  stoki opadające ku kolumnie +, czyli w prawo-dół ekranu; słońce z prawej (cień drzewa
+  pada w lewo). Dopasowane do zrzutu z edytora (`droga i rzeka.h4c` z pagórkiem, skala
+  zrzutu 1,25, korelacja jasności 0,81 przy 90°; pierwsze ustawienie „na oko” (1, −1)
+  było prawie odwrotne). Siła: ~1,1 × (nachylenie / 128) w jasności.
 - **Na DS**: LiteLua rysuje przez sprzętowe 3D (D5, gl2d), więc teren z wysokością da się
   narysować jako siatkę z teksturą i jasnością w wierzchołkach (cieniowanie prawie za
   darmo). Alternatywa: prerender mapy na PC do płaskich obrazków (dużo pamięci).

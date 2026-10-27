@@ -1,7 +1,7 @@
 -- HeroesDS M1: a piece of a Heroes IV map as raised, lit terrain (isogrid, D58).
 -- Bottom screen: the terrain; drag the stylus or use the d-pad to scroll.
--- A: heights on/off, X: light on/off, L/R: flatter/steeper hills,
--- Y: isogrid (C) or one quad() per cell from Lua (to compare).
+-- A: heights on/off, X: light on/off, B: shade strength, L/R: flatter/steeper
+-- hills, Y: isogrid (C) or one quad() per cell from Lua (to compare).
 -- Top screen: the cost of drawing it. Data: HeroesDS/tools/make_m1.py.
 
 local T = dofile("data/terrain.lua")
@@ -9,10 +9,14 @@ local T = dofile("data/terrain.lua")
 local HW, HH = 16, 8            -- half width and half height of a cell on screen
 local ROWS, COLS = T.rows, T.cols
 local W1 = COLS + 1             -- corners per row
-local FRAMES, HEIGHTS, LIGHT = T.frames, T.heights, T.light
+local FRAMES, HEIGHTS, SLOPE = T.frames, T.heights, T.slope
+local FLAT = 25                 -- light level of flat ground (31 = white; tint only darkens)
+local STRENGTHS = { 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.6 }
 
 local img, grid, plain
 local gray = {}                 -- light level 0..31 -> tint color
+local LIGHT = {}                -- corner -> light level, from SLOPE and the strength
+local strength = 3              -- index into STRENGTHS (0.2, chosen on the DSi)
 local lift = {}                 -- corner -> pixels up (heights * scale), Lua mode
 local scale = 0.5               -- pixels per height unit (the PC's 1 at 64x32 tiles)
 local heights_on, light_on = true, true
@@ -27,17 +31,32 @@ local function set_scale(s)
   for i = 1, #HEIGHTS do lift[i] = HEIGHTS[i] * k end
 end
 
+-- Light level of every corner: flat ground FLAT, slopes lighter or darker
+local function set_strength(k)
+  strength = k
+  local s = STRENGTHS[k]
+  for i = 1, #SLOPE do
+    local l = math.floor(FLAT + SLOPE[i] * s + 0.5)
+    LIGHT[i] = l < 0 and 0 or l > 31 and 31 or l
+  end
+  if grid then
+    for y = 0, ROWS do
+      for x = 0, COLS do
+        grid:color(x, y, gray[LIGHT[y * W1 + x + 1]])
+      end
+    end
+  end
+end
+
 function _init()
   img = image("terrain", T.tex)
   for l = 0, 31 do
     gray[l] = (l * 255 // 31) * 0x10101
   end
-  local colors = {}
-  for i = 1, #LIGHT do colors[i] = gray[LIGHT[i]] end
   local opts = { w = HW * 2, h = HH * 2, frames = FRAMES, heights = HEIGHTS }
   plain = isogrid(img, COLS, ROWS, opts)
-  opts.colors = colors
   grid = isogrid(img, COLS, ROWS, opts)
+  set_strength(strength)
   set_scale(scale)
   -- start with the middle of the window in the middle of the screen
   camx = (COLS - ROWS) // 2 * HW - 128
@@ -64,6 +83,7 @@ function _update()
   if btnp("l") then set_scale(math.max(0, scale - 0.125)) end
   if btnp("r") then set_scale(math.min(8, scale + 0.125)) end
   if btnp("y") then use_c = not use_c end
+  if btnp("b") then set_strength(strength % #STRENGTHS + 1) end
 end
 
 -- The same in Lua, one quad() per cell. Cells back to front: s = c + r is the
@@ -124,9 +144,9 @@ function _draw(screen)
     text(("terrain draw: %.1f ms"):format(draw_us / 1000), 8, 40, 6)
     if drawn >= 0 then text(("cells drawn: %d"):format(drawn), 8, 52, 6) end
     text(("heights: %s  x%.3f"):format(heights_on and "on" or "off", scale), 8, 64, 6)
-    text(("light: %s"):format(light_on and "on" or "off"), 8, 76, 6)
+    text(("light: %s  shade (B): %.2f"):format(light_on and "on" or "off", STRENGTHS[strength]), 8, 76, 6)
     text(("camera: %d, %d"):format(camx, camy), 8, 88, 6)
     text("stylus/d-pad scroll, A heights", 8, 160, 5)
-    text("X light, L/R hill scale, Y C/Lua", 8, 172, 5)
+    text("X light, B shade, L/R hills, Y C/Lua", 8, 172, 5)
   end
 end

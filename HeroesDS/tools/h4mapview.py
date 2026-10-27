@@ -275,7 +275,7 @@ def screen(n, r, c, pad):
     return (c - r + n // 2 + 2) * 32, (c + r - n // 2 + 2) * 16 + pad
 
 
-def render(assets, m, level=0, k=1.0, light=(1.0, -1.0)):
+def render(assets, m, level=0, k=1.0, light=(0.0, 1.0)):
     lv = m.levels[level]
     n = m.size
     pad = int(256 * k)
@@ -307,8 +307,9 @@ def main(argv):
     p.add_argument("--level", type=int, default=0)
     p.add_argument("--height", type=float, default=1.0, help="screen pixels per height unit")
     p.add_argument("--scale", type=float, default=1.0, help="shrink the PNG (0.5 = half)")
-    p.add_argument("--light", default="1,-1",
-                   help="light direction in (row, col) steps; 1,-1 matches the editor")
+    p.add_argument("--light", default="0,1",
+                   help="light direction in (row, col) steps; 0,1 matches the editor "
+                        "(fitted to an editor screenshot, docs/FORMATS.md)")
     a = p.parse_args(argv[1:])
     m = h4map.parse(open(a.map, "rb").read())
     img = render(Assets(a.archive), m, a.level, a.height, tuple(float(v) for v in a.light.split(",")))
