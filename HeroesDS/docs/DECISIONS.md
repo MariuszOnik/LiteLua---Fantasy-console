@@ -91,3 +91,23 @@ ostrzelany zawsze odpowiada stanem sprzed strzału. Przełącznik `battle.dead_s
   „Tura przeciwnika…” się animuje. Na PC i w testach `grid.tick` nic nie robi.
 - Kilka sekund tury komputera na DS jest do przyjęcia (decyzja użytkownika); kilkanaście
   już nie — wtedy przyspieszamy silnik (pomiar C4a).
+
+## H12 (2026-10-27) — Mapa strategiczna: miks Imperial Glory i Heroes IV
+Warstwa strategiczna jak w Imperial Glory (prowincje, oblężenia, AI z profilami — ściąga
+`docs/IMPERIAL_GLORY.md`), ekonomia i walka z H4. Decyzje użytkownika:
+- **1 tura = 1 tydzień** (przyrost stworzeń w siedliskach i dochód na koniec tury).
+- **Miasto w prowincji za pieniądze i zasoby**: każda prowincja może dostać miasto (drzewko
+  budynków H4 frakcji), jeśli gracz je opłaci. Na start każde państwo ma **jedno miasto —
+  stolicę**; scenariusz może to zmienić (więcej miast, gotowe budynki). Prowincja bez miasta
+  daje kopalnie i dochód z terenu.
+- Zasoby H4 (złoto, drewno, ruda, kryształ, klejnoty, rtęć, siarka); kopalnie wynikają z terenu.
+- **Utrzymanie armii kosztuje** co tydzień, zależnie od miejsca jak w IG (w mieście tanio,
+  na swoim taniej, na obcym drożej). Liczby do ustalenia przy implementacji.
+- **Armia musi mieć bohatera** (jak oficer w IG): oddziały bez bohatera stoją w garnizonie
+  i nie ruszają się. **Poziom bohatera wyznacza, iloma oddziałami może dowodzić**
+  (progi do ustalenia; maksimum 7 jak w H4).
+- Bitwa: z udziałem gracza — kartridż walki H4; między komputerami — automat na wartościach
+  stworzeń H4 z bonusami obrońcy (IG). Miasto z murami wymaga oblężenia.
+- Neutralni to potwory H4 strzegące prowincji, kopalni i skarbów (zamiast 19 państw IG).
+- Kolejność: zasoby i dochód → miasto w prowincji → ruch komputera z bitwą automatyczną →
+  walka H4 i oblężenia → handel → dyplomacja.
