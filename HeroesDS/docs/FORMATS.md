@@ -163,6 +163,18 @@ Ustalenia z 2026-10-26 — do trybu mapy kontynentu i ewentualnie terenu walki.
   rombu, tak jak 3117 dla 76) — każdy poziom ma własną wysokość. Uwaga:
   `h4map.find_terrain` na pustej mapie łapie złe przesunięcie (powtarzalny wzór) — w tej
   mapie pola zaczynają się od bajtu 197, każde 11 B (`01 00 | 5×00 | 08 00 | 00 | 00`).
+- **Przejścia terenu — sprawdzone 2026-10-27** (`malowanie.h4c`, czytnik
+  `tools/h4map.py`, podgląd `tools/h4mapview.py`, test `tests/test_h4map.py`). 5 bajtów
+  pola to zawsze zera. Nakładka = inny teren rysowany przez maskę nr 0–92; kod maski to
+  cztery cyfry 0–4 = jak daleko kształt sięga ku rogom E, S, W, N pola (rogi rombu na
+  ekranie). Ostatni bajt nakładki (0–19) to nie kolejność — wygląda na losowy wybór
+  wariantu (zestaw 1/2/3, zgadywane). Edytor zapisuje przejście **po obu stronach**
+  granicy, obie maski najmocniejsze na wspólnej krawędzi; podgląd zgodny z edytorem:
+  ląd–ląd: poszarpane ostre `land 1–3`; ląd na polu wody (i bagna): ostre brzegowe
+  `water 1–2`; woda na polu lądu: miękka alfa `land_to_water 1–3` (4 bity, gradient).
+  `water_to_land` i `river` jeszcze nieużyte. Krawędziowe piksele kolumn masek i
+  kafelków trzeba rozciągnąć na zewnątrz, inaczej na krawędziach pól wychodzą kropkowane
+  linie. Światło do cieniowania stoków: z kierunku (wiersz +1, kolumna −1) wg zrzutu.
 - **Na DS**: LiteLua rysuje przez sprzętowe 3D (D5, gl2d), więc teren z wysokością da się
   narysować jako siatkę z teksturą i jasnością w wierzchołkach (cieniowanie prawie za
   darmo). Alternatywa: prerender mapy na PC do płaskich obrazków (dużo pamięci).
