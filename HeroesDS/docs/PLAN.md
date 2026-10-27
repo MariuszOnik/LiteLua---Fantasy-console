@@ -32,6 +32,10 @@ i statki handlowe (`src/war.lua`): ruch po prowincjach, zajmowanie, „bitwa” 
 liczebnością, Y = koniec tury, przeciwnicy stoją. Sprawdzone w melonDS, wysłane na DSi.
 Dalej (do ustalenia z użytkownikiem): bitwa → kartridż walki H4, ruch przeciwników,
 widok militarny, powiększenie prowincji (budowle, kopalnie), handel (dochód).
+Dotyk w m2 (D59): stuknięcie w punkcie dociśnięcia, przewijanie po ruchu o 5 px,
+przekolorowanie ~30 ms zamiast 145 ms; w melonDS 8/8 stuknięć — na DSi do sprawdzenia
+(też przeciąganie). Kierunek gry: decyzja H12 (miks IG + H4), następny krok: zasoby,
+kopalnie i dochód co tydzień.
 Ściąga z reguł i AI Imperial Glory (do wglądu, wypakowane lokalnie w `ref/ImperialGlory/`):
 `docs/IMPERIAL_GLORY.md` — na końcu propozycje dla AI przeciwników i bitwy automatycznej.
 
