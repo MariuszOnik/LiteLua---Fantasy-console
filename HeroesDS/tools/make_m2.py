@@ -2,6 +2,7 @@
 style): height map, terrain, provinces, neighbours, names and owners -- all from one seed.
 
   python HeroesDS/tools/make_m2.py [--seed N] [--size 72] [--provinces 45] [--png out]
+                                   [--cart] [--sd DIR]
 
 Steps (all on a rows x cols grid of cells; corners are (rows + 1) x (cols + 1)):
   1. heights: value noise in octaves, lowered toward the edges -> land in the middle, sea
@@ -20,6 +21,17 @@ the natural one. --style picks how the land looks:
   flat    a paper map: no heights, pale owner colours on parchment, sea light blue
   board   a table model: every province a flat plate raised over the sea, its edges
           bevelled down, so the borders are grooves between the plates
+
+--cart writes the cart carts/m2 (no game data in it):
+  gfx/paper.png   16x16 frames of light grain (land: paper, sea: waves); frame
+                  base * 16 + edges, edges = 1 if the cell's -row side is a border
+                  (another province or the coast), 2 for its -col side: the ink line
+                  is part of the frame, so every border is drawn once, by one cell
+  data/map.lua    size, corner heights 0..255, terrain per cell, province per cell
+                  (-1 none), frame per cell, provinces (name, capital, owner,
+                  neighbours), the factions' colours and the corner colours of both
+                  views (paper, relief) -- the same formulas as the cart's, which
+                  recolours a province when its owner changes
 """
 import argparse
 import heapq
@@ -337,6 +349,138 @@ def preview(m, path, cw=16, lift=24, style="relief"):
     out.save(path)
 
 
+GRAIN = 4      # grain variants per base (land, sea)
+
+
+def paper_sheet(rng):
+    """Frames 16x16: base 0 land / 1 sea, GRAIN variants, 16 edge combinations each."""
+    tex = 16
+    frames = []
+    for base in range(2):
+        for _ in range(GRAIN):
+            g = noise(rng, (tex, tex), octaves=3)
+            if base == 0:
+                grain = 0.86 + 0.14 * g                 # paper: light, fine grain
+            else:
+                y = np.arange(tex)[:, None]
+                grain = 0.84 + 0.10 * g + 0.06 * np.sin((y + 6 * g) * 0.8)   # waves
+            for edges in range(4):
+                f = np.repeat(grain[:, :, None], 3, 2)
+                if edges & 1:
+                    f[0, :, :] = (0.30, 0.22, 0.16)    # ink along the -row side
+                if edges & 2:
+                    f[:, 0, :] = (0.30, 0.22, 0.16)    # ink along the -col side
+                frames.append(f)
+    per_row = 8
+    rows = (len(frames) + per_row - 1) // per_row
+    sheet = np.zeros((rows * tex, per_row * tex, 3))
+    for i, f in enumerate(frames):
+        sheet[i // per_row * tex:(i // per_row + 1) * tex, i % per_row * tex:(i % per_row + 1) * tex] = f
+    img = Image.fromarray((sheet * 255).astype(np.uint8)).quantize(15, method=Image.Quantize.MEDIANCUT)
+    idx = np.asarray(img, np.uint8) + 1                  # index 0 stays transparent
+    out = Image.fromarray(idx, "P")
+    out.putpalette([0, 0, 0] + img.getpalette()[:15 * 3])
+    return out, tex
+
+
+def cell_frames(m, rng):
+    terr, prov = m["terrain"], m["province"]
+    rows, cols = terr.shape
+
+    def region(r, c):
+        return prov[r, c] if terr[r, c] != SEA else -2
+    out = []
+    for r in range(rows):
+        for c in range(cols):
+            a = region(r, c)
+            edges = 0
+            if r > 0 and region(r - 1, c) != a and (a >= 0 or region(r - 1, c) >= 0):
+                edges |= 1
+            if c > 0 and region(r, c - 1) != a and (a >= 0 or region(r, c - 1) >= 0):
+                edges |= 2
+            base = 1 if terr[r, c] == SEA else 0
+            out.append((base * GRAIN + int(rng.integers(GRAIN))) * 4 + edges)
+    return out
+
+
+CART_PARCHMENT = (226, 210, 170)
+CART_PAPER_SEA = (170, 195, 205)
+
+
+def cart_cell_colors(m, hts, relief):
+    """Cell colours of a view, as main.lua's cell_color (no selection)."""
+    terr, prov = m["terrain"], m["province"]
+    rows, cols = terr.shape
+    out = np.zeros((rows, cols, 3))
+    for r in range(rows):
+        for c in range(cols):
+            t, p = terr[r, c], prov[r, c]
+            if relief:
+                slope = (hts[r, c] + hts[r + 1, c] - hts[r, c + 1] - hts[r + 1, c + 1]) / 255
+                out[r, c] = np.array(NATURE[t]) * (1 + 1.5 * slope)
+            elif t == SEA:
+                out[r, c] = CART_PAPER_SEA
+            else:
+                o = FACTIONS[m["owner"][p]][1] if p >= 0 else CART_PARCHMENT
+                dark = 0.82 if t == MOUNT else 0.93 if t == UP else 1
+                out[r, c] = (np.array(CART_PARCHMENT) + o) * 0.5 * dark
+    return out
+
+
+def cart_corner_colors(cells):
+    """Each corner the mean of the cells around it, rounded as main.lua: 0xRRGGBB."""
+    rows, cols, _ = cells.shape
+    out = []
+    for r in range(rows + 1):
+        for c in range(cols + 1):
+            around = [cells[rr, cc] for rr in (r - 1, r) for cc in (c - 1, c)
+                      if 0 <= rr < rows and 0 <= cc < cols]
+            mean = np.floor(np.sum(around, 0) / len(around) + 0.5).clip(0, 255).astype(int)
+            out.append(int(mean[0]) << 16 | int(mean[1]) << 8 | int(mean[2]))
+    return out
+
+
+def write_cart(m, sd):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import cartkit
+    cart = cartkit.cart_dir("m2")
+    os.makedirs(os.path.join(cart, "gfx"), exist_ok=True)
+    os.makedirs(os.path.join(cart, "data"), exist_ok=True)
+    rng = np.random.default_rng(m["seed"] + 1000)
+    sheet, tex = paper_sheet(rng)
+    sheet.save(os.path.join(cart, "gfx", "paper.png"))
+    rows, cols = m["rows"], m["cols"]
+    hts = (np.maximum(m["heights"], 0) * 255).round().astype(int)
+
+    def arr(xs):
+        return "{" + ",".join(str(int(x)) for x in xs) + "}"
+    with open(os.path.join(cart, "data", "map.lua"), "w", encoding="utf-8", newline="\n") as f:
+        f.write(f"-- made by HeroesDS/tools/make_m2.py --seed {m['seed']} --cart\n")
+        f.write(f"return {{\n  seed = {m['seed']}, rows = {rows}, cols = {cols}, tex = {tex},\n")
+        f.write("  terrains = { " + ", ".join(f'"{t}"' for t in TERRAIN) + " },\n")
+        f.write("  nature = { " + ", ".join(f"0x{r:02x}{g:02x}{b:02x}" for r, g, b in
+                                         (NATURE[t] for t in range(len(TERRAIN)))) + " },\n")
+        f.write("  factions = {\n")
+        for name_, (r, g, b) in FACTIONS:
+            f.write(f'    {{ name = "{name_}", color = 0x{r:02x}{g:02x}{b:02x} }},\n')
+        f.write("  },\n")
+        f.write(f"  heights = {arr(hts.ravel())},\n")
+        f.write(f"  terrain = {arr(m['terrain'].ravel())},\n")
+        f.write(f"  province = {arr(m['province'].ravel())},\n")
+        f.write(f"  frames = {arr(cell_frames(m, rng))},\n")
+        for view, relief in (("paper", False), ("relief", True)):
+            f.write(f"  {view} = {arr(cart_corner_colors(cart_cell_colors(m, hts, relief)))},\n")
+        f.write("  provinces = {   -- 0-based numbers in province; r, c: capital\n")
+        for i, (r, c) in enumerate(m["capitals"]):
+            nb = ", ".join(str(j) for j in sorted(m["neighbours"].get(i, ())))
+            f.write(f'    {{ name = "{m["names"][i]}", r = {r}, c = {c}, owner = {m["owner"][i]}, '
+                    f'neighbours = {{ {nb} }} }},\n')
+        f.write("  },\n}\n")
+    print(f"  cart: {cart} (paper.png {sheet.width}x{sheet.height})")
+    if sd is not None:
+        cartkit.deploy(cart, sd)
+
+
 def main(argv):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--seed", type=int, default=1)
@@ -344,6 +488,8 @@ def main(argv):
     p.add_argument("--provinces", type=int, default=45)
     p.add_argument("--png")
     p.add_argument("--style", default="relief", choices=["relief", "flat", "board"])
+    p.add_argument("--cart", action="store_true", help="write carts/m2")
+    p.add_argument("--sd", default=r"D:\Programowanie\sdcard", help="copy the cart there ('' = no)")
     a = p.parse_args(argv[1:])
     m = generate(a.seed, a.size, a.provinces)
     sizes = np.bincount(m["province"][m["province"] >= 0])
@@ -355,6 +501,8 @@ def main(argv):
     if a.png:
         preview(m, a.png, style=a.style)
         print("->", a.png)
+    if a.cart:
+        write_cart(m, a.sd or None)
 
 
 if __name__ == "__main__":
