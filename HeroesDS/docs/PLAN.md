@@ -166,9 +166,17 @@ z mapą wysokości, tekstury rombów, format `.h4c`, test z dwiema mapami z edyt
 
 Stan na 2026-10-27: **teren `.h4c` rozpracowany** — `tools/h4map.py` (czytnik: pola,
 nakładki, drogi, wysokości, poziomy), `tools/h4mapview.py` (podgląd PNG z teksturami
-gry, przejściami, drogami, wysokością i światłem), `tests/test_h4map.py`. Kolejność dalej:
-1. (opcjonalnie, tylko do malowania na DS) automat przejść i kształty pędzli — test:
+gry, przejściami, drogami, wysokością i światłem), `tests/test_h4map.py`. **Teren na DS (M1) — działa w melonDS, na konsoli jeszcze nie:** kartridż `carts/m1`
+(`python HeroesDS/tools/make_m1.py`: wycinek mapy, pola złożone na PC i „wyprostowane”
+do kwadratów 16×16 z ramką, arkusz 256 kolorów ~62 KB, wysokości i jasność narożników)
+rysowany przez `isogrid` z LiteLua (D58): ~260 pól w 2,4 ms (w Lua przez `quad` 42 ms).
+Klawisze: rysik/krzyżak przewijanie, A wysokość, X światło, L/R skala pagórków, Y C/Lua.
+Kolejność dalej:
+0. M1 na DSi (FTP): pomiar i ocena wyglądu (skala wysokości 0,5, jasność cienia).
+1. (tylko do malowania na DS) automat przejść i kształty pędzli — test:
    mapa `pedzle.h4c` z czterema kropkami piasku na trawie, po jednej każdym pędzlem;
+   do tego składanie kwadratów pola na DS (teren + nakładki przez maski) i podmiana
+   klatki w pamięci wideo — potrzebny zapis pikseli do obrazka w LiteLua (nowe API);
 2. **obiekty na mapie**: czytanie obiektów z `.h4c` (pozycja, rodzaj, dane miast/kopalń)
    + z `adv_object` pola zajmowane i wejście — test: mała mapa z zamkiem, kopalnią, drzewami;
 3. **przechodniość**: w pliku jej nie ma, liczymy z terenu (woda/rzeka blokuje, także
