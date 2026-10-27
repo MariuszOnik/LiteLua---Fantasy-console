@@ -111,3 +111,14 @@ Warstwa strategiczna jak w Imperial Glory (prowincje, oblężenia, AI z profilam
 - Neutralni to potwory H4 strzegące prowincji, kopalni i skarbów (zamiast 19 państw IG).
 - Kolejność: zasoby i dochód → miasto w prowincji → ruch komputera z bitwą automatyczną →
   walka H4 i oblężenia → handel → dyplomacja.
+- **Uzupełnienie (2026-10-27, decyzja użytkownika):** część neutralnych prowincji to
+  **niezależne miasta-państwa**, które można przejąć pokojowo (relacje, budynki, złoto,
+  jak w IG) albo zbrojnie. Pozostałe neutralne to potwory H4 strzegące kopalni i skarbów.
+  Kolejność prac nad mapą: pas morza → zasoby i kopalnie z miniaturami H4 (stolice
+  z zamkami) i dochód → minimapa → ekran miasta → szlaki handlowe na mapie (dochód,
+  blokada) → dyplomacja i pokojowe przejęcie → ewentualnie zoom.
+- **Generator M2 (2026-10-27):** wokół lądu jest pas 6 kafli otwartego morza (ląd wygasa
+  przed nim). Prowincje bez wnętrza (mniej niż 4 kafle otoczone tylko swoimi) łączą się
+  z sąsiadem. Strefy morskie mają ~110 kafli (na mapie 84×84 to ~37 stref zamiast 12),
+  żeby flota miała gdzie pływać. Ziarna państw wybierane są na największym lądzie
+  (wcześniej państwo mogło utknąć na wysepce z 1 prowincją). Ziarno 77 daje inną mapę.

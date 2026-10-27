@@ -6,7 +6,10 @@ style): height map, terrain, provinces, neighbours, names and owners -- all from
 
 Steps (all on a rows x cols grid of cells; corners are (rows + 1) x (cols + 1)):
   1. heights: value noise in octaves, lowered toward the edges -> land in the middle, sea
-     around it; sea level so that about LAND of the cells are land. --coast (0..1) makes
+     around it; sea level so that about LAND of the inner cells are land. The grid has a
+     MARGIN of open sea on every side: the land fades out before it (an extra pull down
+     near the inner edge), so coastal provinces are not cut by the map edge and fleets
+     can sail round. --coast (0..1) makes
      the shore more broken: the noise is read at places shifted by another noise
      (domain warping: bays, peninsulas, capes), its middle octaves count more and the
      edges pull down less (more islands and inlets)
@@ -15,11 +18,14 @@ Steps (all on a rows x cols grid of cells; corners are (rows + 1) x (cols + 1)):
      goes to the capital it reaches cheapest -- climbing costs more, so borders follow
      ridges; then RELAX times each capital moves to the land cell nearest the middle of
      its province and the land is shared out again (Lloyd), so provinces get even and
-     capitals sit inside; provinces under MIN_CELLS join their biggest neighbour
+     capitals sit inside; provinces under MIN_CELLS, or thin ones (fewer than MIN_CORE
+     cells with all eight neighbours in the province: strips along a coast or a ridge),
+     join the neighbour they share most border with
   4. neighbours (cells touching across an edge), names from syllables, owners: the six
      H4 factions, each growing a compact realm from a seed province
-  5. sea zones: the sea is shared out the same way into SEA_ZONES bigger zones without
-     an owner (fleets, transports, trade); they are numbered after the land provinces,
+  5. sea zones: the sea is shared out the same way into zones of about SEA_ZONE_CELLS
+     cells without an owner (fleets, transports, trade); they are numbered after the
+     land provinces,
      and their neighbours are the next zones and the coastal provinces (ports)
 --png writes a preview: the political view (land tinted with the owner, borders) next to
 the natural one. --style picks how the land looks:
@@ -52,8 +58,13 @@ from PIL import Image, ImageDraw
 LAND = 0.55            # share of the cells that are land
 RELAX = 4              # Lloyd steps for the provinces
 MIN_CELLS = 20         # smaller provinces join a neighbour
-SEA_ZONES = 12         # sea zones before merging small ones
-MIN_SEA_CELLS = 60
+MIN_CORE = 4           # thinner land provinces join a neighbour too
+MARGIN = 6             # open sea around the land, in cells (on every side)
+EDGE_FADE = 0.85       # the land starts fading at this part of the way to the inner edge
+EDGE_PULL = 0.35       # how far down the fade pulls at the inner edge
+SEA_ZONE_CELLS = 110   # sea cells per zone (before merging small ones): a fleet sails
+                       # 2 zones a turn, so smaller zones mean more places to go
+MIN_SEA_CELLS = 40
 SEA, BEACH, LOW, UP, MOUNT = range(5)
 TERRAIN = ["sea", "beach", "lowland", "upland", "mountain"]
 FACTIONS = [            # name, color (H4: Life, Order, Death, Chaos, Nature, Might)
@@ -91,20 +102,35 @@ def noise(rng, shape, octaves=5, warp=None, gain=0.5):
     return out / total
 
 
-def heights(rng, rows, cols, coast=0.0):
-    """Corner heights 0..1 (sea level at 0) and the sea level used."""
-    shape = (rows + 1, cols + 1)
+def heights(rng, rows, cols, coast=0.0, margin=0):
+    """Corner heights 0..1 (sea level at 0) and the cell heights over sea level, on a
+    grid of rows x cols cells inside a margin of open sea (the grid is margin cells
+    bigger on every side)."""
+    R, C = rows + 2 * margin, cols + 2 * margin
+    shape = (R + 1, C + 1)
     warp = None
     if coast > 0:
         warp = (noise(rng, shape, 3) * 0.35 * coast, noise(rng, shape, 3) * 0.35 * coast)
     h = noise(rng, shape, warp=warp, gain=0.5 + 0.15 * coast)
-    y, x = np.mgrid[0:rows + 1, 0:cols + 1]
-    d = np.maximum(np.abs(y / rows - 0.5), np.abs(x / cols - 0.5)) * 2      # 0 middle, 1 edge
+    y, x = np.mgrid[0:R + 1, 0:C + 1]
+    # 0 in the middle, 1 at the inner edge (more out in the margin)
+    d = np.maximum(np.abs((y - margin) / rows - 0.5), np.abs((x - margin) / cols - 0.5)) * 2
     h = h - (0.55 - 0.2 * coast) * d ** 2
+    if margin:
+        h = h - EDGE_PULL * (np.maximum(0, d - EDGE_FADE) / (1 - EDGE_FADE)) ** 2
     cells = (h[:-1, :-1] + h[1:, :-1] + h[:-1, 1:] + h[1:, 1:]) / 4
-    sea = np.quantile(cells, 1 - LAND)
+    sea = np.quantile(cells, 1 - LAND * rows * cols / (R * C))
     h = (h - sea) / (h.max() - sea)
-    return h, cells - sea
+    cells = cells - sea
+    if margin:
+        # whatever still rises in the margin sinks: the margin is open sea
+        out = np.ones((R, C), bool)
+        out[margin:R - margin, margin:C - margin] = False
+        cells[out] = np.minimum(cells[out], -1e-3)
+        corner_out = np.ones(shape, bool)
+        corner_out[margin + 1:R - margin, margin + 1:C - margin] = False
+        h[corner_out] = np.minimum(h[corner_out], 0)
+    return h, cells
 
 
 def terrain(cell_h):
@@ -139,7 +165,7 @@ def provinces(rng, terr, cell_h, count, sea=False):
         prov = share(terr, cell_h, caps, sea)
         caps = [middle(prov, i, caps[i]) for i in range(len(caps))]
     prov = share(terr, cell_h, caps, sea)
-    return merge_small(prov, caps, MIN_SEA_CELLS if sea else MIN_CELLS)
+    return merge_small(prov, caps, MIN_SEA_CELLS if sea else MIN_CELLS, 0 if sea else MIN_CORE)
 
 
 def middle(prov, i, old):
@@ -152,15 +178,29 @@ def middle(prov, i, old):
     return int(r), int(c)
 
 
-def merge_small(prov, caps, min_cells):
-    """Provinces under min_cells join the neighbour they share most border with
-    (islets without one keep no province); the rest are renumbered from 0."""
+def core_sizes(prov, n):
+    """Per province: its cells whose eight neighbours are all in it too."""
+    rows, cols = prov.shape
+    p = np.pad(prov, 1, constant_values=-1)
+    inner = prov >= 0
+    for dr in (-1, 0, 1):
+        for dc in (-1, 0, 1):
+            inner &= p[1 + dr:1 + dr + rows, 1 + dc:1 + dc + cols] == prov
+    return np.bincount(prov[inner], minlength=n)
+
+
+def merge_small(prov, caps, min_cells, min_core=0):
+    """Provinces under min_cells, or with a core (core_sizes) under min_core, join the
+    neighbour they share most border with (islets without one keep no province); the
+    rest are renumbered from 0."""
     while True:
         sizes = np.bincount(prov[prov >= 0], minlength=len(caps))
-        small = [i for i in range(len(caps)) if 0 < sizes[i] < min_cells]
+        cores = core_sizes(prov, len(caps)) if min_core else sizes
+        small = [i for i in range(len(caps))
+                 if 0 < sizes[i] and (sizes[i] < min_cells or cores[i] < min_core)]
         if not small:
             break
-        i = min(small, key=lambda k: sizes[k])
+        i = min(small, key=lambda k: (cores[k], sizes[k]))
         border = {}
         for r, c in np.argwhere(prov == i):
             for r2, c2 in neighbours4(r, c, *prov.shape):
@@ -224,9 +264,25 @@ def owners(rng, n, adj, caps, by_sea=None):
     nearest capital across one of its sea zones (by_sea: province -> provinces sharing a
     sea zone with it); only one without any gets a random owner."""
     owner = [-1] * n
-    seeds = [int(rng.integers(n))]
+    # the realms start on the biggest piece of land, so none is stuck on an island
+    main, seen = [], set()
+    for start in range(n):
+        if start in seen:
+            continue
+        part, todo = [], [start]
+        seen.add(start)
+        while todo:
+            a = todo.pop()
+            part.append(a)
+            for b in adj.get(a, ()):
+                if b not in seen:
+                    seen.add(b)
+                    todo.append(b)
+        if len(part) > len(main):
+            main = sorted(part)
+    seeds = [main[int(rng.integers(len(main)))]]
     while len(seeds) < len(FACTIONS):
-        far = max(range(n), key=lambda i: min((caps[i][0] - caps[s][0]) ** 2
+        far = max(main, key=lambda i: min((caps[i][0] - caps[s][0]) ** 2
                                               + (caps[i][1] - caps[s][1]) ** 2 for s in seeds))
         seeds.append(far)
     fronts = []
@@ -266,13 +322,14 @@ def name(rng):
 
 def generate(seed=1, size=72, count=45, coast=0.0):
     rng = np.random.default_rng(seed)
-    h, cell_h = heights(rng, size, size, coast)
+    h, cell_h = heights(rng, size, size, coast, MARGIN)
     terr = terrain(cell_h)
+    size = size + 2 * MARGIN
     prov, caps = provinces(rng, terr, cell_h, count)
     land_adj = adjacency(prov)
     names = [name(rng) for _ in caps]
     n = len(caps)
-    zones, centres = provinces(rng, terr, cell_h, SEA_ZONES, sea=True)
+    zones, centres = provinces(rng, terr, cell_h, max(1, int((terr == SEA).sum()) // SEA_ZONE_CELLS), sea=True)
     prov = np.where(zones >= 0, zones + n, prov)
     adj = adjacency(prov)
     by_sea = {i: {j for z in adj.get(i, ()) if z >= n for j in adj.get(z, ()) if j < n and j != i}
