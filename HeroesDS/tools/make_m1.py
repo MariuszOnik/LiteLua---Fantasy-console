@@ -8,7 +8,11 @@ with quad().  Equal squares are stored once; all of them make one 256-colour she
 
   carts/m1/gfx/terrain.png    the squares, FRAME x FRAME frames (index 0 stays transparent)
   carts/m1/data/terrain.lua   window size, frame per cell (-1 outside the map), corner
-                              heights and slopes toward the light for (rows+1) x (cols+1)
+                              heights and slopes toward the light for (rows+1) x (cols+1),
+                              and the objects back to front (h4objects.py)
+  carts/m1/gfx/objects.png    the objects' pictures at half size and their shadows as black
+                              shapes (the cart draws those with alpha: a palette image has
+                              no soft transparency)
 
 Usage (from the repo root):
   python HeroesDS/tools/make_m1.py [--map M.h4c] [--heights H.h4c] [--window r,c,rows,cols]
@@ -24,6 +28,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import cartkit  # noqa: E402
 import h4map  # noqa: E402
 import h4mapview  # noqa: E402
+import h4objects  # noqa: E402
 
 CART = cartkit.cart_dir("m1")
 TEX = 16             # texels per cell side
@@ -53,13 +58,68 @@ def slopes(level, light_dir, rows, cols, r0, c0):
     return out
 
 
+def palette_image(rgba):
+    """RGBA -> 255-colour palette image; alpha < 128 -> index 0 (transparent on the DS)."""
+    a = np.asarray(rgba)
+    q = rgba.convert("RGB").quantize(255, method=Image.Quantize.MEDIANCUT)
+    idx = np.asarray(q, np.uint8) + 1
+    idx[a[..., 3] < 128] = 0
+    out = Image.fromarray(idx, "P")
+    out.putpalette([0, 0, 0] + q.getpalette()[:255 * 3])
+    return out
+
+
+def object_sheet(m, archive, r0, c0, rows, cols):
+    """The objects anchored in the window, back to front: (sheet, records). A record is
+    the anchor cell (window coordinates), picture and shadow rectangles in the sheet and
+    their offset from the top corner of the anchor cell, at half size."""
+    arch = h4objects.h4r.Archive(archive)
+    models = h4objects.Models(arch)
+    objs = [o for o in h4map.find_objects(m, h4objects.names(arch))
+            if o.level == 0 and r0 <= o.row < r0 + rows and c0 <= o.col < c0 + cols]
+
+    def front(o):
+        cells = models.get(o.name).occupied or [(0, 0)]
+        return max(o.row + dr + o.col + dc for dr, dc in cells), o.col - o.row
+    pieces, recs = [], []
+    for o in sorted(objs, key=front):
+        p = models.parts(o.name)
+        if p is None:
+            continue
+        pic, shade, x, y = p
+        size = (max(1, pic.width // 2), max(1, pic.height // 2))
+        pic, shade = pic.resize(size, Image.LANCZOS), shade.resize(size, Image.LANCZOS)
+        black = np.zeros((size[1], size[0], 4), np.uint8)
+        black[..., 3] = np.where(np.asarray(shade)[..., 3] >= 48, 255, 0)
+        recs.append({"r": o.row - r0, "c": o.col - c0, "dx": x // 2, "dy": y // 2,
+                     "w": size[0], "h": size[1], "name": o.name})
+        pieces.append((pic, Image.fromarray(black, "RGBA")))
+    # shelves 256 wide: each picture, then its shadow
+    W, x, y, shelf = 256, 0, 0, 0
+    places = []
+    for pic, shade in pieces:
+        for im in (pic, shade):
+            if x + im.width > W:
+                x, y, shelf = 0, y + shelf, 0
+            places.append((x, y))
+            x += im.width
+            shelf = max(shelf, im.height)
+    sheet = Image.new("RGBA", (W, max(1, y + shelf)))
+    for i, (pic, shade) in enumerate(pieces):
+        sheet.alpha_composite(pic, places[2 * i])
+        sheet.alpha_composite(shade, places[2 * i + 1])
+        recs[i]["sx"], recs[i]["sy"] = places[2 * i]
+        recs[i]["hx"], recs[i]["hy"] = places[2 * i + 1]
+    return palette_image(sheet), recs
+
+
 def main(argv):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--archive", default=os.path.join(cartkit.HEROES, "Data", "heroes4.h4r"))
-    p.add_argument("--map", default=os.path.join(cartkit.HEROES, "droga i rzeka.h4c"))
+    p.add_argument("--map", default=os.path.join(cartkit.HEROES, "obiekty.h4c"))
     p.add_argument("--heights", default="",
                    help="take the corner heights from this map instead (same size)")
-    p.add_argument("--window", default="22,0,36,30", help="first row, first column, rows, columns")
+    p.add_argument("--window", default="22,0,28,32", help="first row, first column, rows, columns")
     p.add_argument("--sd", default=cartkit.SD)
     a = p.parse_args(argv[1:])
     r0, c0, rows, cols = (int(v) for v in a.window.split(","))
@@ -103,15 +163,23 @@ def main(argv):
 
     heights = [lv.height(r, c) for r in range(r0, r0 + rows + 1) for c in range(c0, c0 + cols + 1)]
     slope = slopes(lv, (0.0, 1.0), rows, cols, r0, c0)   # light as in h4mapview
+    objects, recs = object_sheet(m, a.archive, r0, c0, rows, cols)
+    objects.save(os.path.join(CART, "gfx", "objects.png"))
 
     def arr(xs):
         return "{" + ",".join(str(x) for x in xs) + "}"
     with open(os.path.join(CART, "data", "terrain.lua"), "w", encoding="utf-8", newline="\n") as f:
         f.write(f"-- made by HeroesDS/tools/make_m1.py from {os.path.basename(a.map)}\n")
         f.write(f"return {{\n  rows = {rows}, cols = {cols}, row0 = {r0}, col0 = {c0}, tex = {FRAME},\n")
-        f.write(f"  frames = {arr(frames)},\n  heights = {arr(heights)},\n  slope = {arr(slope)},\n}}\n")
+        f.write(f"  frames = {arr(frames)},\n  heights = {arr(heights)},\n  slope = {arr(slope)},\n")
+        f.write("  objects = {   -- back to front; r, c: anchor cell; dx, dy: from its top corner\n")
+        for o in recs:
+            f.write("    {{ r = {r}, c = {c}, dx = {dx}, dy = {dy}, w = {w}, h = {h}, sx = {sx}, "
+                    "sy = {sy}, hx = {hx}, hy = {hy} }},  -- {name}\n".format(**o))
+        f.write("  },\n}}\n".replace("}}", "}"))
     print(f"  {rows}x{cols} cells, {n} different squares, sheet {out.width}x{out.height} "
-          f"({out.width * out.height // 1024} KB)")
+          f"({out.width * out.height // 1024} KB); {len(recs)} objects, sheet "
+          f"{objects.width}x{objects.height}")
     cartkit.deploy(CART, a.sd)
 
 

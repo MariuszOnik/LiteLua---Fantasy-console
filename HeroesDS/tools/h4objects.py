@@ -18,10 +18,14 @@ Passability of a level (as homm4-mac's Passability): water and rivers block (a r
 a bridge, even under a road); every occupied footprint cell blocks; trigger cells are
 where a hero stands to use an object.  Not stored in the map: the editor shows the same.
 
+Pictures: the model's image records (h4d.py) after the header; the first 8 bytes after
+them are i32 x, y of the image origin from the top corner of the object's cell (as
+MapScene.swift).  Frame 1 is drawn over base_frame, shadows under them.
+
 Usage:
-  python h4objects.py <heroes4.h4r> <map.h4c> [out.png] [--level N]
-      lists the objects with their footprints; out.png: the terrain preview with blocked
-      cells red, water/river blue and trigger cells yellow
+  python h4objects.py <heroes4.h4r> <map.h4c> [out.png] [--level N] [--pass]
+      lists the objects with their footprints; out.png: the terrain preview with the
+      objects; --pass: blocked cells red, water/river blue and trigger cells yellow
 """
 import argparse
 import os
@@ -30,6 +34,7 @@ import sys
 from dataclasses import dataclass, field
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import h4d  # noqa: E402
 import h4map  # noqa: E402
 import h4r  # noqa: E402
 
@@ -79,6 +84,49 @@ class Models:
     def __init__(self, archive):
         self.archive = archive if isinstance(archive, h4r.Archive) else h4r.Archive(archive)
         self.cache = {}
+        self.pictures = {}
+
+    def parts(self, name):
+        """(picture, shadow, x, y): frame 1 over base_frame and the shadows under them, as
+        two RGBA images of the same box whose top left goes x, y from the top corner of
+        the object's cell; None without a model."""
+        key = name.lower()
+        if key not in self.pictures:
+            self.pictures[key] = self._parts(name)
+        return self.pictures[key]
+
+    def _parts(self, name):
+        try:
+            seq = h4d.parse(self.archive.read(f"adv_object.{name}.h4d"))
+        except (KeyError, ValueError):
+            return None
+        ox, oy = struct.unpack_from("<ii", seq.trailer) if len(seq.trailer) >= 8 else (0, 0)
+
+        def usable(images):
+            return [i for i in images if i and i.kind and i.box[2] > i.box[0]]
+        shadows = usable([seq.image("base_shadow")] + seq.layers("shadow", 1))
+        body = usable([seq.image("base_frame")] + seq.layers("frame", 1))
+        if not body:
+            return None
+        every = shadows + body
+        left, top = min(i.box[0] for i in every), min(i.box[1] for i in every)
+        size = (max(i.box[2] for i in every) - left, max(i.box[3] for i in every) - top)
+        from PIL import Image
+        pic, shade = Image.new("RGBA", size), Image.new("RGBA", size)
+        for target, images in ((shade, shadows), (pic, body)):
+            for i in images:
+                target.alpha_composite(i.rgba(), (i.box[0] - left, i.box[1] - top))
+        return pic, shade, ox + left, oy + top
+
+    def picture(self, name):
+        """(RGBA image, x, y): parts() composited, the shadow under the picture."""
+        p = self.parts(name)
+        if p is None:
+            return None
+        pic, shade, x, y = p
+        out = shade.copy()
+        out.alpha_composite(pic)
+        return out, x, y
 
     def get(self, name):
         key = name.lower()
@@ -126,12 +174,35 @@ def overlay(img, m, level, cells, pad, k=1.0):
     return __import__("PIL.Image", fromlist=["Image"]).alpha_composite(layer, over)
 
 
+def draw_objects(img, m, level, objects, models, pad, k=1.0):
+    """Draws the objects of one level onto the preview (h4mapview.render at scale 1),
+    back to front by the front corner of each footprint."""
+    import h4mapview
+    lv = m.levels[level]
+    out = img.convert("RGBA")
+
+    def front(o):
+        md = models.get(o.name)
+        cells = md.occupied or [(0, 0)]
+        return max(o.row + dr + o.col + dc for dr, dc in cells), o.col - o.row
+    for o in sorted((o for o in objects if o.level == level), key=front):
+        pic = models.picture(o.name)
+        if pic is None:
+            continue
+        im, dx, dy = pic
+        x, y = h4mapview.screen(m.size, o.row, o.col, pad)
+        top = y - 16 - lv.height(o.row, o.col) * k
+        out.alpha_composite(im, (int(x + dx), int(top + dy)))
+    return out
+
+
 def main(argv):
     p = argparse.ArgumentParser(description="Heroes IV map objects and passability")
     p.add_argument("archive")
     p.add_argument("map")
     p.add_argument("out", nargs="?")
     p.add_argument("--level", type=int, default=0)
+    p.add_argument("--pass", dest="passable", action="store_true", help="tint the passability")
     a = p.parse_args(argv[1:])
     arch = h4r.Archive(a.archive)
     m = h4map.parse(open(a.map, "rb").read())
@@ -144,7 +215,9 @@ def main(argv):
     if a.out:
         import h4mapview
         img = h4mapview.render(h4mapview.Assets(arch.filename), m, a.level)
-        img = overlay(img, m, a.level, passability(m, a.level, objs, models), int(256))
+        img = draw_objects(img, m, a.level, objs, models, 256)
+        if a.passable:
+            img = overlay(img, m, a.level, passability(m, a.level, objs, models), 256)
         img.convert("RGB").save(a.out)
         print("->", a.out)
 

@@ -2,6 +2,8 @@
 -- Bottom screen: the terrain; drag the stylus or use the d-pad to scroll.
 -- A: heights on/off, X: light on/off, B: shade strength, L/R: flatter/steeper
 -- hills, Y: isogrid (C) or one quad() per cell from Lua (to compare).
+-- Objects (T.objects) are drawn over the terrain: all shadows (alpha), then the
+-- pictures back to front.
 -- Top screen: the cost of drawing it. Data: HeroesDS/tools/make_m1.py.
 
 local T = dofile("data/terrain.lua")
@@ -13,7 +15,8 @@ local FRAMES, HEIGHTS, SLOPE = T.frames, T.heights, T.slope
 local FLAT = 25                 -- light level of flat ground (31 = white; tint only darkens)
 local STRENGTHS = { 0.1, 0.15, 0.2, 0.25, 0.3, 0.4, 0.6 }
 
-local img, grid, plain
+local img, grid, plain, objimg
+local OBJECTS = T.objects or {}
 local gray = {}                 -- light level 0..31 -> tint color
 local LIGHT = {}                -- corner -> light level, from SLOPE and the strength
 local strength = 6              -- index into STRENGTHS (0.4; B changes it)
@@ -50,6 +53,7 @@ end
 
 function _init()
   img = image("terrain", T.tex)
+  if #OBJECTS > 0 then objimg = image("objects") end
   for l = 0, 31 do
     gray[l] = (l * 255 // 31) * 0x10101
   end
@@ -123,6 +127,24 @@ local function draw_lua()
   return n
 end
 
+-- Each object at the top corner of its anchor cell, raised with the ground there
+local function draw_objects()
+  if not objimg then return end
+  local k = heights_on and scale or 0
+  alpha(0.4)
+  for _, o in ipairs(OBJECTS) do
+    local x = (o.c - o.r) * HW + o.dx
+    local y = (o.c + o.r) * HH - HH - HEIGHTS[o.r * W1 + o.c + 1] * k + o.dy
+    sspr(objimg, o.hx, o.hy, o.w, o.h, x, y)
+  end
+  alpha()
+  for _, o in ipairs(OBJECTS) do
+    local x = (o.c - o.r) * HW + o.dx
+    local y = (o.c + o.r) * HH - HH - HEIGHTS[o.r * W1 + o.c + 1] * k + o.dy
+    sspr(objimg, o.sx, o.sy, o.w, o.h, x, y)
+  end
+end
+
 function _draw(screen)
   cls(0x101018)
   if screen == BOTTOM then
@@ -132,6 +154,7 @@ function _draw(screen)
       -- the top corner of cell (0, 0) is HH above the centre row 0 of draw_lua
       local g = light_on and grid or plain
       g:draw(0, -HH, heights_on and scale or 0)
+      draw_objects()
       camera()
       drawn = -1
     else
