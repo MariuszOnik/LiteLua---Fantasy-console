@@ -177,7 +177,10 @@ Kolejność dalej:
    mapa `pedzle.h4c` z czterema kropkami piasku na trawie, po jednej każdym pędzlem;
    do tego składanie kwadratów pola na DS (teren + nakładki przez maski) i podmiana
    klatki w pamięci wideo — potrzebny zapis pikseli do obrazka w LiteLua (nowe API);
-2. **obiekty na mapie**: czytanie obiektów z `.h4c` (pozycja, rodzaj, dane miast/kopalń)
-   + z `adv_object` pola zajmowane i wejście — test: mała mapa z zamkiem, kopalnią, drzewami;
+2. **obiekty na mapie** — częściowo (2026-10-27, `obiekty.h4c`): pozycja, model, typ
+   (`h4map.find_objects`), pola zajęte i wejścia z modelu (`tools/h4objects.py`), zgodne z
+   podglądem blokad edytora. Zostało: bohaterowie (zapisani inaczej), dane miast/kopalń
+   (garnizon), obrazki obiektów na mapie (podgląd PC i DS);
 3. **przechodniość**: w pliku jej nie ma, liczymy z terenu (woda/rzeka blokuje, także
-   pod drogą) i obiektów (pkt 2); droga = tańszy ruch (bajt drogi pola).
+   pod drogą) i obiektów (pkt 2) — `h4objects.passability` (zablokowane / woda / pola
+   wejścia); zostały koszty ruchu terenu i droga = tańszy ruch (bajt drogi pola).

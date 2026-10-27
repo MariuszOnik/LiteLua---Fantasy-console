@@ -188,6 +188,17 @@ Ustalenia z 2026-10-26 — do trybu mapy kontynentu i ewentualnie terenu walki.
   pada w lewo). Dopasowane do zrzutu z edytora (`droga i rzeka.h4c` z pagórkiem, skala
   zrzutu 1,25, korelacja jasności 0,81 przy 90°; pierwsze ustawienie „na oko” (1, −1)
   było prawie odwrotne). Siła: ~1,1 × (nachylenie / 128) w jasności.
+- **Obiekty — 2026-10-27** (`obiekty.h4c`, `tools/h4map.py` `find_objects`, `tools/h4objects.py`):
+  rekord obiektu = i32 wiersz, i32 kolumna, u8 poziom, u32 0, nazwa modelu
+  (`adv_object.<nazwa>.h4d`), u16 0, 3 × (u16 id, tekst): typ / podtyp / teren lub kierunek,
+  potem dane zależne od typu (miasta i kopalnie: sloty garnizonu „seq”; dekoracje nic).
+  Szukane po nazwach modeli z archiwum (ciała rekordów jeszcze nieodczytane). Model ma
+  w nagłówku obszar w×h, maskę pól zajętych (bit i = pole (wiersz + i mod w, kolumna +
+  i div w)) i maski krawędzi wejścia (brama miasta, wejście kopalni) → pola wejścia.
+  Przykład: zamek 6×6 cały zajęty, brama 2 pola po stronie „wiersz +”; kopalnia złota 1×2;
+  drzewa 1 pole. Bohater nie jest modelem `adv_object` — zapisany inaczej (do zrobienia).
+  **Edytor spłaszcza teren pod dużymi obiektami** (obserwacja użytkownika) i zapisuje już
+  spłaszczone wysokości — czytnik nic nie poprawia; własny edytor na DS musiałby to robić.
 - **Na DS**: LiteLua rysuje przez sprzętowe 3D (D5, gl2d), więc teren z wysokością da się
   narysować jako siatkę z teksturą i jasnością w wierzchołkach (cieniowanie prawie za
   darmo). Alternatywa: prerender mapy na PC do płaskich obrazków (dużo pamięci).

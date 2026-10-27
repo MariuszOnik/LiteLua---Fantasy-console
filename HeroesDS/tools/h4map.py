@@ -8,7 +8,12 @@ File: "H4CAMPAIGN", u32 22, u8 0, then a gzip stream (little endian inside):
            u16 size (76, 152, 228, 304)   u8 levels (1 = surface, 2 = + underground)   u32 ?
            u8 nplayers, nplayers x 5 bytes,  u16 len + name,  u8 difficulty?,
            u16 len + description
-  ...      players, objects (not decoded here; `objects` keeps their raw bytes)
+  ...      players, objects (`objects` keeps the raw bytes; find_objects reads the placed
+           objects from them): an object record is i32 row, i32 column, u8 level, u32 0,
+           u16 len + model name (adv_object.<name>.h4d), u16 0, 3 x (u16 id, u16 len +
+           string) -- type, subtype, terrain or facing -- then data that depends on the
+           type (none for decorations; garrison slots "seq" for towns and mines).  The
+           position is the cell of the model's footprint origin (h4objects.py).
   cells    levels x one record per playable cell.  The playable area is the diamond
            |r - (size-1)/2| + |c - (size-1)/2| <= size/2 of the size x size grid,
            row-major (2964 cells for 76).
@@ -28,8 +33,9 @@ File: "H4CAMPAIGN", u32 22, u8 0, then a gzip stream (little endian inside):
            ~1 screen pixel per unit at 64x32 tiles.  The file ends there.
 
 The cells are found by trying each start after the header: a start is right when
-parsing all cells ends exactly where the height grids begin (an empty map repeats
-the same 11 bytes, so a weaker test locks onto a wrong offset).
+every cell has its u16 8 and parsing all cells ends exactly where the height grids
+begin (an empty map repeats the same 11 bytes, and object records before the cells can
+parse as cells too, so a weaker test locks onto a wrong offset).
 
 Usage:
   python h4map.py <map.h4c>          prints a summary
@@ -66,6 +72,18 @@ class Level:
 
     def height(self, r, c):
         return self.heights.get((r, c), 0)
+
+
+@dataclass
+class Placed:
+    row: int
+    col: int
+    level: int
+    name: str        # model: adv_object.<name>.h4d
+    type: str        # "town", "mine", "decorative", ...
+    subtype: str
+    kind: str        # terrain or facing
+    offset: int      # of the name in Map.objects
 
 
 @dataclass
@@ -118,7 +136,7 @@ def parse_cells(d, pos, count, stop):
         if pos + 11 > stop:
             return None, pos
         t, v, n = d[pos], d[pos + 1], d[pos + 9]
-        if t >= len(TERRAIN_NAMES) or v > 3 or n > 8:
+        if t >= len(TERRAIN_NAMES) or v > 3 or n > 8 or d[pos + 7] != 8 or d[pos + 8] != 0:
             return None, pos
         overlays = []
         for p in range(pos + 10, pos + 10 + 5 * n, 5):
@@ -154,6 +172,33 @@ def parse(raw):
         hb = d[heights_at + lv * len(corner_list):heights_at + (lv + 1) * len(corner_list)]
         levels.append(Level(dict(zip(cells_at, part)), dict(zip(corner_list, hb))))
     return Map(version, size, name, desc, levels, bytes(d[pos:start]))
+
+
+def find_objects(m, names):
+    """The placed objects of map m, in file order. The records are found by their model
+    names (`names`: lower-case names of the archive's adv_object models, h4objects.names),
+    since the data after each record's header is not decoded."""
+    d, out, p = m.objects, [], 13
+    while p < len(d) - 2:
+        n = struct.unpack_from("<H", d, p)[0]
+        if 4 <= n <= 80 and d[p + 2:p + 2 + n].decode("latin-1").lower() in names:
+            name, q = _str(d, p)
+            row, col, level, zero = struct.unpack_from("<iiBI", d, p - 13)
+            cats = []
+            q += 2
+            for _ in range(3):
+                if q + 4 > len(d) or q + 4 + struct.unpack_from("<H", d, q + 2)[0] > len(d):
+                    break
+                text, q = _str(d, q + 2)
+                cats.append(text)
+            if len(cats) == 3 and zero == 0 and 0 <= level < len(m.levels):
+                out.append(Placed(row, col, level, name, *cats, p))
+                p = q
+            else:
+                p += 1
+        else:
+            p += 1
+    return out
 
 
 def main(argv):
