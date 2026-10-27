@@ -12,10 +12,16 @@ File: "H4CAMPAIGN", u32 22, u8 0, then a gzip stream (little endian inside):
   cells    levels x one record per playable cell.  The playable area is the diamond
            |r - (size-1)/2| + |c - (size-1)/2| <= size/2 of the size x size grid,
            row-major (2964 cells for 76).
-           cell  u8 type, u8 variant, 5 bytes ?, u16 8, u8 n, n x overlay, u8 m, m x road
+           cell  u8 type, u8 variant, u8 road, 4 bytes ?, u16 8, u8 n, n x overlay,
+                 u8 m, m x road piece
+           road     the cell's road type (0 none, 1 gravel, 2 dirt, 3 cobblestone): the cell
+                    is road (all road when it has no road pieces); shoulders next to a road
+                    keep 0.  Passability is not stored: the editor derives it from the
+                    terrain (water and rivers block, even under a road) and the objects.
            overlay  u8 type, u8 variant, u16 mask, u8 order    another terrain drawn
                     through mask number `mask` of transition.Transitions
-           road     u8 kind (0 dirt, 1 gravel, 2 cobblestone), u8 mask, u8 0, u8 ?
+           road piece  u8 kind (1..3 a shoulder of that road type, 0 the road body), u8 mask,
+                    u8 0, u8 order  (pieces and overlays are drawn by order; roads 10..14)
   heights  levels x one u8 per corner of the playable cells (the corners of the diamond,
            row-major: rows of 3, 5, 7 ... size+1 ... 7, 5, 3 corners; 3117 for 76).
            Corner (r, c) is the top corner of cell (r, c) on screen; 0 = flat,
@@ -44,9 +50,13 @@ TERRAIN_NAMES = ["water", "grass", "rough", "swamp", "lava", "snow", "sand", "di
 class Cell:
     type: int
     variant: int
-    extra: bytes                                   # the 5 unknown bytes
+    extra: bytes                                   # road type + 4 unknown bytes
     overlays: list = field(default_factory=list)   # (type, variant, mask, order)
-    roads: list = field(default_factory=list)      # (kind, mask, x)
+    roads: list = field(default_factory=list)      # (kind, mask, order)
+
+    @property
+    def road(self):
+        return self.extra[0]
 
 
 @dataclass
@@ -156,10 +166,11 @@ def main(argv):
         types = Counter((c.type, c.variant) for c in lv.cells.values())
         over = sum(len(c.overlays) for c in lv.cells.values())
         roads = sum(len(c.roads) for c in lv.cells.values())
-        extra = Counter(c.extra for c in lv.cells.values())
+        road_cells = sum(1 for c in lv.cells.values() if c.road)
+        extra = Counter(c.extra[1:] for c in lv.cells.values())
         hs = list(lv.heights.values())
         print(f" level {i}: " + ", ".join(f"{TERRAIN_NAMES[t]}/{v} x{n}" for (t, v), n in types.most_common()))
-        print(f"   {over} overlays, {roads} road pieces, height max {max(hs)}, "
+        print(f"   {over} overlays, {road_cells} road cells, {roads} road pieces, height max {max(hs)}, "
               f"{sum(1 for h in hs if h)} raised corners, unknown bytes {extra.most_common(3)}")
 
 

@@ -174,7 +174,14 @@ Ustalenia z 2026-10-26 — do trybu mapy kontynentu i ewentualnie terenu walki.
   wariant 1–3 z położenia: `(r·3 + c·5) mod 3 + 1`. Edytor zapisuje przejście po obu
   stronach granicy — tylko to przypisanie daje gradienty, które się spotykają
   (odwrotne = ostre linie wzdłuż krawędzi pól, sprawdzone). Bagno liczę jak wodę
-  (miękki brzeg jak w edytorze — ustalone z obrazu, nie z kodu gry). Krawędziowe piksele kolumn masek i
+  (miękki brzeg jak w edytorze — ustalone z obrazu, nie z kodu gry).
+  **Drogi** (`droga i rzeka.h4c`): 1. z „5 nieznanych bajtów” pola = **typ drogi pola**
+  (0 brak, 1 żwir, 2 ziemia, 3 bruk); takie pole jest drogą — bez kawałków drogi cała
+  jest drogą. Kawałek drogi: rodzaj 1–3 = pobocze tego typu (pole obok, maska `road 1`),
+  0 = środek drogi (maska odwrócona: w masce widać teren). Rzeka (typ 9) to zwykły teren
+  z przejściami. **Przechodniości nie ma w pliku**: edytor (podgląd „kolizji”) liczy ją
+  z terenu — rzeka/woda blokuje nawet pod drogą — i z obiektów. Pozostałe 4 bajty pola
+  wciąż zera. Krawędziowe piksele kolumn masek i
   kafelków trzeba rozciągnąć na zewnątrz, inaczej na krawędziach pól wychodzą kropkowane
   linie. Światło do cieniowania stoków: z kierunku (wiersz +1, kolumna −1) wg zrzutu.
 - **Na DS**: LiteLua rysuje przez sprzętowe 3D (D5, gl2d), więc teren z wysokością da się

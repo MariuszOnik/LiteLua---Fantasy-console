@@ -49,6 +49,13 @@ class TestH4Map(unittest.TestCase):
             self.assertEqual(lv.height(*corners[i]), i % 251)
         self.assertEqual(lv.height(0, 0), 0)                  # outside the diamond
 
+    def test_road_byte(self):
+        n = len(h4map.diamond(76))
+        road = bytes([1, 0, 1, 0, 0, 0, 0, 8, 0, 0, 0])       # grass, road type 1
+        cells = h4map.parse(make_map(cells=road + GRASS * (n - 1))).levels[0].cells
+        self.assertEqual(cells[h4map.diamond(76)[0]].road, 1)
+        self.assertEqual(cells[h4map.diamond(76)[1]].road, 0)
+
     def test_overlays_roads_and_two_levels(self):
         n = len(h4map.diamond(76))
         special = bytes([0, 1, 0, 0, 0, 0, 0, 8, 0, 2]) + bytes([1, 0, 6, 0, 7, 6, 0, 24, 0, 5])

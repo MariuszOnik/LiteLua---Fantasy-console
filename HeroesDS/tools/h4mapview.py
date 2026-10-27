@@ -40,18 +40,61 @@ import h4r  # noqa: E402
 
 TERRAIN_BASE = {0: "water", 1: "grass", 2: "rough", 3: "swamp", 4: "lava", 5: "snow",
                 6: "sand", 7: "dirt", 8: "subterranean"}
-TERRAIN_SINGLE = {9: "river.water.1", 10: "river.lava.1", 11: "river.ice.1", 12: "magic.all",
-                  13: "magic.life", 14: "magic.order", 15: "magic.death.1", 16: "magic.chaos.1",
-                  17: "magic.nature.1", 18: "magic.all"}
-ROAD_FILE = {0: "road.dirt.1", 1: "road.gravel.1", 2: "road.cobblestone.1"}
+TERRAIN_SINGLE = {9: "river.water", 10: "river.lava", 11: "river.ice", 12: "magic.all",
+                  13: "magic.life", 14: "magic.order", 15: "magic.death", 16: "magic.chaos",
+                  17: "magic.nature", 18: "magic.all"}
+TWO_PATCHES = {"river.water", "river.lava", "river.ice", "magic.death", "magic.chaos", "magic.nature"}
+# road piece kind: 1..3 = a shoulder of that road type, 0 = road body (type from its neighbours)
+ROAD_FILE = {1: "road.gravel", 2: "road.dirt", 3: "road.cobblestone"}
 COLUMN = [w for w in range(1, 32, 2) for _ in (0, 1)]
 COLUMN += COLUMN[::-1]                                    # pixels in each of the 64 columns
 
 
-def terrain_file(t, v):
+def patch_alt(r, c):
+    """Most terrains have two patches (.1/.2), alternating in 10x10 blocks of cells."""
+    return (r // 10 + c // 10) % 2 + 1
+
+
+def terrain_file(t, v, r=0, c=0):
     if t in TERRAIN_BASE:
-        return f"{TERRAIN_BASE[t]}.{min(v, 1) + 1}.1"
-    return TERRAIN_SINGLE.get(t)
+        return f"{TERRAIN_BASE[t]}.{min(v, 1) + 1}.{patch_alt(r, c)}"
+    s = TERRAIN_SINGLE.get(t)
+    return f"{s}.{patch_alt(r, c)}" if s in TWO_PATCHES else s
+
+
+def road_types(level):
+    """Road type of every cell, after MapScene.swift: shoulders carry their type; a body
+    cell takes the type most of its 8 neighbours have (repeated until nothing changes),
+    an isolated body is dirt."""
+    types, pending = {}, []
+    for k, cell in level.cells.items():
+        kinds = [rd[0] for rd in cell.roads]
+        shoulders = [t for t in kinds if t in ROAD_FILE]
+        if cell.road in ROAD_FILE:              # the cell's own road type (h4map.Cell.road)
+            types[k] = cell.road
+        elif shoulders:
+            types[k] = max(shoulders)
+        elif 0 in kinds:
+            pending.append(k)
+    changed = True
+    while pending and changed:
+        changed, rest = False, []
+        for r, c in pending:
+            votes = {}
+            for dr in (-1, 0, 1):
+                for dc in (-1, 0, 1):
+                    t = types.get((r + dr, c + dc))
+                    if (dr or dc) and t:
+                        votes[t] = votes.get(t, 0) + 1
+            if votes:
+                types[(r, c)] = max(votes, key=votes.get)
+                changed = True
+            else:
+                rest.append((r, c))
+        pending = rest
+    for k in pending:
+        types[k] = 2
+    return types
 
 
 def columns(values):
@@ -150,25 +193,35 @@ def overlay_set(base, over, r, c):
     return f"land_to_water {n}"
 
 
-def compose(assets, cell, r, c):
+def compose(assets, cell, r, c, road_type=0):
     """The cell's flat 32x64 RGBA image: terrain, then overlays and roads by their order
-    byte (roads sit at 10..14, so terrain drawn after a road nibbles its edges)."""
+    byte (roads sit at 10..14, so terrain drawn after a road nibbles its edges).  A road
+    shoulder is drawn through its mask, a road body through the inverted mask (the
+    terrain shows inside the mask)."""
     ti = tile_index(r, c)
-    img = assets.tiles(terrain_file(cell.type, cell.variant))[ti].copy()
+    img = assets.tiles(terrain_file(cell.type, cell.variant, r, c))[ti].copy()
     items = [(o[3], "terrain", o) for o in cell.overlays] + [(rd[2], "road", rd) for rd in cell.roads]
+    if cell.road in ROAD_FILE and not cell.roads:
+        items.append((10, "road", (cell.road, None, 10)))   # all road: no mask needed
     for _, kind, item in sorted(items, key=lambda i: i[0]):
         if kind == "terrain":
             t, v, mask, _ = item
-            name = terrain_file(t, v)
+            name = terrain_file(t, v, r, c)
             if not name:
                 continue
             a = assets.masks[overlay_set(cell.type, t, r, c)][mask][1]
         else:
-            road, mask, _ = item
-            name = ROAD_FILE.get(road)
-            if not name or mask >= 93:
+            piece, mask, _ = item
+            name = ROAD_FILE.get(piece or road_type)
+            if not name or (mask is not None and mask >= 93):
                 continue
-            a = assets.masks["road 1"][mask][1]
+            name = f"{name}.{patch_alt(r, c)}"
+            if mask is None:
+                a = np.ones((32, 64), np.float32)
+            else:
+                a = assets.masks["road 1"][mask][1]
+                if piece == 0:
+                    a = 1 - a
         tile = assets.tiles(name)[ti]
         a = a[..., None] * tile[..., 3:]
         img[..., :3] = img[..., :3] * (1 - a) + tile[..., :3] * a
@@ -229,10 +282,11 @@ def render(assets, m, level=0, k=1.0, light=(1.0, -1.0)):
     canvas = np.zeros(((n + 6) * 16 + pad, (n + 4) * 32, 3), np.float32)
     canvas[:] = (0.05, 0.05, 0.08)
     lum = corner_light(lv, light)
+    roads = road_types(lv)
     # tile corners: top, right, bottom, left (tile x, y)
     T, R, B, L = (32, 0), (64, 16), (32, 32), (0, 16)
     for r, c in sorted(lv.cells, key=lambda p: (p[0] + p[1], p[1] - p[0])):
-        img = compose(assets, lv.cells[(r, c)], r, c)
+        img = compose(assets, lv.cells[(r, c)], r, c, roads.get((r, c), 0))
         x, y = screen(n, r, c, pad)
         corner = {"T": (r, c), "R": (r, c + 1), "B": (r + 1, c + 1), "L": (r + 1, c)}
         sp = {"T": (x, y - 16), "R": (x + 32, y), "B": (x, y + 16), "L": (x - 32, y)}
