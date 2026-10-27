@@ -6,7 +6,10 @@ style): height map, terrain, provinces, neighbours, names and owners -- all from
 
 Steps (all on a rows x cols grid of cells; corners are (rows + 1) x (cols + 1)):
   1. heights: value noise in octaves, lowered toward the edges -> land in the middle, sea
-     around it; sea level so that about LAND of the cells are land
+     around it; sea level so that about LAND of the cells are land. --coast (0..1) makes
+     the shore more broken: the noise is read at places shifted by another noise
+     (domain warping: bays, peninsulas, capes), its middle octaves count more and the
+     edges pull down less (more islands and inlets)
   2. terrain by height: sea, beach, lowland, upland, mountain (snow on the peaks)
   3. provinces: capitals spread over the land (farthest-point sampling), every land cell
      goes to the capital it reaches cheapest -- climbing costs more, so borders follow
@@ -62,33 +65,42 @@ SYLLABLES = ["ar", "bel", "cor", "dal", "en", "fal", "gor", "hal", "is", "kar", 
              "ia", "on", "ost", "mir", "dun", "gal"]
 
 
-def noise(rng, shape, octaves=5):
-    """Value noise in [0, 1]: bilinear random grids, each octave twice as fine."""
+def noise(rng, shape, octaves=5, warp=None, gain=0.5):
+    """Value noise in [0, 1]: bilinear random grids, each octave twice as fine. warp:
+    (dy, dx) arrays in [0, 1) of the shape: where each point reads the noise, shifted by
+    up to that fraction of the grid. gain: how much each finer octave counts."""
     h, w = shape
     out = np.zeros(shape)
     amp, total = 1.0, 0.0
+    y0 = np.linspace(0, 1, h, endpoint=False)[:, None] + np.zeros((1, w))
+    x0 = np.linspace(0, 1, w, endpoint=False)[None, :] + np.zeros((h, 1))
+    if warp is not None:
+        y0, x0 = (y0 + warp[0]) % 1, (x0 + warp[1]) % 1
     for o in range(octaves):
         n = 2 ** (o + 2)
         g = rng.random((n + 1, n + 1))
-        y = np.linspace(0, n, h, endpoint=False)
-        x = np.linspace(0, n, w, endpoint=False)
+        y, x = y0 * n, x0 * n
         yi, xi = y.astype(int), x.astype(int)
-        fy, fx = (y - yi)[:, None], (x - xi)[None, :]
+        fy, fx = y - yi, x - xi
         fy, fx = fy * fy * (3 - 2 * fy), fx * fx * (3 - 2 * fx)       # smoothstep
-        a, b = g[yi][:, xi], g[yi][:, xi + 1]
-        c, d = g[yi + 1][:, xi], g[yi + 1][:, xi + 1]
+        a, b = g[yi, xi], g[yi, xi + 1]
+        c, d = g[yi + 1, xi], g[yi + 1, xi + 1]
         out += amp * ((a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy)
         total += amp
-        amp *= 0.5
+        amp *= gain
     return out / total
 
 
-def heights(rng, rows, cols):
+def heights(rng, rows, cols, coast=0.0):
     """Corner heights 0..1 (sea level at 0) and the sea level used."""
-    h = noise(rng, (rows + 1, cols + 1))
+    shape = (rows + 1, cols + 1)
+    warp = None
+    if coast > 0:
+        warp = (noise(rng, shape, 3) * 0.35 * coast, noise(rng, shape, 3) * 0.35 * coast)
+    h = noise(rng, shape, warp=warp, gain=0.5 + 0.15 * coast)
     y, x = np.mgrid[0:rows + 1, 0:cols + 1]
     d = np.maximum(np.abs(y / rows - 0.5), np.abs(x / cols - 0.5)) * 2      # 0 middle, 1 edge
-    h = h - 0.55 * d ** 2
+    h = h - (0.55 - 0.2 * coast) * d ** 2
     cells = (h[:-1, :-1] + h[1:, :-1] + h[:-1, 1:] + h[1:, 1:]) / 4
     sea = np.quantile(cells, 1 - LAND)
     h = (h - sea) / (h.max() - sea)
@@ -237,9 +249,9 @@ def name(rng):
     return s.capitalize()
 
 
-def generate(seed=1, size=72, count=45):
+def generate(seed=1, size=72, count=45, coast=0.0):
     rng = np.random.default_rng(seed)
-    h, cell_h = heights(rng, size, size)
+    h, cell_h = heights(rng, size, size, coast)
     terr = terrain(cell_h)
     prov, caps = provinces(rng, terr, cell_h, count)
     own = owners(rng, len(caps), adjacency(prov), caps)
@@ -251,7 +263,7 @@ def generate(seed=1, size=72, count=45):
     own = own + [-1] * len(centres)
     names = names + [name(rng) + " Sea" for _ in centres]
     adj = adjacency(prov)
-    return dict(seed=seed, rows=size, cols=size, heights=h, cell_h=cell_h, terrain=terr,
+    return dict(seed=seed, coast=coast, rows=size, cols=size, heights=h, cell_h=cell_h, terrain=terr,
                 province=prov, capitals=caps, neighbours=adj, owner=own, names=names, land=n)
 
 
@@ -481,7 +493,7 @@ def write_cart(m, sd):
     def arr(xs):
         return "{" + ",".join(str(int(x)) for x in xs) + "}"
     with open(os.path.join(cart, "data", "map.lua"), "w", encoding="utf-8", newline="\n") as f:
-        f.write(f"-- made by HeroesDS/tools/make_m2.py --seed {m['seed']} --cart\n")
+        f.write(f"-- made by HeroesDS/tools/make_m2.py --seed {m['seed']} --coast {m['coast']} --cart\n")
         f.write(f"return {{\n  seed = {m['seed']}, rows = {rows}, cols = {cols}, tex = {tex},\n")
         f.write("  terrains = { " + ", ".join(f'"{t}"' for t in TERRAIN) + " },\n")
         f.write("  nature = { " + ", ".join(f"0x{r:02x}{g:02x}{b:02x}" for r, g, b in
@@ -513,12 +525,13 @@ def main(argv):
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--size", type=int, default=72)
     p.add_argument("--provinces", type=int, default=45)
+    p.add_argument("--coast", type=float, default=0.0, help="0..1: how broken the shore is")
     p.add_argument("--png")
     p.add_argument("--style", default="relief", choices=["relief", "flat", "board"])
     p.add_argument("--cart", action="store_true", help="write carts/m2")
     p.add_argument("--sd", default=r"D:\Programowanie\sdcard", help="copy the cart there ('' = no)")
     a = p.parse_args(argv[1:])
-    m = generate(a.seed, a.size, a.provinces)
+    m = generate(a.seed, a.size, a.provinces, a.coast)
     sizes = np.bincount(m["province"][m["province"] >= 0])
     n = m["land"]
     land_nb = [len([j for j in m["neighbours"].get(i, ()) if j < n]) for i in range(n)]
