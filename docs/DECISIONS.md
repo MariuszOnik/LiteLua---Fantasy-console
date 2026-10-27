@@ -1343,3 +1343,23 @@ szukanie ~1 s, tura komputera do kilku sekund. Propozycja agenta, użytkownik za
 - **Poprawka `micros()`:** licznik taktów 33,5 MHz (32 bity) przekręca się co 128 s, więc
   pomiary dłuższe niż 128 s dawały ujemne czasy. Teraz licznik 64-bitowy, aktualizowany w
   każdej klatce; wartość w Lua (32 bity) zawija się po ~35 min, ale różnice są poprawne.
+
+## D58 (2026-10-27) — Teren izometryczny z wysokością: `quad(...)` i `isogrid(...)`
+Z HeroesDS (mapa przygody H4: teren 2.5D, wysokość w narożnikach pól — `HeroesDS/docs/FORMATS.md`).
+Propozycja agenta, użytkownik za (wariant A: jeden kąt kamery, bez obrotu — nie pełne 3D).
+- **`quad(img, frame, x1, y1, ... x4, y4)`** — klatka rozciągnięta na dowolne 4 punkty (lewy górny,
+  prawy górny, prawy dolny, lewy dolny róg klatki), z `tint` w rogach. Rysowana jako **dwa trójkąty**
+  (przekątna prawy górny–lewy dolny).
+- **Pomiar (melonDS, HeroesDS `carts/m1`, ~260 pól na ekranie):** pętla w Lua z `quad` + `tint` na
+  pole 42 ms na ekran (sama pętla 12 ms, `quad` ~70 µs, `tint` ~40 µs na wywołanie) — za dużo
+  na 16 ms. Stąd **`isogrid(img, cols, rows, opts)`**: obiekt w C, `g:draw(x, y, [scale])` rysuje
+  widoczne pola jednym wywołaniem — **2,4 ms**, ten sam obraz (~18× szybciej).
+- Klatki to kwadraty „wyprostowane” z rombu (x wzdłuż kolumn, y wzdłuż wierszy), więc rogi klatki
+  idą prosto na rogi rombu; wysokości i kolory (cieniowanie) na narożnik; `-1` = brak pola.
+  `g:frame/height/color` zmieniają pojedyncze pola i narożniki (edycja mapy w grze).
+- Pola od tyłu do przodu (s = c + r), każde o krok głębokości wyżej — podniesione pole z przodu
+  zasłania tył. Romb rysowany **o 1 piksel większy** z każdej strony: rasteryzer DS zostawia
+  1-pikselowe szpary między wielokątami o wspólnej krawędzi pod nietypowym kątem (podniesione
+  rogi); podział na trójkąty sam ich nie usunął. Limit DS: 2048 wielokątów na ekran, pole = 2.
+- Pełne 3D (kamera, światło z normalnych, z-bufor) odłożone: grafika H4 to obrazki z jednego kąta,
+  a LiteLua rysuje w 2D; API `isogrid` da się później przełączyć bez zmian w grach.

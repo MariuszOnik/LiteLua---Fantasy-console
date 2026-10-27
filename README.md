@@ -309,6 +309,7 @@ function _draw(surface)
   spr(walk, x, y, 2, "x")                  -- mirrored ("x", "y" or "xy")
   sprx(ship, 128, 96, 0, angle, 2)         -- centered, rotated (degrees), scaled
   sspr(tiles, 0, 0, 8, 8, 10, 10, 32, 32)  -- any part, stretched
+  quad(tiles, 3, 100,40, 132,56, 100,72, 68,50) -- a frame on any 4 corners
   tint(2) spr(hero, x, y) tint()           -- red tint (4 colors: corner gradient)
 end
 ```
@@ -447,6 +448,33 @@ layers: 64 KB). The tileset is one image in video memory (128×64 with 16 colors
 Only the tiles on the screen are drawn; with 8×8 tiles a full screen is about 800
 tiles per layer, and the DS draws at most about 2000 per screen, so keep 8×8 maps to two
 layers.
+
+### Isometric ground with hills
+
+`isogrid(img, cols, rows, opts)` makes isometric ground: diamonds whose four corners can
+be raised, drawn by the engine in one call (in Lua one `quad` per cell is ~20× slower).
+Each cell shows a frame of `img` stretched onto its diamond — make the frames squares
+"straightened" from the diamond (x along the columns, y along the rows). `colors` per
+corner shade the slopes.
+
+```lua
+ground = isogrid(image("ground", 16), 20, 20, {
+  w = 32, h = 16,                -- diamond size (default)
+  frames = cells,                -- 20 * 20 frame numbers, row by row (-1 = none)
+  heights = hills,               -- 21 * 21 corner heights
+  colors = shade,                -- 21 * 21 corner colors (optional)
+})
+
+function _draw(surface)
+  camera(camx, camy)
+  ground:draw(0, 0, 0.5)         -- top corner of cell (0, 0) at 0, 0; heights * 0.5 px up
+end
+
+ground:height(5, 5, 40)          -- change a corner (also :frame and :color)
+```
+
+Cells are drawn back to front, so a hill covers what is behind it. A cell takes two of
+the DS's 2048 polygons per screen: keep about 900 cells or fewer on the screen.
 
 ### Path search
 

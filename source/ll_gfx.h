@@ -64,6 +64,23 @@ void ll_gfx_frame(void (*draw)(int screen, void *ud), void *ud);
 void ll_gfx_tiles(const LLImage *img, const uint16_t *cells, int map_w,
                   int map_h, int tile_w, int tile_h);
 
+// An isometric grid of raised cells (D58): each cell is a frame of an image
+// stretched onto a diamond whose four corners are lifted by their heights.
+typedef struct {
+    int cols, rows;          // Cells
+    int cw, ch;              // Diamond width and height in pixels (even)
+    const int16_t *frames;   // cols x rows, row by row; < 0 = no cell
+    const int16_t *heights;  // (cols + 1) x (rows + 1) corners, row by row
+    const u16 *colors;       // The same corners, or NULL for the tint color
+    int maxh;                // Highest corner, for culling
+} LLIsoGrid;
+
+// Draws the visible cells of 'g' back to front: the top corner of cell (0, 0)
+// at world x, y, heights times 'scale' (20.12, 0..8) pixels up. Uses the
+// camera, zoom, clip and alpha of the current _draw.
+void ll_gfx_isogrid(const LLImage *img, const LLIsoGrid *g, int x, int y,
+                    int32_t scale);
+
 // Registers the drawing functions as globals.
 void ll_gfx_register(lua_State *L);
 

@@ -979,6 +979,131 @@ void ll_gfx_tiles(const LLImage *img, const uint16_t *cells, int map_w,
     prim_end();
 }
 
+static int32_t floor_div(int32_t a, int32_t b)
+{
+    int32_t q = a / b;
+    return (a % b != 0 && (a < 0) != (b < 0)) ? q - 1 : q;
+}
+
+// Isometric height grid (D58). Screen row s = c + r and column d = c - r of a
+// cell; rows go back to front, each cell one depth step above the last, so a
+// raised cell in front covers the ones behind it. Every diamond is drawn one
+// pixel bigger on each side: the DS leaves 1-pixel cracks between polygons
+// whose shared edge has an odd slope (raised corners). Two triangles per
+// cell, split between the left and right corner.
+void ll_gfx_isogrid(const LLImage *img, const LLIsoGrid *g, int x, int y,
+                    int32_t scale)
+{
+    if (img->tex == 0 || img->frames == 0 || g->cols <= 0 || g->rows <= 0 ||
+        !poly_begin(true))
+        return;
+
+    // Visible world rectangle in quarter pixels
+    int32_t wx1 = gs.cam_x * 4 + (int32_t)(((int64_t)gs.clip_x << 14) / gs.zoom);
+    int32_t wy1 = gs.cam_y * 4 + (int32_t)(((int64_t)gs.clip_y << 14) / gs.zoom);
+    int32_t wx2 = gs.cam_x * 4 + (int32_t)(((int64_t)(gs.clip_x + gs.clip_w) << 14) / gs.zoom);
+    int32_t wy2 = gs.cam_y * 4 + (int32_t)(((int64_t)(gs.clip_y + gs.clip_h) << 14) / gs.zoom);
+
+    const int32_t hw = g->cw * 2, hh = g->ch * 2; // Half diamond, quarter pixels
+    const int32_t ox = x * 4, oy = y * 4;
+    const int32_t maxlift = (g->maxh * scale) >> 10;
+    const int32_t O = 4; // Overlap: one pixel
+
+    int32_t s1 = floor_div(wy1 - oy - hh - 1, hh);
+    int32_t s2 = floor_div(wy2 - oy + maxlift, hh);
+    int32_t d1 = floor_div(wx1 - ox - 1, hw);
+    int32_t d2 = floor_div(wx2 - ox, hw) + 1;
+    if (s1 < 0)
+        s1 = 0;
+    if (s2 > g->cols + g->rows - 2)
+        s2 = g->cols + g->rows - 2;
+
+    if (gs.bound != img->tex)
+    {
+        glBindTexture(0, img->tex);
+        gs.bound = img->tex;
+    }
+    const int W1 = g->cols + 1;
+    const u16 *col = g->colors;
+    const int fw = img->fw ? img->fw : img->w, fh = img->fh ? img->fh : img->h;
+    const int fcols = img->cols > 0 ? img->cols : 1;
+    glBegin(GL_TRIANGLES);
+    if (!col)
+        glColor(gs.tint[0]);
+    for (int32_t s = s1; s <= s2; s++)
+    {
+        int32_t ty = oy + s * hh; // Top corner of a flat cell
+        int32_t d = d1;
+        if ((d - s) & 1)
+            d++;
+        for (; d <= d2; d += 2)
+        {
+            int c = (s + d) / 2, r = (s - d) / 2;
+            if (c < 0 || c >= g->cols || r < 0 || r >= g->rows)
+                continue;
+            int f = g->frames[r * g->cols + c];
+            if (f < 0 || f >= img->frames)
+                continue;
+            int i = r * W1 + c; // Corners: T = i, R = i + 1, B = i + W1 + 1, L = i + W1
+            int32_t lt = (g->heights[i] * scale) >> 10;
+            int32_t lr = (g->heights[i + 1] * scale) >> 10;
+            int32_t lb = (g->heights[i + W1 + 1] * scale) >> 10;
+            int32_t ll = (g->heights[i + W1] * scale) >> 10;
+            int32_t yt = ty - O - lt, yr = ty + hh - lr, yb = ty + 2 * hh + O - lb, yl = ty + hh - ll;
+            int32_t top = yt < yr ? yt : yr, bottom = yb > yl ? yb : yl;
+            if (yl < top)
+                top = yl;
+            if (yb < top)
+                top = yb;
+            if (yt > bottom)
+                bottom = yt;
+            if (yr > bottom)
+                bottom = yr;
+            if (top > wy2 || bottom < wy1)
+                continue;
+
+            int32_t cx = ox + d * hw;
+            int u = (img->x + (f % fcols) * fw) * 16;
+            int v = (img->y + (f / fcols) * fh) * 16;
+            int u2 = u + fw * 16, v2 = v + fh * 16;
+            v16 xt = VXQ(cx), xr = VXQ(cx + hw + O), xb = VXQ(cx), xl = VXQ(cx - hw - O);
+            v16 vt = VYQ(yt), vr = VYQ(yr), vb = VYQ(yb), vl = VYQ(yl);
+
+            // Frame corners: top left on T, top right on R, bottom right on
+            // B, bottom left on L
+            if (col)
+                glColor(col[i]);
+            glTexCoord2t16(u, v);
+            glVertex3v16(xt, vt, gs.depth);
+            if (col)
+                glColor(col[i + 1]);
+            glTexCoord2t16(u2, v);
+            glVertex2v16(xr, vr);
+            if (col)
+                glColor(col[i + W1]);
+            glTexCoord2t16(u, v2);
+            glVertex2v16(xl, vl);
+
+            if (col)
+                glColor(col[i + 1]);
+            glTexCoord2t16(u2, v);
+            glVertex2v16(xr, vr);
+            if (col)
+                glColor(col[i + W1 + 1]);
+            glTexCoord2t16(u2, v2);
+            glVertex2v16(xb, vb);
+            if (col)
+                glColor(col[i + W1]);
+            glTexCoord2t16(u, v2);
+            glVertex2v16(xl, vl);
+            if (gs.depth < MAX_DEPTH)
+                gs.depth++;
+        }
+    }
+    glEnd();
+    prim_end();
+}
+
 // Axis-aligned sprite at x, y (pixels) with size dw x dh (pixels)
 static void draw_rect_textured(const LLImage *img, int u, int v, int w, int h,
                                int x, int y, int dw, int dh, bool fx, bool fy)
@@ -1087,6 +1212,47 @@ static int l_sspr(lua_State *L)
     if (dh < 0)
         dy += dh, dh = -dh, fy = !fy;
     draw_rect_textured(img, img->x + sx, img->y + sy, sw, sh, dx, dy, dw, dh, fx, fy);
+    return 0;
+}
+
+// quad(img, frame, x1, y1, x2, y2, x3, y3, x4, y4): a frame stretched onto any
+// four points, given for its top left, top right, bottom right and bottom left
+// corner (D58; e.g. terrain cells raised by height). Positions can have
+// fractions; tint() colors the corners as for the other sprites.
+static int l_quad(lua_State *L)
+{
+    LLImage *img = ll_image_check(L, 1);
+    int frame = (int)luaL_optinteger(L, 2, 0);
+    int32_t cx[4], cy[4];
+    for (int i = 0; i < 4; i++)
+    {
+        cx[i] = (int32_t)lroundf((float)luaL_checknumber(L, 3 + i * 2) * 4);
+        cy[i] = (int32_t)lroundf((float)luaL_checknumber(L, 4 + i * 2) * 4);
+    }
+    int u, v, w, h;
+    ll_image_frame(L, img, frame, &u, &v, &w, &h);
+    if (!poly_begin(true))
+        return 0;
+    if (gs.bound != img->tex)
+    {
+        glBindTexture(0, img->tex);
+        gs.bound = img->tex;
+    }
+    // Two triangles split between the top right and bottom left corner: a
+    // strongly bent quad (a raised corner) drawn as one GL quad leaves cracks
+    const int tu[4] = { u * 16, (u + w) * 16, (u + w) * 16, u * 16 };
+    const int tv[4] = { v * 16, v * 16, (v + h) * 16, (v + h) * 16 };
+    static const int order[6] = { 0, 1, 3, 1, 2, 3 };
+    glBegin(GL_TRIANGLES);
+    for (int k = 0; k < 6; k++)
+    {
+        int i = order[k];
+        glColor(gs.tint[gs.tint_corners ? i : 0]);
+        glTexCoord2t16(tu[i], tv[i]);
+        glVertex3v16(VXQ(cx[i]), VYQ(cy[i]), gs.depth);
+    }
+    glEnd();
+    prim_end();
     return 0;
 }
 
@@ -1344,6 +1510,7 @@ void ll_gfx_register(lua_State *L)
         { "spr", l_spr },
         { "sprx", l_sprx },
         { "sspr", l_sspr },
+        { "quad", l_quad },
         { "tint", l_tint },
         { "text", l_text },
         { "textw", l_textw },

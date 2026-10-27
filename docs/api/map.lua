@@ -5,7 +5,8 @@ return {
   title = "Tile maps",
   summary = "Levels made of tiles: map/<name>.lua files (written by hand or "
          .. "converted from Tiled), drawn by the engine, with tile flags for "
-         .. "collisions. Tile coordinates start at 0.",
+         .. "collisions. Tile coordinates start at 0. isogrid: isometric "
+         .. "ground with hills (D58).",
   since = "P8",
   entries = {
     {
@@ -110,6 +111,101 @@ end]],
           .. "layer names.",
       example = [[
 local world_w = level.w * level.tile]],
+    },
+    {
+      name = "isogrid", kind = "function",
+      sig = "isogrid(img, cols, rows, [opts]) -> grid",
+      args = {
+        { "img", "image", "frames for the cells (square frames work best)" },
+        { "cols", "integer", "cells across (1..1024)" },
+        { "rows", "integer", "cells down (1..1024)" },
+        { "opts", "table", "w, h: diamond size in pixels (even, default "
+          .. "32 x 16); frames: cols * rows frame numbers, row by row (-1 = "
+          .. "no cell, default 0); heights: (cols + 1) * (rows + 1) corner "
+          .. "heights 0..32767 (default 0); colors: the same corners, colors "
+          .. "multiplied with the frames (shading; default: the tint color)" },
+      },
+      ret = { { "grid", "the grid; its cells live in the engine" } },
+      desc = "Isometric ground with hills: every cell is a diamond whose four "
+          .. "corners are raised by their heights, drawn in one call (D58). A "
+          .. "frame is stretched onto its diamond: its top left corner on the "
+          .. "top corner of the cell, top right on the right, bottom right on "
+          .. "the bottom, bottom left on the left. So frames are squares "
+          .. "\"straightened\" from the diamond: x runs along the columns, y "
+          .. "along the rows. Cell (x, y) has the corners (x, y) top, (x+1, y) "
+          .. "right, (x+1, y+1) bottom and (x, y+1) left. Grid coordinates "
+          .. "start at 0. The DS draws at most 2048 polygons per screen and a "
+          .. "cell takes two, so keep about 900 cells or fewer on screen.",
+      example = [[
+ground = isogrid(image("ground", 16), 20, 20,
+  { frames = cells, heights = hills })]],
+    },
+    {
+      name = "grid:draw", kind = "function",
+      sig = "grid:draw(x, y, [scale])",
+      args = {
+        { "x", "number", "world x of the top corner of cell (0, 0)" },
+        { "y", "number", "world y of that corner" },
+        { "scale", "number", "pixels up per height unit, 0..8, default 1" },
+      },
+      desc = "Draws the cells you can see, back to front, so a hill in front "
+          .. "covers what is behind it. Works with camera (also zoom), clip "
+          .. "and alpha. The top corner of cell (x, y) is at x + (x - y) * w / "
+          .. "2, y + (x + y) * h / 2 when flat. Each diamond is drawn a pixel "
+          .. "bigger on every side so raised cells leave no cracks.",
+      example = [[
+camera(camx, camy)
+ground:draw(0, 0, 0.5)
+camera()]],
+    },
+    {
+      name = "grid:frame", kind = "function",
+      sig = "grid:frame(x, y, [f]) -> f",
+      args = {
+        { "x", "integer", "cell column (0 .. cols - 1)" },
+        { "y", "integer", "cell row (0 .. rows - 1)" },
+        { "f", "integer", "new frame, -1 = no cell" },
+      },
+      ret = { { "integer", "the frame of the cell" } },
+      desc = "Reads or changes the frame of a cell.",
+      example = [[
+ground:frame(3, 4, ROAD)]],
+    },
+    {
+      name = "grid:height", kind = "function",
+      sig = "grid:height(x, y, [h]) -> h",
+      args = {
+        { "x", "integer", "corner column (0 .. cols)" },
+        { "y", "integer", "corner row (0 .. rows)" },
+        { "h", "integer", "new height 0..32767" },
+      },
+      ret = { { "integer", "the height of the corner" } },
+      desc = "Reads or changes the height of a corner (the four cells around "
+          .. "it bend with it).",
+      example = [[
+ground:height(5, 5, ground:height(5, 5) + 8)  -- raise a hill]],
+    },
+    {
+      name = "grid:color", kind = "function",
+      sig = "grid:color(x, y, [col]) -> col",
+      args = {
+        { "x", "integer", "corner column (0 .. cols)" },
+        { "y", "integer", "corner row (0 .. rows)" },
+        { "col", "color", "new color of the corner" },
+      },
+      ret = { { "integer", "the color of the corner as 0xRRGGBB" } },
+      desc = "Reads or changes the color of a corner, multiplied with the "
+          .. "frames around it: light and shade on slopes. The first color "
+          .. "set on a grid without colors makes all other corners white.",
+      example = [[
+ground:color(5, 5, 0xc0c0c0)  -- a bit darker]],
+    },
+    {
+      name = "grid.cols", kind = "field", type = "integer",
+      sig = "grid.cols, grid.rows, grid.w, grid.h",
+      desc = "Cells across and down, and the diamond size in pixels.",
+      example = [[
+print(ground.cols, ground.rows)]],
     },
   },
 }

@@ -311,6 +311,27 @@ sprx(coin, 64, 40, 0, 0, 2)  -- twice as big]],
 sspr(tiles, 0, 0, 8, 8, 10, 10, 32, 32)]],
     },
     {
+      name = "quad", kind = "function",
+      sig = "quad(img, frame, x1, y1, x2, y2, x3, y3, x4, y4)",
+      args = {
+        { "img", "image", "image to draw" },
+        { "frame", "integer", "frame number from 0" },
+        { "x1, y1", "number", "where the top left corner of the frame goes" },
+        { "x2, y2", "number", "top right corner" },
+        { "x3, y3", "number", "bottom right corner" },
+        { "x4, y4", "number", "bottom left corner" },
+      },
+      desc = "Draws a frame stretched onto any four points: skewed, "
+          .. "turned into a diamond, lifted at one corner. Good for "
+          .. "isometric ground with hills, shadows and fake 3D. The texture "
+          .. "is split into two triangles, so very uneven shapes bend along "
+          .. "the diagonal. tint(c1, c2, c3, c4) colors its corners as for "
+          .. "spr. Positions can have fractions.",
+      example = [[
+-- a square tile as an isometric diamond, its left corner raised
+quad(grass, 0, 100, 40, 132, 56, 100, 72, 68, 50)]],
+    },
+    {
       name = "tint", kind = "function",
       sig = "tint([col]) / tint(c1, c2, c3, c4)",
       args = {
