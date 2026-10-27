@@ -163,3 +163,13 @@ Folder w repo LuaDS (H1), wykluczenia w `.gitignore`, plan i decyzje.
 Tryb mapy kontynentu — osobny plan, gdy walka będzie stała. **Najpierw przeczytać
 sekcję „Ważne na później: mapa przygody i teren” w `docs/FORMATS.md`** (teren 2.5D
 z mapą wysokości, tekstury rombów, format `.h4c`, test z dwiema mapami z edytora).
+
+Stan na 2026-10-27: **teren `.h4c` rozpracowany** — `tools/h4map.py` (czytnik: pola,
+nakładki, drogi, wysokości, poziomy), `tools/h4mapview.py` (podgląd PNG z teksturami
+gry, przejściami, drogami, wysokością i światłem), `tests/test_h4map.py`. Kolejność dalej:
+1. (opcjonalnie, tylko do malowania na DS) automat przejść i kształty pędzli — test:
+   mapa `pedzle.h4c` z czterema kropkami piasku na trawie, po jednej każdym pędzlem;
+2. **obiekty na mapie**: czytanie obiektów z `.h4c` (pozycja, rodzaj, dane miast/kopalń)
+   + z `adv_object` pola zajmowane i wejście — test: mała mapa z zamkiem, kopalnią, drzewami;
+3. **przechodniość**: w pliku jej nie ma, liczymy z terenu (woda/rzeka blokuje, także
+   pod drogą) i obiektów (pkt 2); droga = tańszy ruch (bajt drogi pola).
