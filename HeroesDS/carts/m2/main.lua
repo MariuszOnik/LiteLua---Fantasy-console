@@ -28,6 +28,8 @@ local paper_grid, relief_grid
 local relief = false            -- the view: paper map or relief
 local selected                  -- province number (0-based) or nil
 local camx, camy
+local DRAG_START = 5            -- pixels the stylus moves before a touch scrolls
+local press_x, press_y          -- where the current touch came down
 local drag_x, drag_y, drag_moved
 local recolor_ms = 0
 
@@ -40,61 +42,6 @@ for i, c in ipairs(M.nature) do NATURE[i - 1] = rgb(c) end
 for i, f in ipairs(M.factions) do FACTION[i - 1] = rgb(f.color) end
 
 
--- Colour of cell (r, c) in the paper view (r, g, b); make_m2.py has the same formula
-local function cell_color(r, c)
-  local i = r * COLS + c + 1
-  local t, p = M.terrain[i], M.province[i]
-  local col
-  if t == SEA then
-    col = { PAPER_SEA[1], PAPER_SEA[2], PAPER_SEA[3] }
-  else
-    -- land without a province (an islet) is plain parchment
-    local o = p >= 0 and FACTION[M.provinces[p + 1].owner] or PARCHMENT
-    local dark = t == MOUNT and 0.82 or t == 3 and 0.93 or 1
-    col = { (PARCHMENT[1] + o[1]) * 0.5 * dark, (PARCHMENT[2] + o[2]) * 0.5 * dark,
-            (PARCHMENT[3] + o[3]) * 0.5 * dark }
-  end
-  if selected and p == selected then
-    col = { col[1] * 0.8 + 60, col[2] * 0.8 + 60, col[3] * 0.8 + 60 }
-  end
-  return col[1], col[2], col[3]
-end
-
--- A corner takes the mean colour of the cells around it
-local function corner_color(r, c)
-  local sr, sg, sb, n = 0, 0, 0, 0
-  for rr = r - 1, r do
-    for cc = c - 1, c do
-      if rr >= 0 and rr < ROWS and cc >= 0 and cc < COLS then
-        local r1, g1, b1 = cell_color(rr, cc)
-        sr, sg, sb, n = sr + r1, sg + g1, sb + b1, n + 1
-      end
-    end
-  end
-  local function ch(v)
-    v = math.floor(v / n + 0.5)
-    return v < 0 and 0 or v > 255 and 255 or v
-  end
-  return ch(sr) << 16 | ch(sg) << 8 | ch(sb)
-end
-
--- Recolours every corner the given cells (list of r * COLS + c) touch, paper view
-local function recolor(cells)
-  local t0 = micros()
-  local corners = {}
-  for _, k in ipairs(cells) do
-    local r, c = k // COLS, k % COLS
-    for rr = r, r + 1 do
-      for cc = c, c + 1 do corners[rr * W1 + cc] = true end
-    end
-  end
-  for k in pairs(corners) do
-    local r, c = k // W1, k % W1
-    paper_grid:color(c, r, corner_color(r, c))
-  end
-  recolor_ms = (micros() - t0) / 1000
-end
-
 local CELLS_OF = {}             -- province -> its cells
 for k = 0, ROWS * COLS - 1 do
   local p = M.province[k + 1]
@@ -102,6 +49,77 @@ for k = 0, ROWS * COLS - 1 do
     CELLS_OF[p] = CELLS_OF[p] or {}
     table.insert(CELLS_OF[p], k)
   end
+end
+
+-- Colour of cell k (r * COLS + c) in the paper view without the selection, cached per
+-- cell (CELL_R/G/B, k + 1) and refreshed when the owner changes; make_m2.py has the
+-- same formula
+local CELL_R, CELL_G, CELL_B = {}, {}, {}
+local function cache_cell(k)
+  local t, p = M.terrain[k + 1], M.province[k + 1]
+  if t == SEA then
+    CELL_R[k + 1], CELL_G[k + 1], CELL_B[k + 1] = PAPER_SEA[1], PAPER_SEA[2], PAPER_SEA[3]
+  else
+    -- land without a province (an islet) is plain parchment
+    local o = p >= 0 and FACTION[M.provinces[p + 1].owner] or PARCHMENT
+    local dark = (t == MOUNT and 0.82 or t == 3 and 0.93 or 1) * 0.5
+    CELL_R[k + 1] = (PARCHMENT[1] + o[1]) * dark
+    CELL_G[k + 1] = (PARCHMENT[2] + o[2]) * dark
+    CELL_B[k + 1] = (PARCHMENT[3] + o[3]) * dark
+  end
+end
+for k = 0, ROWS * COLS - 1 do cache_cell(k) end
+
+-- A corner takes the mean colour of the cells around it (the selected province lighter)
+local function corner_color(r, c)
+  local sr, sg, sb, n = 0, 0, 0, 0
+  local province, sel = M.province, selected
+  for rr = r - 1, r do
+    if rr >= 0 and rr < ROWS then
+      for cc = c - 1, c do
+        if cc >= 0 and cc < COLS then
+          local i = rr * COLS + cc + 1
+          local r1, g1, b1 = CELL_R[i], CELL_G[i], CELL_B[i]
+          if sel and province[i] == sel then
+            r1, g1, b1 = r1 * 0.8 + 60, g1 * 0.8 + 60, b1 * 0.8 + 60
+          end
+          sr, sg, sb, n = sr + r1, sg + g1, sb + b1, n + 1
+        end
+      end
+    end
+  end
+  local h = 0.5 * n
+  sr, sg, sb = (sr + h) // n, (sg + h) // n, (sb + h) // n
+  return math.tointeger(sr > 255 and 255 or sr) << 16 | math.tointeger(sg > 255 and 255 or sg) << 8
+    | math.tointeger(sb > 255 and 255 or sb)
+end
+
+-- Every corner the cells of a province touch (r * W1 + c), built on first use
+local CORNERS_OF = {}
+
+-- Recolours the corners of province p, paper view
+local function recolor(p)
+  local t0 = micros()
+  local corners = CORNERS_OF[p]
+  if not corners then
+    local seen = {}
+    corners = {}
+    for _, k in ipairs(CELLS_OF[p]) do
+      local r, c = k // COLS, k % COLS
+      for q = r * W1 + c, (r + 1) * W1 + c, W1 do
+        for kk = q, q + 1 do
+          if not seen[kk] then seen[kk] = true corners[#corners + 1] = kk end
+        end
+      end
+    end
+    CORNERS_OF[p] = corners
+  end
+  local grid = paper_grid
+  for _, k in ipairs(corners) do
+    local r, c = k // W1, k % W1
+    grid:color(c, r, corner_color(r, c))
+  end
+  recolor_ms = (micros() - t0) / 1000
 end
 
 local war = require("war")
@@ -150,8 +168,8 @@ end
 local function select(p)
   local old = selected
   selected = p
-  if old then recolor(CELLS_OF[old]) end
-  if p then recolor(CELLS_OF[p]) end
+  if old then recolor(old) end
+  if p then recolor(p) end
 end
 
 -- World position of a province's capital (a sea zone's centre)
@@ -193,7 +211,10 @@ local function tap(sx, sy)
   end
   if unit and p and targets[p] then
     local _, result = war.act(st, unit, p)
-    if result == "taken" then recolor(CELLS_OF[p]) end
+    if result == "taken" then
+      for _, k in ipairs(CELLS_OF[p]) do cache_cell(k) end
+      recolor(p)
+    end
     targets = war.targets(st, unit)
     return
   end
@@ -202,19 +223,24 @@ local function tap(sx, sy)
 end
 
 function _update()
+  -- A touch is a tap at the point the stylus came down, unless the stylus moves more
+  -- than DRAG_START first (a resting stylus jitters): then it scrolls the map
+  local px, py = touchp()
+  if px then press_x, press_y, drag_x, drag_y, drag_moved = px, py, px, py, false end
   local tx, ty = touch()
-  if tx then
-    if drag_x then
-      if math.abs(tx - drag_x) + math.abs(ty - drag_y) > 0 then drag_moved = true end
+  if tx and press_x then
+    if not drag_moved and math.abs(tx - press_x) + math.abs(ty - press_y) > DRAG_START then
+      drag_moved = true
+    end
+    if drag_moved then
       camx = camx - (tx - drag_x)
       camy = camy - (ty - drag_y)
-    else
-      drag_moved = false
+      drag_x, drag_y = tx, ty
     end
-    drag_x, drag_y = tx, ty
-  elseif drag_x then
-    if not drag_moved then tap(drag_x, drag_y) end
-    drag_x = nil
+  end
+  if btnr("touch") and press_x then
+    if not drag_moved then tap(press_x, press_y) end
+    press_x = nil
   end
   if btn("left") then camx = camx - 3 end
   if btn("right") then camx = camx + 3 end
@@ -320,6 +346,6 @@ function _draw(screen)
       text("tap an army or a fleet", 8, y, 6)
     end
     for i, msg in ipairs(st.log) do text(msg, 8, 110 + i * 12, i == 1 and 7 or 5) end
-    text(("draw %.1f ms"):format(draw_us / 1000), 8, 180, 5)
+    text(("draw %.1f ms  recolour %.1f ms"):format(draw_us / 1000, recolor_ms), 8, 180, 5)
   end
 end
