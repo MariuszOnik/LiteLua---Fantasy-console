@@ -34,8 +34,10 @@ Dalej (do ustalenia z użytkownikiem): bitwa → kartridż walki H4, ruch przeci
 widok militarny, powiększenie prowincji (budowle, kopalnie), handel (dochód).
 Dotyk w m2 (D59): stuknięcie w punkcie dociśnięcia, przewijanie po ruchu o 5 px,
 przekolorowanie ~30 ms zamiast 145 ms; w melonDS 8/8 stuknięć — na DSi do sprawdzenia
-(też przeciąganie). Kierunek gry: decyzja H12 (miks IG + H4), następny krok: zasoby,
-kopalnie i dochód co tydzień.
+(też przeciąganie) — użytkownik: „zaznaczanie działa idealnie”. Kierunek gry: H12 (miks
+IG + H4, kolejność prac w uzupełnieniu H12). Zrobione: pas morza, łączenie cienkich
+prowincji, ~37 mniejszych stref morskich. Następny krok: zasoby i kopalnie z miniaturami
+H4 (stolice z zamkami) i dochód co tydzień.
 Ściąga z reguł i AI Imperial Glory (do wglądu, wypakowane lokalnie w `ref/ImperialGlory/`):
 `docs/IMPERIAL_GLORY.md` — na końcu propozycje dla AI przeciwników i bitwy automatycznej.
 
