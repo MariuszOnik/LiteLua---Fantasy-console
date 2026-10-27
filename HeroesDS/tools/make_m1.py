@@ -122,7 +122,7 @@ def main(argv):
     p.add_argument("--map", default=os.path.join(cartkit.HEROES, "obiekty.h4c"))
     p.add_argument("--heights", default="",
                    help="take the corner heights from this map instead (same size)")
-    p.add_argument("--window", default="22,0,28,32", help="first row, first column, rows, columns")
+    p.add_argument("--window", default="0,0,76,76", help="first row, first column, rows, columns")
     p.add_argument("--sd", default=cartkit.SD)
     a = p.parse_args(argv[1:])
     r0, c0, rows, cols = (int(v) for v in a.window.split(","))
