@@ -15,7 +15,11 @@ Steps (all on a rows x cols grid of cells; corners are (rows + 1) x (cols + 1)):
   4. neighbours (cells touching across an edge), names from syllables, owners: the six
      H4 factions, each growing a compact realm from a seed province
 --png writes a preview: the political view (land tinted with the owner, borders) next to
-the natural one.
+the natural one. --style picks how the land looks:
+  relief  heights from the terrain, shaded slopes (default)
+  flat    a paper map: no heights, pale owner colours on parchment, sea light blue
+  board   a table model: every province a flat plate raised over the sea, its edges
+          bevelled down, so the borders are grooves between the plates
 """
 import argparse
 import heapq
@@ -229,8 +233,54 @@ NATURE = {SEA: (40, 80, 150), BEACH: (205, 190, 130), LOW: (95, 140, 60), UP: (1
           MOUNT: (150, 140, 130)}
 
 
-def cell_color(m, r, c, political):
+PARCHMENT = np.array((226, 210, 170), float)
+PAPER_SEA = (170, 195, 205)
+
+
+def board_heights(m):
+    """Corner heights of the table model: 1 inside a province, lower on its edge (a
+    corner touching another province or the sea), 0 out at sea."""
+    prov = m["province"]
+    rows, cols = prov.shape
+    h = np.zeros((rows + 1, cols + 1))
+    for r in range(rows + 1):
+        for c in range(cols + 1):
+            around = {prov[rr, cc] for rr in (r - 1, r) for cc in (c - 1, c)
+                      if 0 <= rr < rows and 0 <= cc < cols}
+            land = {p for p in around if p >= 0}
+            if not land:
+                h[r, c] = 0
+            elif len(around) == 1:
+                h[r, c] = 1
+            else:
+                h[r, c] = 0.55 if len(land) == 1 and -1 not in around else 0.3
+    return h
+
+
+def cell_color(m, r, c, political, style="relief"):
     t = m["terrain"][r, c]
+    p = m["province"][r, c]
+    if style == "flat":
+        if t == SEA:
+            return PAPER_SEA
+        col = PARCHMENT.copy()
+        if political and p >= 0:
+            col = col * 0.5 + np.array(FACTIONS[m["owner"][p]][1]) * 0.5
+        if t == MOUNT:
+            col *= 0.82
+        elif t == UP:
+            col *= 0.93
+        return tuple(int(v) for v in col)
+    if style == "board":
+        if t == SEA:
+            col = np.array(NATURE[SEA], float)
+        elif political and p >= 0:
+            col = np.array(FACTIONS[m["owner"][p]][1], float) * 0.75 + 40
+        else:
+            col = np.array(NATURE[t], float)
+        h = m["board"]
+        slope = (h[r, c] + h[r + 1, c]) - (h[r, c + 1] + h[r + 1, c + 1])
+        return tuple(int(v) for v in np.clip(col * (1 + 0.35 * slope), 0, 255))
     col = np.array(NATURE[t], float)
     if t == MOUNT and m["cell_h"][r, c] > 0.88 * m["cell_h"].max():
         col = np.array((235, 235, 240), float)
@@ -243,7 +293,7 @@ def cell_color(m, r, c, political):
     return tuple(int(v) for v in np.clip(col * (1 + 1.5 * slope), 0, 255))
 
 
-def preview(m, path, cw=16, lift=24):
+def preview(m, path, cw=16, lift=24, style="relief"):
     """Both views side by side; diamonds cw x cw/2, heights lift pixels at most."""
     rows, cols = m["rows"], m["cols"]
     hw, hh = cw // 2, cw // 4
@@ -252,7 +302,13 @@ def preview(m, path, cw=16, lift=24):
     for v, political in enumerate((True, False)):
         img = Image.new("RGB", (W, H), (15, 15, 25))
         d = ImageDraw.Draw(img)
-        hgt = np.maximum(m["heights"], 0) * lift
+        if style == "relief":
+            hgt = np.maximum(m["heights"], 0) * lift
+        elif style == "board":
+            m["board"] = board_heights(m)
+            hgt = m["board"] * 6
+        else:
+            hgt = np.zeros_like(m["heights"])
 
         def pt(r, c):
             return (c - r) * hw + rows * hw + 10, (c + r) * hh - hgt[r, c] + lift + 10
@@ -260,15 +316,18 @@ def preview(m, path, cw=16, lift=24):
             for r in range(max(0, s - cols + 1), min(rows, s + 1)):
                 c = s - r
                 poly = [pt(r, c), pt(r, c + 1), pt(r + 1, c + 1), pt(r + 1, c)]
-                d.polygon(poly, fill=cell_color(m, r, c, political))
+                d.polygon(poly, fill=cell_color(m, r, c, political, style))
         prov = m["province"]
         for r in range(rows):
             for c in range(cols):
                 a = prov[r, c]
-                if c + 1 < cols and a != prov[r, c + 1] and (a >= 0 or prov[r, c + 1] >= 0) and a >= 0 <= prov[r, c + 1]:
-                    d.line([pt(r, c + 1), pt(r + 1, c + 1)], fill=(30, 20, 15), width=1)
+                if style == "board":
+                    continue        # the grooves are the borders
+                ink = (90, 60, 40) if style == "flat" else (30, 20, 15)
+                if c + 1 < cols and a != prov[r, c + 1] and a >= 0 <= prov[r, c + 1]:
+                    d.line([pt(r, c + 1), pt(r + 1, c + 1)], fill=ink, width=1)
                 if r + 1 < rows and a != prov[r + 1, c] and a >= 0 <= prov[r + 1, c]:
-                    d.line([pt(r + 1, c), pt(r + 1, c + 1)], fill=(30, 20, 15), width=1)
+                    d.line([pt(r + 1, c), pt(r + 1, c + 1)], fill=ink, width=1)
         if political:
             for i, (r, c) in enumerate(m["capitals"]):
                 x, y = pt(r, c)
@@ -284,6 +343,7 @@ def main(argv):
     p.add_argument("--size", type=int, default=72)
     p.add_argument("--provinces", type=int, default=45)
     p.add_argument("--png")
+    p.add_argument("--style", default="relief", choices=["relief", "flat", "board"])
     a = p.parse_args(argv[1:])
     m = generate(a.seed, a.size, a.provinces)
     sizes = np.bincount(m["province"][m["province"] >= 0])
@@ -293,7 +353,7 @@ def main(argv):
     for f, (fname, _) in enumerate(FACTIONS):
         print(f"  {fname}: {sum(1 for o in m['owner'] if o == f)} provinces")
     if a.png:
-        preview(m, a.png)
+        preview(m, a.png, style=a.style)
         print("->", a.png)
 
 
