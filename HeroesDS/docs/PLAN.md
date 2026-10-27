@@ -21,6 +21,18 @@ na DSi użytkownik nie widział przycięcia. Mapy testowe użytkownika (`*.h4c` 
 są poza repo. Dalej: sekcja „Później” niżej (bohaterowie na mapie, animacje obiektów,
 koszty ruchu, wersje zapasowe modeli, malowanie terenu na DS).
 
+**Mapa polityczna (M2, decyzja użytkownika: mapa przygody jak w Imperial Glory —
+prowincje, nie pola).** `tools/make_m2.py` generuje z ziarna wymyślony ląd (`--seed 77
+--coast 1` domyślnie: postrzępione wybrzeże), prowincje (relaksacja Lloyda, granice na
+grzbietach), strefy morskie bez właściciela, sąsiedztwo, nazwy i 6 państw (frakcje H4;
+wyspy przez morze). `--cart` robi `carts/m2` bez grafiki z gry: dwie siatki `isogrid`
+(pergamin z kolorami państw i atramentowymi granicami / rzeźba terenu, A), kolory z PC,
+przekolorowanie jednej prowincji w Lua. Armie, floty wojenne (do 2 stref, przewóz armii)
+i statki handlowe (`src/war.lua`): ruch po prowincjach, zajmowanie, „bitwa” na razie
+liczebnością, Y = koniec tury, przeciwnicy stoją. Sprawdzone w melonDS, wysłane na DSi.
+Dalej (do ustalenia z użytkownikiem): bitwa → kartridż walki H4, ruch przeciwników,
+widok militarny, powiększenie prowincji (budowle, kopalnie), handel (dochód).
+
 **Walka (stan z 2026-10-26):**
 
 **Stan:** tor A (grafika) do H2 włącznie; tor B: C1 (mechanika), C2 (projekt walki,
