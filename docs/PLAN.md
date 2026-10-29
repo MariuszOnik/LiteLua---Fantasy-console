@@ -13,7 +13,9 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
   pomysł gry w stylu Imperial Glory z sprajtami Cossacks. Test `tests/carts/army3d` (atlas:
   `tools/cossacks_atlas.py`, grafika tylko lokalnie): melonDS 1500 żołnierzy + teren w
   30 FPS; **na DSi: 1500 żołnierzy, stałe 30 FPS** (oddalenie gubi dalekich). Dalej do
-  ustalenia z użytkownikiem: osobny projekt gry (IG + Cossacks), LOD/oddalenie, kolor narodu.
+  ustalenia z użytkownikiem: osobny projekt gry (IG + Cossacks), kolor narodu. Zrobione też:
+  display listy terenu + BoxTest, `fog3d`, LOD terenu i żołnierzy. **Bank pomysłów:
+  `docs/IDEAS_3D.md`** (ozdoby terenu, open world, teren proceduralny, FPP).
 - **D58 (2026-10-27):** teren izometryczny z wysokością — `quad(img, frame, 4 rogi)` i
   `isogrid(img, cols, rows, opts)` + `g:draw/frame/height/color` (z HeroesDS, kartridż
   `HeroesDS/carts/m1`); sprawdzone w melonDS, **na konsoli jeszcze nie**.

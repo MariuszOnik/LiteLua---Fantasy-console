@@ -40,7 +40,7 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
   launcher `@launcher`, D52), `nitrofs/lib/keyboard.lua` — klawiatura ekranowa obu
 - `docs/` — plan, decyzje, `UX.md` (projekt aplikacji: ekrany, przepływ, przyciski,
   kartridże systemowe), `newCzatWorkflow.md` (jak zaczynać nowy czat), `LSONG.md`
-  (specyfikacja formatu muzyki), `COMPOSING.md` (manual kompozytora)
+  (specyfikacja formatu muzyki), `COMPOSING.md` (manual kompozytora), `IDEAS_3D.md` (pomysły na 3D: D60 i dalej)
 - Testy dźwięku potwierdzamy nagraniem wyjścia audio melonDS (WASAPI loopback, D41) —
   same liczniki wysłanych poleceń nie dowodzą, że coś gra (lekcja z S0)
 - `docs/api/*.lua` — dokumentacja API Lua (źródło dla edytora na DS i `docs/API.md`, D12);
