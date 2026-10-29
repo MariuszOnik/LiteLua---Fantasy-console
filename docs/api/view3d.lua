@@ -33,19 +33,40 @@ ground:draw3d(1 / 16, 32)
 army:draw3d(micros() // 1000)]],
     },
     {
+      name = "fog3d", kind = "function",
+      sig = "fog3d([col], [near], [far])",
+      args = {
+        { "col", "number", "fog color, usually the sky (cls); none = off" },
+        { "near", "number", "tiles from the eye where it starts, default dist" },
+        { "far", "number", "tiles where it covers everything, default 3 * near" },
+      },
+      desc = "Hardware fog of the 3D layer for the rest of this _draw (off at "
+          .. "the start of each _draw). It grows evenly with distance. Nothing "
+          .. "beyond far is drawn at all, which saves vertices.",
+      example = [[
+cls(SKY)
+camera3d(x, y, yaw, 40, 10)
+fog3d(SKY, 15, 30)]],
+    },
+    {
       name = "grid:draw3d", kind = "function",
-      sig = "grid:draw3d([hscale], [tpt])",
+      sig = "grid:draw3d([hscale], [tpt], [lod])",
       args = {
         { "hscale", "number", "tiles up per height unit, default 1/16" },
         { "tpt", "integer", "texels per tile 1..32: one repeated texture "
             .. "instead of frames; default 0 = frames" },
+        { "lod", "number", "with tpt: farther than this from the eye (tiles) "
+            .. "every second corner, a quarter of the polygons; 0 = off" },
       },
       desc = "Draws an isogrid as terrain in the view of camera3d: cell (c, r) "
           .. "is the square c..c+1, r..r+1, its corners raised by their "
           .. "heights and shaded by their colors. With tpt the whole image "
           .. "(power-of-two sides) repeats over the ground and every row is "
           .. "one strip: about half the vertices of frames (the DS draws at "
-          .. "most 6144 vertices per screen).",
+          .. "most 6144 vertices and 2048 polygons per screen). The ground is "
+          .. "kept as display lists of 8x8 cells, sent by DMA and tested "
+          .. "for visibility by the hardware; they are rebuilt only when the "
+          .. "grid or the arguments change.",
       example = [[
 ground = isogrid(image("grass"), 48, 48, { heights = hs, colors = cols })
 ground:draw3d(1 / 16, 32)]],
@@ -138,10 +159,15 @@ army:move(i, 0, -0.6, micros() // 1000)]],
     },
     {
       name = "b:draw3d", kind = "function",
-      sig = "b:draw3d(t)",
-      args = { { "t", "integer", "time in ms (animations and walking)" } },
+      sig = "b:draw3d(t, [lod])",
+      args = {
+        { "t", "integer", "time in ms (animations and walking)" },
+        { "lod", "number", "farther than this from the eye (tiles) only every "
+            .. "second billboard, beyond twice as far every fourth; 0 = all" },
+      },
       desc = "Draws the billboards in the view of camera3d. Each one is 4 "
-          .. "vertices: with terrain a screen holds about 1000-1100.",
+          .. "vertices (the DS draws at most 6144 per screen), so a far view "
+          .. "of a big army needs lod.",
     },
   },
 }

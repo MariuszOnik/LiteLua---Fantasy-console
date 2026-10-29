@@ -21,7 +21,13 @@ void ll_3d_reset(void);
 // height unit, 20.12) up. With 'tpt' > 0 the frames are ignored: the whole
 // image (power-of-two sides) repeats over the ground, 'tpt' texels per tile
 // (1..32), and rows of cells are drawn as strips (half the vertices).
-void ll_3d_terrain(const LLImage *img, const LLIsoGrid *g, int32_t hscale, int tpt);
+// Kept as display lists of 8x8 cells, rebuilt when the grid or the arguments
+// change. With strips, chunks farther than 'lod' tiles from the eye (0 = off)
+// use every second corner (a quarter of the polygons).
+void ll_3d_terrain(const LLImage *img, LLIsoGrid *g, int32_t hscale, int tpt, float lod);
+
+// Frees the display lists of a grid (when it is collected).
+void ll_3d_free(LLIsoGrid *g);
 
 // Registers camera3d() and billboards().
 void ll_3d_register(lua_State *L);

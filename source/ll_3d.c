@@ -10,7 +10,9 @@
 //       tiles away; yaw in degrees (0 = the camera is south of the point and
 //       looks north, 90 = it is west of it), pitch in degrees above the
 //       ground (5..89), fov = vertical field of view (default 50)
-//   g:draw3d([hscale], [tpt])      isogrid as terrain, see ll_3d_terrain
+//   fog3d([col], [near], [far])    fog from near to far tiles from the eye
+//                                  (default dist .. 3 * near); no arguments = off
+//   g:draw3d([hscale], [tpt], [lod]) isogrid as terrain, see ll_3d_terrain
 //   b = billboards(img, n, [opts])
 //       opts.dirs = 9   directions stored in the image: 0 = facing south
 //                       (the camera at yaw 0), then turning west; the other
@@ -28,7 +30,10 @@
 //   b:get(i, t) -> x, y                       where it is at time t
 //   b:ground(g, [hscale])                     z is above the ground of the
 //                                             isogrid g (heights as draw3d)
-//   b:draw3d(t)                               draws at time t (ms)
+//   b:draw3d(t, [lod])                        draws at time t (ms); farther than
+//                                             lod tiles from the eye only every
+//                                             second one, beyond 2 * lod every
+//                                             fourth (0 = all; vertex limit)
 //   b.n
 //
 // The 3D layer shares the frame with 2D drawing: its depth range is behind
@@ -40,6 +45,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <nds.h>
@@ -59,6 +65,9 @@
 static struct {
     float tx, ty, tz;         // Target, tiles
     float yaw, pitch, dist, fov;
+    bool fog;
+    u16 fog_color;
+    float fog_near, fog_far;  // Tiles from the eye
 } cam;
 
 void ll_3d_reset(void)
@@ -68,6 +77,43 @@ void ll_3d_reset(void)
     cam.pitch = 45;
     cam.dist = 12;
     cam.fov = 50;
+    cam.fog = false;
+}
+
+// Hardware fog by depth (D60): the 3D layer is the far half of the depth
+// buffer, so 15-bit depth = (z'/w * 0x4000) + 0x3fff with z'/w = -A + B / d
+// at d tiles from the eye. The 32 entries of the density table step through
+// depth from the near distance; each gets the density of its distance, so
+// the fog grows evenly with distance though depth does not.
+static void set_fog(float A, float B, float far)
+{
+    float d0 = cam.fog_near, d1 = cam.fog_far < far ? cam.fog_far : far;
+    if (d1 <= d0)
+        d1 = d0 + 0.01f;
+    int D0 = (int)((-A + B / d0) * 0x4000) + 0x3fff;
+    int D1 = (int)((-A + B / d1) * 0x4000) + 0x3fff;
+    if (D0 < 0)
+        D0 = 0;
+    if (D0 > 0x7fff)
+        D0 = 0x7fff;
+    int shift = 10;
+    while (shift > 0 && 32 * (0x400 >> shift) < D1 - D0)
+        shift--;
+    int step = 0x400 >> shift;
+    glFogShift(shift);
+    glFogOffset(D0);
+    for (int i = 0; i < 32; i++)
+    {
+        float ndc = (float)(D0 + i * step - 0x3fff) / 0x4000;
+        // B < 0 and ndc + A < 0 in front of the far plane
+        float d = ndc + A < -1e-6f ? B / (ndc + A) : 1e9f;
+        float k = (d - cam.fog_near) / (cam.fog_far - cam.fog_near);
+        k = k < 0 ? 0 : k > 1 ? 1 : k;
+        glFogDensity(i, (int)(k * 127));
+    }
+    u16 c = cam.fog_color;
+    glFogColor(c & 31, (c >> 5) & 31, (c >> 10) & 31, 31);
+    glEnable(GL_FOG);
 }
 
 // --- View -------------------------------------------------------------------
@@ -103,6 +149,11 @@ static int32_t f32(float v)
     return (int32_t)lrintf(v * 4096);
 }
 
+static void poly_fmt(void)
+{
+    glPolyFmt(POLY_ALPHA(31) | POLY_CULL_NONE | POLY_ID(0) | (cam.fog ? POLY_FOG : 0));
+}
+
 // Loads the projection and modelview matrices; 'margin' (tiles) widens the
 // footprint for things above the ground. False outside _draw.
 static bool view_begin(View *v, float margin)
@@ -131,6 +182,9 @@ static bool view_begin(View *v, float margin)
         n = 0.1f;
     if (far > 200)
         far = 200;
+    // Nothing behind the fog is drawn (it would be all fog color)
+    if (cam.fog && far > cam.fog_far + 1)
+        far = cam.fog_far + 1;
     float ty = tanf(cam.fov * PI / 360), aspect = (float)cw / ch, tx = ty * aspect;
 
     // Projection; z is moved to the far half of the depth range (the 2D
@@ -203,7 +257,9 @@ static bool view_begin(View *v, float margin)
         v->ec[k] = (int32_t)lrintf((-(nx * px[k] + nz * pz[k]) + margin) * 16 * 1024);
     }
 
-    glPolyFmt(POLY_ALPHA(31) | POLY_CULL_NONE | POLY_ID(0));
+    if (cam.fog)
+        set_fog(A, B, far);
+    poly_fmt();
     return true;
 }
 
@@ -241,149 +297,354 @@ static int l_camera3d(lua_State *L)
     return 0;
 }
 
-// --- Terrain ----------------------------------------------------------------
-
-// Heights in vertex units: h * hscale * 512, hscale in 20.12
-static inline v16 corner_y(const LLIsoGrid *g, int i, int64_t hs, int32_t tz)
+// fog3d([col], [near], [far]): off without arguments
+static int l_fog3d(lua_State *L)
 {
-    return clamp16((int32_t)((g->heights[i] * hs) >> 12) - tz);
+    if (lua_isnoneornil(L, 1))
+    {
+        cam.fog = false;
+        return 0;
+    }
+    cam.fog_color = ll_gfx_color((u32)luaL_checkinteger(L, 1));
+    float n = (float)luaL_optnumber(L, 2, cam.dist), f = (float)luaL_optnumber(L, 3, n * 3);
+    luaL_argcheck(L, n >= 0 && n < 1000, 2, "near must be 0..1000");
+    luaL_argcheck(L, f > n && f <= 1000, 3, "far must be near..1000");
+    cam.fog = true;
+    cam.fog_near = n, cam.fog_far = f;
+    return 0;
 }
 
-// One texture repeated over the ground, 'tpt' texels per tile: every row of
-// cells is one strip, so a cell costs ~2 vertices instead of 4.
-static void terrain_strips(const LLImage *img, const LLIsoGrid *g, const View *v,
-                           int64_t hs, int tpt, int c1, int c2, int r1, int r2)
-{
-    // Repeat the whole texture
-    u32 param = glGetTexParameter();
-    if ((param & (GL_TEXTURE_WRAP_S | GL_TEXTURE_WRAP_T)) != (GL_TEXTURE_WRAP_S | GL_TEXTURE_WRAP_T))
-        glTexParameter(0, (int)((param & 0xE00F0000) | GL_TEXTURE_WRAP_S | GL_TEXTURE_WRAP_T));
+// --- Terrain ----------------------------------------------------------------
+//
+// The terrain is kept as display lists (packed GPU commands in RAM, sent by
+// DMA with glCallList) of CHUNK x CHUNK cells, with vertices relative to the
+// corner of their chunk; each frame only tests the chunks with the hardware
+// box test and calls the visible ones under a translation. The lists are
+// rebuilt when the grid (its version) or the arguments change.
 
-    // Texture coordinates are 12.4 (+-2048 texels): count them from a
-    // multiple of the texture size near the target
-    int tw = 8, th = 8;
-    while (tw < img->w)
-        tw <<= 1;
-    while (th < img->h)
-        th <<= 1;
-    int32_t u0 = (int32_t)floorf(cam.tx * tpt / tw) * tw;
-    int32_t w0 = (int32_t)floorf(cam.ty * tpt / th) * th;
-    const int W1 = g->cols + 1;
-    const u16 *col = g->colors;
-    if (!col)
-        glColor(0x7fff);
-    for (int r = r1; r <= r2; r++)
+#define CHUNK 8
+#define MAX_VISIBLE 1024
+
+// GPU command ids (GBATEK)
+#define CMD_COLOR 0x20
+#define CMD_TEXCOORD 0x22
+#define CMD_VTX16 0x23
+#define CMD_BEGIN 0x40
+#define CMD_END 0x41
+
+typedef struct {
+    u32 *list[2];             // Word count, then packed commands; NULL = empty.
+                              // [1]: every second corner (far away, strips only)
+    int32_t ymin, ymax;       // Heights of the corners, vertex units
+} Chunk;
+
+typedef struct {
+    unsigned version;
+    int32_t hscale;
+    int tpt, tex, ix, iy, iw, ih, fw, fh, fcols, frames;
+    const u16 *colors;
+    int cc, cr;               // Chunks across and down
+    Chunk chunks[];
+} Cache;
+
+// A packed list being built: up to 4 command ids per header word, followed
+// by their parameters in order
+typedef struct {
+    u32 *buf;
+    int n, cap, hdr, slot;
+    bool fail;
+} List;
+
+static void list_word(List *d, u32 w)
+{
+    if (d->fail)
+        return;
+    if (d->n == d->cap)
     {
-        int32_t z0 = r * Q - v->ty, z1 = z0 + Q;
-        if (z0 < -REACH || z1 > REACH)
-            continue;
-        // The visible cells of the row, as one run
-        int a = -1, b = -1;
-        for (int c = c1; c <= c2; c++)
+        int cap = d->cap ? d->cap * 2 : 256;
+        u32 *b = realloc(d->buf, cap * sizeof(u32));
+        if (b == NULL)
         {
-            int32_t x0 = c * Q - v->tx;
-            if (x0 >= -REACH && x0 + Q <= REACH && in_view(v, x0 + Q / 2, z0 + Q / 2))
-            {
-                if (a < 0)
-                    a = c;
-                b = c;
-            }
+            d->fail = true;
+            return;
         }
-        if (a < 0)
-            continue;
-        int wt = (r * tpt - w0) * 16, wb = wt + tpt * 16;
-        glBegin(GL_QUAD_STRIP);
-        for (int c = a; c <= b + 1; c++)
+        d->buf = b, d->cap = cap;
+    }
+    d->buf[d->n++] = w;
+}
+
+static void list_cmd(List *d, u32 cmd)
+{
+    if (d->slot == 0)
+    {
+        d->hdr = d->n;
+        list_word(d, 0);
+    }
+    if (!d->fail)
+        d->buf[d->hdr] |= cmd << (8 * d->slot);
+    d->slot = (d->slot + 1) & 3;
+}
+
+static void list_vertex(List *d, int32_t x, int32_t y, int32_t z)
+{
+    list_cmd(d, CMD_VTX16);
+    list_word(d, ((u32)(uint16_t)clamp16(y) << 16) | (uint16_t)clamp16(x));
+    list_word(d, (uint16_t)clamp16(z));
+}
+
+static void list_texcoord(List *d, int u, int v)
+{
+    list_cmd(d, CMD_TEXCOORD);
+    list_word(d, ((u32)(uint16_t)v << 16) | (uint16_t)u);
+}
+
+static void list_color(List *d, u16 c)
+{
+    list_cmd(d, CMD_COLOR);
+    list_word(d, c);
+}
+
+static void free_lists(Cache *k)
+{
+    for (int i = 0; i < k->cc * k->cr; i++)
+    {
+        for (int j = 0; j < 2; j++)
         {
-            int32_t x = c * Q - v->tx;
-            int u = (c * tpt - u0) * 16;
-            int i = r * W1 + c;
-            if (col)
-                glColor(col[i]);
-            glTexCoord2t16(u, wt);
-            glVertex3v16(x, corner_y(g, i, hs, v->tz), z0);
-            if (col)
-                glColor(col[i + W1]);
-            glTexCoord2t16(u, wb);
-            glVertex3v16(x, corner_y(g, i + W1, hs, v->tz), z1);
+            free(k->chunks[i].list[j]);
+            k->chunks[i].list[j] = NULL;
         }
-        glEnd();
     }
 }
 
-void ll_3d_terrain(const LLImage *img, const LLIsoGrid *g, int32_t hscale, int tpt)
+void ll_3d_free(LLIsoGrid *g)
+{
+    Cache *k = g->cache3d;
+    if (k)
+    {
+        free_lists(k);
+        free(k);
+        g->cache3d = NULL;
+    }
+}
+
+static inline int32_t height_q(const LLIsoGrid *g, int i, int64_t hs)
+{
+    return (int32_t)((g->heights[i] * hs) >> 12);
+}
+
+static int pow2(int n)
+{
+    int s = 8;
+    while (s < n)
+        s <<= 1;
+    return s;
+}
+
+// Builds list 'lod' of chunk (cx, cy): corners every 1 << lod cells (strips
+// only); false if out of memory
+static bool build_chunk(Cache *k, const LLIsoGrid *g, int cx, int cy, int lod)
+{
+    Chunk *ch = &k->chunks[cy * k->cc + cx];
+    const int64_t hs = (int64_t)k->hscale * Q;
+    const int c0 = cx * CHUNK, r0 = cy * CHUNK;
+    const int c1 = c0 + CHUNK < g->cols ? c0 + CHUNK : g->cols;
+    const int r1 = r0 + CHUNK < g->rows ? r0 + CHUNK : g->rows;
+    const int W1 = g->cols + 1;
+    const u16 *col = g->colors;
+
+    ch->ymin = INT32_MAX, ch->ymax = INT32_MIN;
+    for (int r = r0; r <= r1; r++)
+        for (int c = c0; c <= c1; c++)
+        {
+            int32_t y = height_q(g, r * W1 + c, hs);
+            ch->ymin = y < ch->ymin ? y : ch->ymin;
+            ch->ymax = y > ch->ymax ? y : ch->ymax;
+        }
+
+    List d = { 0 };
+    list_word(&d, 0); // Word count, set at the end
+    if (!col)
+        list_color(&d, 0x7fff);
+    int quads = 0;
+    if (k->tpt > 0)
+    {
+        // One texture repeated: every row is a strip, texture coordinates
+        // counted from the chunk (the texture wraps)
+        const int tw = pow2(k->iw), th = pow2(k->ih);
+        const int uo = (c0 * k->tpt) % tw, vo = (r0 * k->tpt) % th;
+        const int step = 1 << lod;
+        for (int r = r0; r < r1; r += step)
+        {
+            int rb = r + step < r1 ? r + step : r1;
+            int z0 = (r - r0) * Q, z1 = (rb - r0) * Q;
+            int vt = ((r - r0) * k->tpt + vo) * 16, vb = ((rb - r0) * k->tpt + vo) * 16;
+            list_cmd(&d, CMD_BEGIN);
+            list_word(&d, GL_QUAD_STRIP);
+            for (int c = c0;; c += step)
+            {
+                if (c > c1)
+                    c = c1;
+                int x = (c - c0) * Q, u = ((c - c0) * k->tpt + uo) * 16;
+                int i = r * W1 + c, ib = rb * W1 + c;
+                if (col)
+                    list_color(&d, col[i]);
+                list_texcoord(&d, u, vt);
+                list_vertex(&d, x, height_q(g, i, hs), z0);
+                if (col)
+                    list_color(&d, col[ib]);
+                list_texcoord(&d, u, vb);
+                list_vertex(&d, x, height_q(g, ib, hs), z1);
+                if (c == c1)
+                    break;
+                quads++;
+            }
+            list_cmd(&d, CMD_END);
+        }
+    }
+    else
+    {
+        list_cmd(&d, CMD_BEGIN);
+        list_word(&d, GL_QUADS);
+        for (int r = r0; r < r1; r++)
+            for (int c = c0; c < c1; c++)
+            {
+                int f = g->frames[r * g->cols + c];
+                if (f < 0 || f >= k->frames)
+                    continue;
+                int i = r * W1 + c; // Corners: T = i, R = i + 1, B = i + W1 + 1, L = i + W1
+                int x0 = (c - c0) * Q, x1 = x0 + Q, z0 = (r - r0) * Q, z1 = z0 + Q;
+                int u = (k->ix + (f % k->fcols) * k->fw) * 16;
+                int w = (k->iy + (f / k->fcols) * k->fh) * 16;
+                int u2 = u + k->fw * 16, w2 = w + k->fh * 16;
+                const int corner[4] = { i, i + 1, i + W1 + 1, i + W1 };
+                const int xs[4] = { x0, x1, x1, x0 }, zs[4] = { z0, z0, z1, z1 };
+                const int us[4] = { u, u2, u2, u }, ws[4] = { w, w, w2, w2 };
+                for (int j = 0; j < 4; j++)
+                {
+                    if (col)
+                        list_color(&d, col[corner[j]]);
+                    list_texcoord(&d, us[j], ws[j]);
+                    list_vertex(&d, xs[j], height_q(g, corner[j], hs), zs[j]);
+                }
+                quads++;
+            }
+        list_cmd(&d, CMD_END);
+    }
+    if (d.fail || quads == 0)
+    {
+        free(d.buf);
+        return !d.fail;
+    }
+    d.buf[0] = (u32)(d.n - 1);
+    u32 *b = realloc(d.buf, d.n * sizeof(u32));
+    ch->list[lod] = b ? b : d.buf;
+    return true;
+}
+
+// The lists for these arguments, (re)built if needed; NULL if out of memory
+static Cache *terrain_cache(const LLImage *img, LLIsoGrid *g, int32_t hscale, int tpt)
+{
+    const int fw = img->fw ? img->fw : img->w, fh = img->fh ? img->fh : img->h;
+    const int fcols = img->cols > 0 ? img->cols : 1;
+    Cache *k = g->cache3d;
+    if (k && k->version == g->version && k->hscale == hscale && k->tpt == tpt &&
+        k->tex == img->tex && k->ix == img->x && k->iy == img->y && k->iw == img->w &&
+        k->ih == img->h && k->fw == fw && k->fh == fh && k->fcols == fcols &&
+        k->frames == img->frames && k->colors == g->colors)
+        return k;
+
+    int cc = (g->cols + CHUNK - 1) / CHUNK, cr = (g->rows + CHUNK - 1) / CHUNK;
+    if (k == NULL)
+    {
+        k = calloc(1, sizeof(Cache) + (size_t)cc * cr * sizeof(Chunk));
+        if (k == NULL)
+            return NULL;
+        g->cache3d = k;
+    }
+    else
+        free_lists(k);
+    k->version = g->version, k->hscale = hscale, k->tpt = tpt, k->tex = img->tex;
+    k->ix = img->x, k->iy = img->y, k->iw = img->w, k->ih = img->h;
+    k->fw = fw, k->fh = fh, k->fcols = fcols, k->frames = img->frames;
+    k->colors = g->colors, k->cc = cc, k->cr = cr;
+    for (int cy = 0; cy < cr; cy++)
+        for (int cx = 0; cx < cc; cx++)
+            if (!build_chunk(k, g, cx, cy, 0) || (tpt > 0 && !build_chunk(k, g, cx, cy, 1)))
+            {
+                ll_3d_free(g);
+                return NULL;
+            }
+    return k;
+}
+
+void ll_3d_terrain(const LLImage *img, LLIsoGrid *g, int32_t hscale, int tpt, float lod)
 {
     if (img->tex == 0 || (tpt == 0 && img->frames == 0))
         return;
-    const int64_t hs = (int64_t)hscale * Q;
-    float lift = (float)(((int64_t)g->maxh * hs) >> 12) / Q;
+    Cache *k = terrain_cache(img, g, hscale, tpt);
+    if (k == NULL)
+        return;
+    // The footprint is on the ground at the target's height: widen it by the
+    // hills (the box test is exact anyway)
+    float lift = (float)(((int64_t)g->maxh * hscale * Q) >> 12) / Q;
     View v;
     if (!view_begin(&v, 1 + lift))
         return;
 
-    int c1 = (int)floorf(cam.tx + v.x1), c2 = (int)floorf(cam.tx + v.x2);
-    int r1 = (int)floorf(cam.ty + v.z1), r2 = (int)floorf(cam.ty + v.z2);
-    if (c1 < 0)
-        c1 = 0;
-    if (r1 < 0)
-        r1 = 0;
-    if (c2 > g->cols - 1)
-        c2 = g->cols - 1;
-    if (r2 > g->rows - 1)
-        r2 = g->rows - 1;
-
     ll_gfx_bind(img->tex);
     if (tpt > 0)
     {
-        terrain_strips(img, g, &v, hs, tpt, c1, c2, r1, r2);
-        ll_gfx_3d_end();
-        return;
+        // Repeat the whole texture
+        u32 param = glGetTexParameter();
+        const u32 wrap = GL_TEXTURE_WRAP_S | GL_TEXTURE_WRAP_T;
+        if ((param & wrap) != wrap)
+            glTexParameter(0, (int)((param & 0xE00F0000) | wrap));
     }
 
-    const int W1 = g->cols + 1;
-    const u16 *col = g->colors;
-    const int fw = img->fw ? img->fw : img->w, fh = img->fh ? img->fh : img->h;
-    const int fcols = img->cols > 0 ? img->cols : 1;
-    glBegin(GL_QUADS);
-    if (!col)
-        glColor(0x7fff);
-    for (int r = r1; r <= r2; r++)
+    // Chunks near the footprint of the view (its bounding box), then the box
+    // test of the hardware. The test sets its own polygon format, so all
+    // tests come first.
+    static uint16_t visible[MAX_VISIBLE]; // Chunk index * 2 + level of detail
+    int nv = 0;
+    const int32_t span = CHUNK * Q;
+    for (int cy = 0; cy < k->cr; cy++)
     {
-        int32_t z0 = r * Q - v.ty, z1 = z0 + Q;
-        if (z0 < -REACH || z1 > REACH)
+        int32_t z0 = cy * span - v.ty;
+        if (z0 + span < v.z1 * Q || z0 > v.z2 * Q || z0 < -REACH || z0 + span > REACH)
             continue;
-        for (int c = c1; c <= c2; c++)
+        for (int cx = 0; cx < k->cc && nv < MAX_VISIBLE; cx++)
         {
-            int32_t x0 = c * Q - v.tx, x1 = x0 + Q;
-            if (x0 < -REACH || x1 > REACH || !in_view(&v, x0 + Q / 2, z0 + Q / 2))
+            const Chunk *ch = &k->chunks[cy * k->cc + cx];
+            int32_t x0 = cx * span - v.tx;
+            if (ch->list[0] == NULL || x0 + span < v.x1 * Q || x0 > v.x2 * Q || x0 < -REACH ||
+                x0 + span > REACH)
                 continue;
-            int f = g->frames[r * g->cols + c];
-            if (f < 0 || f >= img->frames)
+            int32_t y0 = ch->ymin - v.tz, hgt = ch->ymax - ch->ymin + 1;
+            if (y0 < -REACH || y0 + hgt > REACH)
                 continue;
-            int i = r * W1 + c; // Corners: T = i, R = i + 1, B = i + W1 + 1, L = i + W1
-            int u = (img->x + (f % fcols) * fw) * 16;
-            int w = (img->y + (f / fcols) * fh) * 16;
-            int u2 = u + fw * 16, w2 = w + fh * 16;
-
-            if (col)
-                glColor(col[i]);
-            glTexCoord2t16(u, w);
-            glVertex3v16(x0, corner_y(g, i, hs, v.tz), z0);
-            if (col)
-                glColor(col[i + 1]);
-            glTexCoord2t16(u2, w);
-            glVertex3v16(x1, corner_y(g, i + 1, hs, v.tz), z0);
-            if (col)
-                glColor(col[i + W1 + 1]);
-            glTexCoord2t16(u2, w2);
-            glVertex3v16(x1, corner_y(g, i + W1 + 1, hs, v.tz), z1);
-            if (col)
-                glColor(col[i + W1]);
-            glTexCoord2t16(u, w2);
-            glVertex3v16(x0, corner_y(g, i + W1, hs, v.tz), z1);
+            if (!BoxTest(x0, y0, z0, span, hgt, span))
+                continue;
+            // Coarse beyond 'lod' tiles from the eye (to the chunk's middle)
+            int coarse = 0;
+            if (lod > 0 && ch->list[1])
+            {
+                float dx = (x0 + span / 2) / (float)Q - v.e[0];
+                float dz = (z0 + span / 2) / (float)Q - v.e[2];
+                coarse = dx * dx + dz * dz > lod * lod;
+            }
+            visible[nv++] = (uint16_t)((cy * k->cc + cx) * 2 + coarse);
         }
     }
-    glEnd();
+
+    poly_fmt();
+    for (int i = 0; i < nv; i++)
+    {
+        int id = visible[i] >> 1;
+        glPushMatrix();
+        glTranslatef32((id % k->cc) * span - v.tx, -v.tz, (id / k->cc) * span - v.ty);
+        glCallList(k->chunks[id].list[visible[i] & 1]);
+        glPopMatrix(1);
+    }
     ll_gfx_3d_end();
 }
 
@@ -619,12 +880,14 @@ static int m_ground(lua_State *L)
     return 0;
 }
 
-// b:draw3d(t)
+// b:draw3d(t, [lod])
 static int m_draw3d(lua_State *L)
 {
     Bill *b = check_bb(L);
     LLImage *img = bb_image(L);
     int32_t t = (int32_t)luaL_checkinteger(L, 2);
+    lua_Number lod = luaL_optnumber(L, 3, 0);
+    luaL_argcheck(L, lod >= 0 && lod <= 100, 3, "lod must be 0..100");
     if (img->tex == 0 || img->frames == 0)
         return 0;
     const int fw = img->fw ? img->fw : img->w, fh = img->fh ? img->fh : img->h;
@@ -661,6 +924,10 @@ static int m_draw3d(lua_State *L)
     }
     const int du = fw * 16, dw = fh * 16;
 
+    // Distances from the eye in 1/32 tiles (squares fit 32 bits within REACH)
+    const int32_t ex = (int32_t)lrintf(v.e[0] * 32), ez = (int32_t)lrintf(v.e[2] * 32);
+    const int32_t lod1 = (int32_t)(lod * 32 * lod * 32), lod2 = lod1 * 4;
+
     ll_gfx_bind(img->tex);
     glBegin(GL_QUADS);
     glColor(0x7fff);
@@ -677,6 +944,12 @@ static int m_draw3d(lua_State *L)
         int32_t x = wx - v.tx, z = wy - v.ty;
         if (x < -REACH || x > REACH || z < -REACH || z > REACH || !in_view(&v, x, z))
             continue;
+        if (lod1 && (i & 3))
+        {
+            int32_t dx = (x >> 4) - ex, dz = (z >> 4) - ez, d2 = dx * dx + dz * dz;
+            if (d2 > lod2 || (d2 > lod1 && (i & 1)))
+                continue;
+        }
         int32_t y = p->z - v.tz + (b->ground ? ground_at(b, wx, wy) : 0);
         if (y < -REACH || y > REACH)
             continue;
@@ -770,5 +1043,6 @@ void ll_3d_register(lua_State *L)
     lua_setfield(L, -2, "__tostring");
     lua_pop(L, 1);
     lua_register(L, "camera3d", l_camera3d);
+    lua_register(L, "fog3d", l_fog3d);
     lua_register(L, "billboards", l_billboards);
 }

@@ -8,7 +8,7 @@
 //   g = isogrid(img, cols, rows, [opts])
 //   g:draw(x, y, [scale])             top corner of cell (0, 0) at world x, y;
 //                                     heights times scale (default 1, 0..8) pixels up
-//   g:draw3d([hscale], [tpt])        the grid as 3D terrain (D60, ll_3d.c)
+//   g:draw3d([hscale], [tpt], [lod]) the grid as 3D terrain (D60, ll_3d.c)
 //   g:frame(x, y, [f]) -> f           cell x, y (0-based): frame of img, -1 = none
 //   g:height(x, y, [h]) -> h          corner x, y (0..cols, 0..rows): 0..32767
 //   g:color(x, y, [col]) -> col       corner color (shading), 0xRRGGBB
@@ -179,15 +179,18 @@ static int m_draw(lua_State *L)
     return 0;
 }
 
-// g:draw3d([hscale], [tpt]): terrain in the view of camera3d (D60)
+// g:draw3d([hscale], [tpt], [lod]): terrain in the view of camera3d (D60)
 static int m_draw3d(lua_State *L)
 {
     Iso *iso = check_iso(L);
     lua_Number hscale = luaL_optnumber(L, 2, 1.0 / 16);
     lua_Integer tpt = luaL_optinteger(L, 3, 0);
+    lua_Number lod = luaL_optnumber(L, 4, 0);
     luaL_argcheck(L, hscale >= 0 && hscale <= 8, 2, "hscale must be 0..8");
     luaL_argcheck(L, tpt >= 0 && tpt <= 32, 3, "tpt must be 0..32");
-    ll_3d_terrain(iso_image(L), &iso->g, (int32_t)(hscale * 4096 + 0.5f), (int)tpt);
+    luaL_argcheck(L, lod >= 0 && lod <= 1000, 4, "lod must be 0..1000");
+    ll_3d_terrain(iso_image(L), &iso->g, (int32_t)(hscale * 4096 + 0.5f), (int)tpt,
+                  (float)lod);
     return 0;
 }
 
@@ -211,6 +214,7 @@ static int m_frame(lua_State *L)
         int frames = iso_image(L)->frames;
         luaL_argcheck(L, f >= -1 && f < frames, 4, "not a frame of the image (or -1)");
         iso->frames[i] = (int16_t)f;
+        iso->g.version++;
     }
     lua_pushinteger(L, iso->frames[i]);
     return 1;
@@ -227,6 +231,7 @@ static int m_height(lua_State *L)
         luaL_argcheck(L, h >= 0 && h <= MAX_HEIGHT, 4, "height must be 0..32767");
         int old = iso->heights[i];
         iso->heights[i] = (int16_t)h;
+        iso->g.version++;
         if (h > iso->g.maxh)
             iso->g.maxh = (int)h;
         else if (old == iso->g.maxh && h < old)
@@ -255,6 +260,7 @@ static int m_color(lua_State *L)
             iso->g.colors = iso->colors;
         }
         iso->colors[i] = ll_gfx_color((u32)c);
+        iso->g.version++;
     }
     if (!iso->colored)
     {
@@ -288,6 +294,12 @@ static int m_index(lua_State *L)
     return 1;
 }
 
+static int m_gc(lua_State *L)
+{
+    ll_3d_free(&check_iso(L)->g);
+    return 0;
+}
+
 static int m_tostring(lua_State *L)
 {
     Iso *iso = check_iso(L);
@@ -309,6 +321,8 @@ void ll_iso_register(lua_State *L)
     lua_setfield(L, -2, "__index");
     lua_pushcfunction(L, m_tostring);
     lua_setfield(L, -2, "__tostring");
+    lua_pushcfunction(L, m_gc);
+    lua_setfield(L, -2, "__gc");
     lua_pop(L, 1);
     lua_register(L, "isogrid", l_isogrid);
 }

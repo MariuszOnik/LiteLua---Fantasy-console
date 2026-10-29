@@ -1429,4 +1429,21 @@ Propozycja agenta, użytkownik za (wariant A: jeden kąt kamery, bez obrotu — 
   wygląd „genialny”, także 8 kierunków. Przy dużym oddaleniu część żołnierzy znika (limit
   wierzchołków / zasięg ~60 pól). Poprawka po pierwszym teście: animacje z 1 krokiem
   znikały po ~20 s od startu konsoli (odwrotność 2^32 / 1 nie mieściła się w 32 bitach).
-- Kolor narodu przez paletę, LOD terenu, mgła, cień i nazwy API — po teście na konsoli.
+- **Uzupełnienie (2026-10-29, sztuczki z DSCraft — tylko pomysły, repo bez licencji):**
+  - **Display listy terenu:** kawałki 8×8 pól jako spakowane komendy GPU w RAM
+    (`glCallList`, DMA), wierzchołki względem rogu kawałka + `glTranslatef32`; najpierw
+    wstępny test po śladzie widoku, potem sprzętowy `BoxTest` (ustawia własny `glPolyFmt`, więc
+    wszystkie testy przed rysowaniem). Listy odbudowywane po zmianie siatki (`version` w
+    `LLIsoGrid`, `g:height/color/frame`) albo argumentów; zwalniane w `__gc`. melonDS:
+    teren 4,2 → 2,0–2,3 ms.
+  - **Mgła sprzętowa `fog3d(col, near, far)`:** tablica 32 gęstości od głębi `near`
+    (wpis = gęstość swojej odległości, więc rośnie równo z odległością, choć głębia nie);
+    płaszczyzna daleka przycięta do `far` — za mgłą nic nie jest rysowane.
+  - **LOD:** teren — drugi zestaw list co drugi narożnik (¼ wielokątów) dalej niż `lod`
+    pól od oka (`g:draw3d(hs, tpt, lod)`); żołnierze — `b:draw3d(t, lod)`: dalej niż `lod`
+    co drugi, dalej niż 2·`lod` co czwarty. Próg stały w polach od oka (nie względem `dist`):
+    przy oddaleniu i tak wszystko jest daleko. Szpary na styku poziomów są w mgle.
+  - **Pomiar melonDS, 1500 żołnierzy:** dist 10 z mgłą — 836 wielokątów (było 1168),
+    teren 2,1 ms; dist 40 z LOD — 1188 wielokątów / 3846 wierzchołków, 30 FPS (bez LOD:
+    limit 2048 i 20 FPS — przyczyna „znikania” dalekich jednostek). Na DSi do sprawdzenia.
+- Kolor narodu przez paletę, ozdoby terenu (drzewa) i nazwy API — dalej.
