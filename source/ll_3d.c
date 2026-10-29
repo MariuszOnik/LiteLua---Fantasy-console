@@ -392,7 +392,8 @@ void ll_3d_terrain(const LLImage *img, const LLIsoGrid *g, int32_t hscale, int t
 typedef struct {
     int16_t first, frames, ms;
     bool loop;
-    uint32_t inv_ms, inv_frames; // 2^32 / ms, 2^32 / frames, rounded up
+    uint64_t inv_ms, inv_frames; // 2^32 / ms, 2^32 / frames, rounded up
+                                 // (2^32 itself for 1: does not fit 32 bits)
 } Anim;
 
 typedef struct {
@@ -509,6 +510,11 @@ static int l_billboards(lua_State *L)
     return 1;
 }
 
+static uint64_t recip(uint32_t x)
+{
+    return ((1ull << 32) + x - 1) / x;
+}
+
 // b:anim(id, first, frames, [ms], [loop])
 static int m_anim(lua_State *L)
 {
@@ -526,7 +532,7 @@ static int m_anim(lua_State *L)
                           last, count);
     b->anims[id] = (Anim){ (int16_t)first, (int16_t)frames, (int16_t)ms,
                            lua_isnoneornil(L, 6) || lua_toboolean(L, 6),
-                           (uint32_t)((0xffffffffu / ms) + 1), (uint32_t)((0xffffffffu / frames) + 1) };
+                           recip((uint32_t)ms), recip((uint32_t)frames) };
     return 0;
 }
 
@@ -683,6 +689,7 @@ static int m_draw3d(lua_State *L)
         // the small numbers here)
         int32_t el = t - p->t0;
         uint32_t step = el < 0 ? 0 : (uint32_t)(((uint64_t)(uint32_t)el * a->inv_ms) >> 32);
+        // (time - t0) < 2^31 and step < 2^32: the products fit in 64 bits
         if (step >= (uint32_t)a->frames)
         {
             if (a->loop)
