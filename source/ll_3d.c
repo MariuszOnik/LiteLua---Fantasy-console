@@ -10,6 +10,10 @@
 //       tiles away; yaw in degrees (0 = the camera is south of the point and
 //       looks north, 90 = it is west of it), pitch in degrees above the
 //       ground (5..89), fov = vertical field of view (default 50)
+//   project3d(x, y, [z]) -> sx, sy   screen point of a world point (nil behind
+//                                  the eye); uses the last camera3d
+//   pick3d(sx, sy, [g], [hscale]) -> x, y   the ground (isogrid g, or flat at
+//                                  height 0) under a screen point, or nil
 //   fog3d([col], [near], [far])    fog from near to far tiles from the eye
 //                                  (default dist .. 3 * near); no arguments = off
 //   g:draw3d([hscale], [tpt], [lod], [under]) isogrid as terrain, see ll_3d_terrain
@@ -68,7 +72,10 @@ static struct {
     bool fog;
     u16 fog_color;
     float fog_near, fog_far;  // Tiles from the eye
+    float e[3], s[3], u[3], f[3]; // Basis of the camera (cam_update)
 } cam;
+
+static void cam_update(void);
 
 void ll_3d_reset(void)
 {
@@ -78,6 +85,7 @@ void ll_3d_reset(void)
     cam.dist = 12;
     cam.fov = 50;
     cam.fog = false;
+    cam_update();
 }
 
 // Hardware fog by depth (D60): the 3D layer is the far half of the depth
@@ -154,6 +162,31 @@ static void poly_fmt(void)
     glPolyFmt(POLY_ALPHA(31) | POLY_CULL_NONE | POLY_ID(0) | (cam.fog ? POLY_FOG : 0));
 }
 
+// The camera in GL coordinates relative to the target: eye, right, up,
+// forward; computed when the camera changes (sines are slow without an FPU)
+static void cam_update(void)
+{
+    float yaw = cam.yaw * PI / 180, pitch = cam.pitch * PI / 180;
+    float cp = cosf(pitch), sp = sinf(pitch);
+    cam.e[0] = -sinf(yaw) * cp * cam.dist;
+    cam.e[1] = sp * cam.dist;
+    cam.e[2] = cosf(yaw) * cp * cam.dist;
+    for (int i = 0; i < 3; i++)
+        cam.f[i] = -cam.e[i] / cam.dist;
+    const float up[3] = { 0, 1, 0 };
+    cross(cam.f, up, cam.s);
+    normalize(cam.s);
+    cross(cam.s, cam.f, cam.u);
+}
+
+static void cam_basis(float *e, float *s, float *u, float *f)
+{
+    memcpy(e, cam.e, sizeof cam.e);
+    memcpy(s, cam.s, sizeof cam.s);
+    memcpy(u, cam.u, sizeof cam.u);
+    memcpy(f, cam.f, sizeof cam.f);
+}
+
 // Loads the projection and modelview matrices; 'margin' (tiles) widens the
 // footprint for things above the ground. False outside _draw.
 static bool view_begin(View *v, float margin)
@@ -162,17 +195,7 @@ static bool view_begin(View *v, float margin)
     if (!ll_gfx_3d_begin(&cx, &cy, &cw, &ch))
         return false;
 
-    float yaw = cam.yaw * PI / 180, pitch = cam.pitch * PI / 180;
-    float cp = cosf(pitch), sp = sinf(pitch);
-    v->e[0] = -sinf(yaw) * cp * cam.dist;
-    v->e[1] = sp * cam.dist;
-    v->e[2] = cosf(yaw) * cp * cam.dist;
-    for (int i = 0; i < 3; i++)
-        v->f[i] = -v->e[i] / cam.dist;
-    const float up[3] = { 0, 1, 0 };
-    cross(v->f, up, v->s);
-    normalize(v->s);
-    cross(v->s, v->f, v->u);
+    cam_basis(v->e, v->s, v->u, v->f);
     v->tx = (int32_t)lrintf(cam.tx * Q);
     v->ty = (int32_t)lrintf(cam.ty * Q);
     v->tz = (int32_t)lrintf(cam.tz * Q);
@@ -294,6 +317,7 @@ static int l_camera3d(lua_State *L)
     if (cam.yaw < 0)
         cam.yaw += 360;
     cam.pitch = pitch, cam.dist = dist, cam.fov = fov;
+    cam_update();
     return 0;
 }
 
@@ -314,13 +338,112 @@ static int l_fog3d(lua_State *L)
     return 0;
 }
 
+// The viewport: the clip rectangle inside _draw, else the whole screen
+static void viewport(float *x, float *y, float *w, float *h)
+{
+    int cx, cy, cw, ch;
+    if (!ll_gfx_3d_begin(&cx, &cy, &cw, &ch))
+        cx = 0, cy = 0, cw = 256, ch = 192;
+    *x = (float)cx, *y = (float)cy, *w = (float)cw, *h = (float)ch;
+}
+
+// project3d(x, y, [z]) -> sx, sy | nil
+static int l_project3d(lua_State *L)
+{
+    float p[3] = { (float)luaL_checknumber(L, 1) - cam.tx, (float)luaL_optnumber(L, 3, 0) - cam.tz,
+                   (float)luaL_checknumber(L, 2) - cam.ty };
+    float e[3], s[3], u[3], f[3];
+    cam_basis(e, s, u, f);
+    float d[3] = { p[0] - e[0], p[1] - e[1], p[2] - e[2] };
+    float xc = d[0] * s[0] + d[1] * s[1] + d[2] * s[2];
+    float yc = d[0] * u[0] + d[1] * u[1] + d[2] * u[2];
+    float zc = d[0] * f[0] + d[1] * f[1] + d[2] * f[2];
+    if (zc < 0.05f)
+        return 0; // Behind the eye
+    float vx, vy, vw, vh;
+    viewport(&vx, &vy, &vw, &vh);
+    float ty = tanf(cam.fov * PI / 360), tx = ty * vw / vh;
+    lua_pushnumber(L, vx + vw / 2 * (1 + xc / (zc * tx)));
+    lua_pushnumber(L, vy + vh / 2 * (1 - yc / (zc * ty)));
+    return 2;
+}
+
+// Ground height under x, y (tiles) of an isogrid, in tiles
+static float grid_height(const LLIsoGrid *g, float hscale, float x, float y)
+{
+    if (x < 0 || y < 0 || x >= g->cols || y >= g->rows)
+        return 0;
+    int c = (int)x, r = (int)y, W1 = g->cols + 1, i = r * W1 + c;
+    float fx = x - c, fy = y - r;
+    float top = g->heights[i] * (1 - fx) + g->heights[i + 1] * fx;
+    float bot = g->heights[i + W1] * (1 - fx) + g->heights[i + W1 + 1] * fx;
+    return (top * (1 - fy) + bot * fy) * hscale;
+}
+
+// pick3d(sx, sy, [grid], [hscale]) -> x, y | nil: the ground point under a
+// point of the screen (the flat ground at height 0 without a grid)
+static int l_pick3d(lua_State *L)
+{
+    float sx = (float)luaL_checknumber(L, 1), sy = (float)luaL_checknumber(L, 2);
+    const LLIsoGrid *g = lua_isnoneornil(L, 3) ? NULL : ll_iso_check(L, 3);
+    float hscale = (float)luaL_optnumber(L, 4, 1.0 / 16);
+    float e[3], s[3], u[3], f[3];
+    cam_basis(e, s, u, f);
+    float vx, vy, vw, vh;
+    viewport(&vx, &vy, &vw, &vh);
+    float ty = tanf(cam.fov * PI / 360), tx = ty * vw / vh;
+    float nx = (sx - vx) / (vw / 2) - 1, ny = 1 - (sy - vy) / (vh / 2);
+    float d[3];
+    for (int i = 0; i < 3; i++)
+        d[i] = f[i] + s[i] * nx * tx + u[i] * ny * ty;
+    normalize(d);
+    // World: x = tx + X, y = ty + Z, height = tz + Y
+    float o[3] = { cam.tx + e[0], cam.tz + e[1], cam.ty + e[2] };
+    float t = -1;
+    if (g == NULL)
+    {
+        if (d[1] < -1e-4f)
+            t = -o[1] / d[1];
+    }
+    else
+    {
+        // March along the ray until it is under the ground, then halve
+        float step = 0.25f, far = cam.dist * 4 + 32, prev = 0;
+        for (float k = 0; k <= far; k += step)
+        {
+            float h = grid_height(g, hscale, o[0] + d[0] * k, o[2] + d[2] * k);
+            if (o[1] + d[1] * k <= h)
+            {
+                float a = prev, b = k;
+                for (int n = 0; n < 12; n++)
+                {
+                    float m = (a + b) / 2;
+                    if (o[1] + d[1] * m <= grid_height(g, hscale, o[0] + d[0] * m, o[2] + d[2] * m))
+                        b = m;
+                    else
+                        a = m;
+                }
+                t = b;
+                break;
+            }
+            prev = k;
+        }
+    }
+    if (t < 0)
+        return 0;
+    lua_pushnumber(L, o[0] + d[0] * t);
+    lua_pushnumber(L, o[2] + d[2] * t);
+    return 2;
+}
+
 // --- Terrain ----------------------------------------------------------------
 //
 // The terrain is kept as display lists (packed GPU commands in RAM, sent by
 // DMA with glCallList) of CHUNK x CHUNK cells, with vertices relative to the
 // corner of their chunk; each frame only tests the chunks with the hardware
 // box test and calls the visible ones under a translation. The lists are
-// rebuilt when the grid (its version) or the arguments change.
+// rebuilt when the arguments change, and a chunk alone when one of its cells
+// or corners is edited (ll_3d_touch).
 
 #define CHUNK 8
 #define MAX_VISIBLE 1024
@@ -334,12 +457,12 @@ static int l_fog3d(lua_State *L)
 
 typedef struct {
     u32 *list[2];             // Word count, then packed commands; NULL = empty.
-                              // [1]: every second corner (far away, strips only)
+                              // [1]: every second corner (far away)
     int32_t ymin, ymax;       // Heights of the corners, vertex units
+    bool dirty;               // A corner or cell changed: rebuild
 } Chunk;
 
 typedef struct {
-    unsigned version;
     int32_t hscale;
     int tpt, tex, ix, iy, iw, ih, fw, fh, fcols, frames;
     const u16 *colors;
@@ -416,6 +539,21 @@ static void free_lists(Cache *k)
     }
 }
 
+void ll_3d_touch(LLIsoGrid *g, int c, int r, bool corner)
+{
+    Cache *k = g->cache3d;
+    if (k == NULL)
+        return;
+    // A corner on a chunk's edge belongs to the chunks on both sides
+    for (int dy = 0; dy <= (corner && r > 0 && r % CHUNK == 0); dy++)
+        for (int dx = 0; dx <= (corner && c > 0 && c % CHUNK == 0); dx++)
+        {
+            int cx = c / CHUNK - dx, cy = r / CHUNK - dy;
+            if (cx >= 0 && cy >= 0 && cx < k->cc && cy < k->cr)
+                k->chunks[cy * k->cc + cx].dirty = true;
+        }
+}
+
 void ll_3d_free(LLIsoGrid *g)
 {
     Cache *k = g->cache3d;
@@ -440,8 +578,9 @@ static int pow2(int n)
     return s;
 }
 
-// Builds list 'lod' of chunk (cx, cy): corners every 1 << lod cells (strips
-// only); false if out of memory
+// Builds list 'lod' of chunk (cx, cy): corners every 1 << lod cells (with
+// frames, a coarse quad shows the frame of its top left cell); false if out
+// of memory
 static bool build_chunk(Cache *k, const LLIsoGrid *g, int cx, int cy, int lod)
 {
     Chunk *ch = &k->chunks[cy * k->cc + cx];
@@ -503,20 +642,22 @@ static bool build_chunk(Cache *k, const LLIsoGrid *g, int cx, int cy, int lod)
     }
     else
     {
+        const int step = 1 << lod;
         list_cmd(&d, CMD_BEGIN);
         list_word(&d, GL_QUADS);
-        for (int r = r0; r < r1; r++)
-            for (int c = c0; c < c1; c++)
+        for (int r = r0; r < r1; r += step)
+            for (int c = c0; c < c1; c += step)
             {
                 int f = g->frames[r * g->cols + c];
                 if (f < 0 || f >= k->frames)
                     continue;
+                int cr = c + step < c1 ? c + step : c1, rb = r + step < r1 ? r + step : r1;
                 int i = r * W1 + c; // Corners: T = i, R = i + 1, B = i + W1 + 1, L = i + W1
-                int x0 = (c - c0) * Q, x1 = x0 + Q, z0 = (r - r0) * Q, z1 = z0 + Q;
+                int x0 = (c - c0) * Q, x1 = (cr - c0) * Q, z0 = (r - r0) * Q, z1 = (rb - r0) * Q;
                 int u = (k->ix + (f % k->fcols) * k->fw) * 16;
                 int w = (k->iy + (f / k->fcols) * k->fh) * 16;
                 int u2 = u + k->fw * 16, w2 = w + k->fh * 16;
-                const int corner[4] = { i, i + 1, i + W1 + 1, i + W1 };
+                const int corner[4] = { i, r * W1 + cr, rb * W1 + cr, rb * W1 + c };
                 const int xs[4] = { x0, x1, x1, x0 }, zs[4] = { z0, z0, z1, z1 };
                 const int us[4] = { u, u2, u2, u }, ws[4] = { w, w, w2, w2 };
                 for (int j = 0; j < 4; j++)
@@ -547,11 +688,32 @@ static Cache *terrain_cache(const LLImage *img, LLIsoGrid *g, int32_t hscale, in
     const int fw = img->fw ? img->fw : img->w, fh = img->fh ? img->fh : img->h;
     const int fcols = img->cols > 0 ? img->cols : 1;
     Cache *k = g->cache3d;
-    if (k && k->version == g->version && k->hscale == hscale && k->tpt == tpt &&
+    if (k && k->hscale == hscale && k->tpt == tpt &&
         k->tex == img->tex && k->ix == img->x && k->iy == img->y && k->iw == img->w &&
         k->ih == img->h && k->fw == fw && k->fh == fh && k->fcols == fcols &&
         k->frames == img->frames && k->colors == g->colors)
+    {
+        // Only the chunks whose cells or corners changed
+        for (int cy = 0; cy < k->cr; cy++)
+            for (int cx = 0; cx < k->cc; cx++)
+            {
+                Chunk *ch = &k->chunks[cy * k->cc + cx];
+                if (!ch->dirty)
+                    continue;
+                ch->dirty = false;
+                for (int j = 0; j < 2; j++)
+                {
+                    free(ch->list[j]);
+                    ch->list[j] = NULL;
+                }
+                if (!build_chunk(k, g, cx, cy, 0) || !build_chunk(k, g, cx, cy, 1))
+                {
+                    ll_3d_free(g);
+                    return NULL;
+                }
+            }
         return k;
+    }
 
     int cc = (g->cols + CHUNK - 1) / CHUNK, cr = (g->rows + CHUNK - 1) / CHUNK;
     if (k == NULL)
@@ -563,13 +725,13 @@ static Cache *terrain_cache(const LLImage *img, LLIsoGrid *g, int32_t hscale, in
     }
     else
         free_lists(k);
-    k->version = g->version, k->hscale = hscale, k->tpt = tpt, k->tex = img->tex;
+    k->hscale = hscale, k->tpt = tpt, k->tex = img->tex;
     k->ix = img->x, k->iy = img->y, k->iw = img->w, k->ih = img->h;
     k->fw = fw, k->fh = fh, k->fcols = fcols, k->frames = img->frames;
     k->colors = g->colors, k->cc = cc, k->cr = cr;
     for (int cy = 0; cy < cr; cy++)
         for (int cx = 0; cx < cc; cx++)
-            if (!build_chunk(k, g, cx, cy, 0) || (tpt > 0 && !build_chunk(k, g, cx, cy, 1)))
+            if (!build_chunk(k, g, cx, cy, 0) || !build_chunk(k, g, cx, cy, 1))
             {
                 ll_3d_free(g);
                 return NULL;
@@ -1072,5 +1234,7 @@ void ll_3d_register(lua_State *L)
     lua_pop(L, 1);
     lua_register(L, "camera3d", l_camera3d);
     lua_register(L, "fog3d", l_fog3d);
+    lua_register(L, "project3d", l_project3d);
+    lua_register(L, "pick3d", l_pick3d);
     lua_register(L, "billboards", l_billboards);
 }

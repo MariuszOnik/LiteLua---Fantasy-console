@@ -221,7 +221,7 @@ static int m_frame(lua_State *L)
         int frames = iso_image(L)->frames;
         luaL_argcheck(L, f >= -1 && f < frames, 4, "not a frame of the image (or -1)");
         iso->frames[i] = (int16_t)f;
-        iso->g.version++;
+        ll_3d_touch(&iso->g, i % iso->g.cols, i / iso->g.cols, false);
     }
     lua_pushinteger(L, iso->frames[i]);
     return 1;
@@ -238,7 +238,7 @@ static int m_height(lua_State *L)
         luaL_argcheck(L, h >= 0 && h <= MAX_HEIGHT, 4, "height must be 0..32767");
         int old = iso->heights[i];
         iso->heights[i] = (int16_t)h;
-        iso->g.version++;
+        ll_3d_touch(&iso->g, i % (iso->g.cols + 1), i / (iso->g.cols + 1), true);
         if (h > iso->g.maxh)
             iso->g.maxh = (int)h;
         else if (old == iso->g.maxh && h < old)
@@ -267,7 +267,7 @@ static int m_color(lua_State *L)
             iso->g.colors = iso->colors;
         }
         iso->colors[i] = ll_gfx_color((u32)c);
-        iso->g.version++;
+        ll_3d_touch(&iso->g, i % (iso->g.cols + 1), i / (iso->g.cols + 1), true);
     }
     if (!iso->colored)
     {

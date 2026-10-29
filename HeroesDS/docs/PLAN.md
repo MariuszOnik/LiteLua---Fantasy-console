@@ -39,6 +39,9 @@ IG + H4, kolejność prac w uzupełnieniu H12). Zrobione: pas morza, łączenie 
 prowincji, ~37 mniejszych stref morskich. Granice stref morskich ciemniejsze i grubsze, mocniejsze
 zaznaczenie — na DSi ok (2026-10-27). Następny krok: zasoby i kopalnie z miniaturami
 H4 (stolice z zamkami) i dochód co tydzień.
+**M2 w 3D (2026-10-29):** X przełącza mapę płaską / 3D (warstwa 3D LiteLua D60: L/R obrót,
+B zoom, mgła; nazwy i armie w 2D przez `project3d`, stuknięcia przez `pick3d`). Sprawdzone
+w melonDS, wysłane na DSi. Pomysły na 3D: `docs/IDEAS_3D.md` w LiteLua.
 Ściąga z reguł i AI Imperial Glory (do wglądu, wypakowane lokalnie w `ref/ImperialGlory/`):
 `docs/IMPERIAL_GLORY.md` — na końcu propozycje dla AI przeciwników i bitwy automatycznej.
 

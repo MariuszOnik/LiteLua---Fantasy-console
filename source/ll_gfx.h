@@ -73,7 +73,6 @@ typedef struct {
     const int16_t *heights;  // (cols + 1) x (rows + 1) corners, row by row
     const u16 *colors;       // The same corners, or NULL for the tint color
     int maxh;                // Highest corner, for culling
-    unsigned version;        // Changes with every edit (3D caches, D60)
     void *cache3d;           // Display lists of the 3D terrain, or NULL
 } LLIsoGrid;
 

@@ -4,7 +4,8 @@
 -- armies or war fleets, then a marked place: an army walks to a neighbouring province
 -- or boards your fleet next to its port; a fleet sails up to two sea zones or lands
 -- the army it carries. Tap a province or sea zone to see it. Y: end the turn (trade
--- ships sail on), A: paper map / relief. Top screen: the turn, the selection, news.
+-- ships sail on), A: paper map / relief, X: flat map / 3D view (LiteLua D60; L/R turn,
+-- B zoom). Top screen: the turn, the selection, news.
 -- Sea zones (provinces with sea = true, no owner) are where fleets sail: their
 -- neighbours are the next zones and the coastal provinces (ports).
 --
@@ -26,6 +27,14 @@ local SEA, MOUNT = 0, 4         -- terrain numbers (M.terrains, 0-based)
 
 local paper_grid, relief_grid
 local relief = false            -- the view: paper map or relief
+local view3d = false            -- X: the 3D view (camera3d) instead of the flat map
+local t3x, t3y, yaw3 = 0, 0, 0  -- 3D: the tile the camera looks at, its turn
+local ZOOMS = { 10, 16, 26 }    -- 3D: camera distances in tiles (B)
+local zoom3 = 2
+local PITCH3 = 50
+local HSCALE3 = 0.012           -- 3D relief: tiles up per height unit (0..255)
+local BACK = 0x101018           -- background and fog
+local UNDER = { paper = 0xb4a078, relief = 0x5a6440 }  -- fills the DS's cracks
 local selected                  -- province number (0-based) or nil
 local camx, camy
 local DRAG_START = 5            -- pixels the stylus moves before a touch scrolls
@@ -158,10 +167,20 @@ function _init()
   camy = (pr.c + pr.r) * HH - 96
 end
 
--- The province under a point of the bottom screen (heights ignored)
+local function grid() return relief and relief_grid or paper_grid end
+local function hscale3() return relief and HSCALE3 or 0 end
+
+-- The province under a point of the bottom screen (flat map: heights ignored)
 local function province_at(sx, sy)
-  local u, v = (sx + camx) / HW, (sy + camy) / HH
-  local c, r = math.floor((u + v) / 2), math.floor((v - u) / 2)
+  local c, r
+  if view3d then
+    local x, y = pick3d(sx, sy, grid(), hscale3())
+    if not x then return nil end
+    c, r = math.floor(x), math.floor(y)
+  else
+    local u, v = (sx + camx) / HW, (sy + camy) / HH
+    c, r = math.floor((u + v) / 2), math.floor((v - u) / 2)
+  end
   if r < 0 or r >= ROWS or c < 0 or c >= COLS then return nil end
   local p = M.province[r * COLS + c + 1]
   return p >= 0 and p or nil
@@ -174,10 +193,18 @@ local function select(p)
   if p then recolor(p) end
 end
 
--- World position of a province's capital (a sea zone's centre)
+-- Screen position of a province's capital (a sea zone's centre), nil if behind the
+-- 3D camera
 local function place_xy(p)
   local pr = M.provinces[p + 1]
-  return (pr.c - pr.r) * HW, (pr.c + pr.r + 1) * HH
+  if view3d then
+    -- far places are in the fog: skip them before projecting (floats are slow)
+    local dx, dy, far = pr.c - t3x, pr.r - t3y, ZOOMS[zoom3] * 3
+    if dx * dx + dy * dy > far * far then return nil end
+    local h = grid():height(pr.c, pr.r) * hscale3()
+    return project3d(pr.c + 0.5, pr.r + 0.5, h)
+  end
+  return (pr.c - pr.r) * HW - camx, (pr.c + pr.r + 1) * HH - camy
 end
 
 -- Every army on land and every fleet with where its token is: { unit, x, y }
@@ -188,14 +215,14 @@ local function tokens()
       local x, y = place_xy(a.at)
       local k = count[a.at] or 0
       count[a.at] = k + 1
-      out[#out + 1] = { a, x - 3 + k * 9, y - 6 }
+      if x then out[#out + 1] = { a, x - 3 + k * 9, y - 6 } end
     end
   end
   for _, f in ipairs(st.fleets) do
     local x, y = place_xy(f.at)
     local k = count[f.at] or 0
     count[f.at] = k + 1
-    out[#out + 1] = { f, x - 6 + k * 13, y - 4 }
+    if x then out[#out + 1] = { f, x - 6 + k * 13, y - 4 } end
   end
   return out
 end
@@ -203,9 +230,8 @@ end
 -- A tap that did not drag: an order for the selected unit, a unit, or a place
 local function tap(sx, sy)
   local p = province_at(sx, sy)
-  local wx, wy = sx + camx, sy + camy
   for _, t in ipairs(tokens()) do
-    if math.abs(wx - t[2]) <= 6 and wy >= t[3] - 10 and wy <= t[3] + 4 then
+    if math.abs(sx - t[2]) <= 6 and sy >= t[3] - 10 and sy <= t[3] + 4 then
       unit = t[1]
       targets = war.targets(st, unit)
       return
@@ -224,6 +250,32 @@ local function tap(sx, sy)
   select(p)
 end
 
+-- X: the same place stays in the middle of the screen
+local function toggle_view()
+  if view3d then
+    camx = (t3x - t3y) * HW - 128
+    camy = (t3x + t3y) * HH - 96
+  else
+    local u, v = (128 + camx) / HW, (96 + camy) / HH
+    t3x, t3y = (u + v) / 2, (v - u) / 2
+  end
+  view3d = not view3d
+end
+
+-- Moves the map by dx, dy pixels of the screen
+local function scroll(dx, dy)
+  if view3d then
+    local k = ZOOMS[zoom3] / 150
+    local a = math.rad(yaw3)
+    t3x = t3x - (dx * math.cos(a) - dy * math.sin(a)) * k
+    t3y = t3y - (dx * math.sin(a) + dy * math.cos(a)) * k
+    t3x = math.max(0, math.min(COLS, t3x))
+    t3y = math.max(0, math.min(ROWS, t3y))
+  else
+    camx, camy = camx - dx, camy - dy
+  end
+end
+
 function _update()
   -- A touch is a tap at the point the stylus came down, unless the stylus moves more
   -- than DRAG_START first (a resting stylus jitters): then it scrolls the map
@@ -235,8 +287,7 @@ function _update()
       drag_moved = true
     end
     if drag_moved then
-      camx = camx - (tx - drag_x)
-      camy = camy - (ty - drag_y)
+      scroll(tx - drag_x, ty - drag_y)
       drag_x, drag_y = tx, ty
     end
   end
@@ -244,11 +295,17 @@ function _update()
     if not drag_moved then tap(press_x, press_y) end
     press_x = nil
   end
-  if btn("left") then camx = camx - 3 end
-  if btn("right") then camx = camx + 3 end
-  if btn("up") then camy = camy - 3 end
-  if btn("down") then camy = camy + 3 end
+  if btn("left") then scroll(3, 0) end
+  if btn("right") then scroll(-3, 0) end
+  if btn("up") then scroll(0, 3) end
+  if btn("down") then scroll(0, -3) end
   if btnp("a") then relief = not relief end
+  if btnp("x") then toggle_view() end
+  if view3d then
+    if btn("l") then yaw3 = yaw3 - 3 end
+    if btn("r") then yaw3 = yaw3 + 3 end
+    if btnp("b") then zoom3 = zoom3 % #ZOOMS + 1 end
+  end
   if btnp("y") then
     war.end_turn(st)
     targets = unit and war.targets(st, unit) or {}
@@ -277,20 +334,27 @@ end
 
 function _draw(screen)
   if screen == BOTTOM then
-    cls(0x101018)
+    cls(BACK)
     local t0 = micros()
-    camera(camx, camy)
-    if relief then
-      relief_grid:draw(0, 0, RELIEF_SCALE)
+    if view3d then
+      local d = ZOOMS[zoom3]
+      camera3d(t3x, t3y, yaw3, PITCH3, d)
+      fog3d(BACK, d * 1.5, d * 2.8)
+      grid():draw3d(hscale3(), 0, 18, relief and UNDER.relief or UNDER.paper)
     else
-      paper_grid:draw(0, 0, 0)
+      camera(camx, camy)
+      if relief then
+        relief_grid:draw(0, 0, RELIEF_SCALE)
+      else
+        paper_grid:draw(0, 0, 0)
+      end
+      camera()
     end
     if not relief then
-      -- capitals: a dot and the name
+      -- capitals: a dot and the name (screen positions)
       for i, pr in ipairs(M.provinces) do
-        local x = (pr.c - pr.r) * HW
-        local y = (pr.c + pr.r + 1) * HH
-        if x > camx - 40 and x < camx + 296 and y > camy - 10 and y < camy + 200 then
+        local x, y = place_xy(i - 1)
+        if x and x > -40 and x < 296 and y > -10 and y < 200 then
           local w = textw(pr.name)
           local col = i - 1 == selected and 0xffffff or pr.sea and 0x46648c or 0x302018
           if not pr.sea then rectfill(x - 1, y - 1, 3, 3, 0x302018) end
@@ -300,19 +364,20 @@ function _draw(screen)
     end
     for p, kind in pairs(targets) do
       local x, y = place_xy(p)
-      circ(x, y, 6, MARK[kind])
+      if x then circ(x, y, 6, MARK[kind]) end
     end
     for _, t in ipairs(tokens()) do
       if t[1].size then draw_army(t[1], t[2], t[3]) else draw_fleet(t[1], t[2], t[3]) end
     end
-    camera()
     draw_us = micros() - t0
   else
     cls(0x181410)
     local me = M.factions[st.player + 1]
     text(("Turn %d - you lead %s"):format(st.turn, me.name), 8, 8, 7)
     rectfill(230, 6, 16, 10, me.color)
-    text(("view (A): %s   Y: end turn"):format(relief and "relief" or "paper map"), 8, 22, 6)
+    text(("A: %s  X: %s  Y: end turn"):format(relief and "relief" or "paper",
+      view3d and "3D" or "flat"), 8, 22, 6)
+    if view3d then text("3D: L/R turn, B zoom, stylus/d-pad move", 8, 30, 5) end
     local y = 40
     if unit then
       local f = M.factions[unit.owner + 1].name

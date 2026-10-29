@@ -1454,4 +1454,18 @@ Propozycja agenta, użytkownik za (wariant A: jeden kąt kamery, bez obrotu — 
   pokazują zieleń. Na kawałek, nie jeden na mapę: jeden duży wystawał spod krawędzi mapy.
   Koszt: 1 wielokąt na widoczny kawałek. Jeśli szpary LOD dalej będą widać — „fartuchy”
   albo krawędzie rzadkiego kawałka w pełnej gęstości (`IDEAS_3D.md`).
+- **Mapa prowincji HeroesDS m2 w 3D (2026-10-29, prośba użytkownika):**
+  - `project3d(x, y, z) -> sx, sy` i `pick3d(sx, sy, [grid, hscale]) -> x, y` (promień z oka,
+    po terenie: kroki 0,25 pola i 12 połowień). Liczą z ostatniego `camera3d` — w `_update`
+    to kamera poprzedniego `_draw`, więc dotyk zgadza się z obrazem. Baza kamery liczona
+    raz w `camera3d` (sinusy bez FPU są drogie; ~100 nazw prowincji na klatkę).
+  - Edycja siatki odbudowuje tylko dotknięte kawałki (`ll_3d_touch` z `g:color/height/frame`;
+    narożnik na krawędzi należy do obu kawałków). Przekolorowanie prowincji nie przebudowuje
+    całej mapy 84×84 (~110 kawałków).
+  - LOD też dla klatek: rzadki czworokąt na 2×2 pola z klatką lewego górnego — bez tego
+    przy oddaleniu pergamin zapełniał 2048 wielokątów i znikały napisy 2D.
+  - m2: X = mapa płaska / 3D, w 3D L/R obrót, B zoom (10/16/26 pól), mgła w kolorze tła,
+    podkład w kolorze pergaminu / rzeźby. Nazwy, armie, floty i znaczniki w 2D w punktach
+    `project3d` (dalekie pomijane przed rzutowaniem). melonDS: rysowanie 15–32 ms (pergamin
+    z nazwami), 7 ms (rzeźba). Pamięć list: ~5 KB na kawałek z klatkami (+¼ na LOD).
 - Kolor narodu przez paletę, ozdoby terenu (drzewa) i nazwy API — dalej.

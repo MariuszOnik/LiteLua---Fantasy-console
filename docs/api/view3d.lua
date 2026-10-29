@@ -33,6 +33,39 @@ ground:draw3d(1 / 16, 32)
 army:draw3d(micros() // 1000)]],
     },
     {
+      name = "project3d", kind = "function",
+      sig = "project3d(x, y, [z]) -> sx, sy",
+      args = {
+        { "x", "number", "tile x" },
+        { "y", "number", "tile y" },
+        { "z", "number", "tiles up, default 0" },
+      },
+      ret = { { "number", "screen x and y, or nil behind the eye" } },
+      desc = "Where a point of the 3D world is on the screen, for the last "
+          .. "camera3d (in _update: the camera of the last _draw). Draw names, "
+          .. "markers and the HUD at these points in 2D.",
+      example = [[
+local sx, sy = project3d(town.x + 0.5, town.y + 0.5)
+if sx then text(town.name, sx - 10, sy) end]],
+    },
+    {
+      name = "pick3d", kind = "function",
+      sig = "pick3d(sx, sy, [grid], [hscale]) -> x, y",
+      args = {
+        { "sx", "number", "screen x (e.g. the stylus)" },
+        { "sy", "number", "screen y" },
+        { "grid", "isogrid", "the terrain with its hills; default flat "
+            .. "ground at height 0" },
+        { "hscale", "number", "as in grid:draw3d, default 1/16" },
+      },
+      ret = { { "number", "the tile x and y hit (fractions), or nil" } },
+      desc = "The ground point under a point of the screen, for the last "
+          .. "camera3d: what the stylus touches in the 3D view.",
+      example = [[
+local x, y = pick3d(tx, ty, ground, 1 / 16)
+if x then select_cell(math.floor(x), math.floor(y)) end]],
+    },
+    {
       name = "fog3d", kind = "function",
       sig = "fog3d([col], [near], [far])",
       args = {
@@ -55,8 +88,9 @@ fog3d(SKY, 15, 30)]],
         { "hscale", "number", "tiles up per height unit, default 1/16" },
         { "tpt", "integer", "texels per tile 1..32: one repeated texture "
             .. "instead of frames; default 0 = frames" },
-        { "lod", "number", "with tpt: farther than this from the eye (tiles) "
-            .. "every second corner, a quarter of the polygons; 0 = off" },
+        { "lod", "number", "farther than this from the eye (tiles) every "
+            .. "second corner, a quarter of the polygons (with frames: the "
+            .. "frame of the top left cell); 0 = off" },
         { "under", "number", "color of a flat quad just under each chunk: "
             .. "fills the cracks the DS leaves between polygons (use the "
             .. "average ground color); default none" },
@@ -68,8 +102,8 @@ fog3d(SKY, 15, 30)]],
           .. "one strip: about half the vertices of frames (the DS draws at "
           .. "most 6144 vertices and 2048 polygons per screen). The ground is "
           .. "kept as display lists of 8x8 cells, sent by DMA and tested "
-          .. "for visibility by the hardware; they are rebuilt only when the "
-          .. "grid or the arguments change.",
+          .. "for visibility by the hardware; grid:height/color/frame rebuild "
+          .. "only the lists they touch.",
       example = [[
 ground = isogrid(image("grass"), 48, 48, { heights = hs, colors = cols })
 ground:draw3d(1 / 16, 32, 20, 0x426430)]],
