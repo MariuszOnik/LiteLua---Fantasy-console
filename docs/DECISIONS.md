@@ -1425,5 +1425,8 @@ Propozycja agenta, użytkownik za (wariant A: jeden kąt kamery, bez obrotu — 
   teren pasami 4,2 ms (pola osobno 7,8 ms), 1500 żołnierzy 10,8 ms (marsz 13,3 ms, Lua
   0,2 ms), razem 30 FPS na ekran (dual30). Wielokąty 1155, wierzchołki 3810 z 6144.
   Wcześniej bez pasów teren zjadał ~2700 wierzchołków i przy 1000 żołnierzy brakowało limitu.
-  Na DSi do sprawdzenia.
+- **DSi (2026-10-29, użytkownik):** 1500 żołnierzy przy rozsądnym zoomie — stałe 30 FPS,
+  wygląd „genialny”, także 8 kierunków. Przy dużym oddaleniu część żołnierzy znika (limit
+  wierzchołków / zasięg ~60 pól). Poprawka po pierwszym teście: animacje z 1 krokiem
+  znikały po ~20 s od startu konsoli (odwrotność 2^32 / 1 nie mieściła się w 32 bitach).
 - Kolor narodu przez paletę, LOD terenu, mgła, cień i nazwy API — po teście na konsoli.
