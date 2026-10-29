@@ -4,7 +4,8 @@
 --   python tools/cossacks_atlas.py <extractor out>/MBA tests/carts/army3d
 --
 -- D-pad: left/right turn, up/down tilt; L/R: zoom; stylus: move the view;
--- A: number of soldiers; B: terrain strips + fog / strips / cells / off; X: stand / shoot / march;
+-- A: number of soldiers; B: terrain strips + fog + LOD + underlay (fills cracks)
+-- / strips / cells / off; X: stand / shoot / march;
 -- Y: reset the camera; select: 16 / 8 directions (gfx/soldier8.png, --dirs 5).
 
 local MAP = 48                       -- tiles per side
@@ -26,6 +27,7 @@ local heights = {}                   -- corner heights in tiles, [r * (MAP + 1) 
 local soldiers = {}                  -- { x, y, dir }
 local GROUNDS = { "fog", "strips", "cells", "off" }  -- fog: also coarse far away
 local SKY = 0x8ab4d8
+local UNDER = 0x426430               -- under the ground: fills the DS's cracks
 local count_i, mode_i, ground_i = 2, 1, 1
 local grass_ground
 local cx, cy, yaw, pitch, dist
@@ -245,7 +247,7 @@ function _draw(screen)
   local g = GROUNDS[ground_i]
   if g == "fog" then fog3d(SKY, dist * 1.5, dist * 3) end
   if g == "fog" then
-    grass_ground:draw3d(1 / 16, 32, 20)   -- coarse 20 tiles from the eye
+    grass_ground:draw3d(1 / 16, 32, 20, UNDER)  -- coarse 20 tiles from the eye
   elseif g == "strips" then
     grass_ground:draw3d(1 / 16, 32)
   elseif g == "cells" then

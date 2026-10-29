@@ -3136,7 +3136,7 @@ fog3d(SKY, 15, 30)
 ### `grid:draw3d`
 
 ```lua
-grid:draw3d([hscale], [tpt], [lod])
+grid:draw3d([hscale], [tpt], [lod], [under])
 ```
 
 Draws an isogrid as terrain in the view of camera3d: cell (c, r) is the square c..c+1, r..r+1, its corners raised by their heights and shaded by their colors. With tpt the whole image (power-of-two sides) repeats over the ground and every row is one strip: about half the vertices of frames (the DS draws at most 6144 vertices and 2048 polygons per screen). The ground is kept as display lists of 8x8 cells, sent by DMA and tested for visibility by the hardware; they are rebuilt only when the grid or the arguments change.
@@ -3146,12 +3146,13 @@ Draws an isogrid as terrain in the view of camera3d: cell (c, r) is the square c
 | `hscale` | number | tiles up per height unit, default 1/16 |
 | `tpt` | integer | texels per tile 1..32: one repeated texture instead of frames; default 0 = frames |
 | `lod` | number | with tpt: farther than this from the eye (tiles) every second corner, a quarter of the polygons; 0 = off |
+| `under` | number | color of a flat quad just under each chunk: fills the cracks the DS leaves between polygons (use the average ground color); default none |
 
 Example:
 
 ```lua
 ground = isogrid(image("grass"), 48, 48, { heights = hs, colors = cols })
-ground:draw3d(1 / 16, 32)
+ground:draw3d(1 / 16, 32, 20, 0x426430)
 ```
 
 ### `billboards`

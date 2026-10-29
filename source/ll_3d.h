@@ -23,8 +23,11 @@ void ll_3d_reset(void);
 // (1..32), and rows of cells are drawn as strips (half the vertices).
 // Kept as display lists of 8x8 cells, rebuilt when the grid or the arguments
 // change. With strips, chunks farther than 'lod' tiles from the eye (0 = off)
-// use every second corner (a quarter of the polygons).
-void ll_3d_terrain(const LLImage *img, LLIsoGrid *g, int32_t hscale, int tpt, float lod);
+// use every second corner (a quarter of the polygons). 'under' >= 0 (RGB15)
+// draws a flat quad of that color just under each chunk, which fills the
+// cracks the DS leaves between polygons.
+void ll_3d_terrain(const LLImage *img, LLIsoGrid *g, int32_t hscale, int tpt, float lod,
+                   int under);
 
 // Frees the display lists of a grid (when it is collected).
 void ll_3d_free(LLIsoGrid *g);

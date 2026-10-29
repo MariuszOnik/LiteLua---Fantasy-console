@@ -12,7 +12,7 @@
 //       ground (5..89), fov = vertical field of view (default 50)
 //   fog3d([col], [near], [far])    fog from near to far tiles from the eye
 //                                  (default dist .. 3 * near); no arguments = off
-//   g:draw3d([hscale], [tpt], [lod]) isogrid as terrain, see ll_3d_terrain
+//   g:draw3d([hscale], [tpt], [lod], [under]) isogrid as terrain, see ll_3d_terrain
 //   b = billboards(img, n, [opts])
 //       opts.dirs = 9   directions stored in the image: 0 = facing south
 //                       (the camera at yaw 0), then turning west; the other
@@ -577,7 +577,8 @@ static Cache *terrain_cache(const LLImage *img, LLIsoGrid *g, int32_t hscale, in
     return k;
 }
 
-void ll_3d_terrain(const LLImage *img, LLIsoGrid *g, int32_t hscale, int tpt, float lod)
+void ll_3d_terrain(const LLImage *img, LLIsoGrid *g, int32_t hscale, int tpt, float lod,
+                   int under)
 {
     if (img->tex == 0 || (tpt == 0 && img->frames == 0))
         return;
@@ -644,6 +645,33 @@ void ll_3d_terrain(const LLImage *img, LLIsoGrid *g, int32_t hscale, int tpt, fl
         glTranslatef32((id % k->cc) * span - v.tx, -v.tz, (id / k->cc) * span - v.ty);
         glCallList(k->chunks[id].list[visible[i] & 1]);
         glPopMatrix(1);
+    }
+
+    // The DS rasterizer leaves 1-pixel cracks between polygons that share an
+    // edge (more at the seams of the levels of detail): a flat quad of the
+    // ground's color just under each visible chunk fills them instead of the
+    // sky. Per chunk, so it stays close under the surface and does not show
+    // below the edge of the map.
+    if (under >= 0 && nv > 0)
+    {
+        ll_gfx_bind(0);
+        glBegin(GL_QUADS);
+        glColor((u16)under);
+        for (int i = 0; i < nv; i++)
+        {
+            int id = visible[i] >> 1;
+            const Chunk *ch = &k->chunks[id];
+            int cx = id % k->cc, cy = id / k->cc;
+            int32_t x0 = cx * span - v.tx, z0 = cy * span - v.ty;
+            int32_t x1 = (cx * CHUNK + CHUNK < g->cols ? cx * span + span : g->cols * Q) - v.tx;
+            int32_t z1 = (cy * CHUNK + CHUNK < g->rows ? cy * span + span : g->rows * Q) - v.ty;
+            int32_t y = ch->ymin - v.tz - Q / 8;
+            glVertex3v16(x0, clamp16(y), z0);
+            glVertex3v16(x1, clamp16(y), z0);
+            glVertex3v16(x1, clamp16(y), z1);
+            glVertex3v16(x0, clamp16(y), z1);
+        }
+        glEnd();
     }
     ll_gfx_3d_end();
 }

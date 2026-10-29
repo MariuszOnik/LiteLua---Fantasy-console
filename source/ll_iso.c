@@ -8,7 +8,7 @@
 //   g = isogrid(img, cols, rows, [opts])
 //   g:draw(x, y, [scale])             top corner of cell (0, 0) at world x, y;
 //                                     heights times scale (default 1, 0..8) pixels up
-//   g:draw3d([hscale], [tpt], [lod]) the grid as 3D terrain (D60, ll_3d.c)
+//   g:draw3d([hscale], [tpt], [lod], [under]) the grid as 3D terrain (D60, ll_3d.c)
 //   g:frame(x, y, [f]) -> f           cell x, y (0-based): frame of img, -1 = none
 //   g:height(x, y, [h]) -> h          corner x, y (0..cols, 0..rows): 0..32767
 //   g:color(x, y, [col]) -> col       corner color (shading), 0xRRGGBB
@@ -179,18 +179,25 @@ static int m_draw(lua_State *L)
     return 0;
 }
 
-// g:draw3d([hscale], [tpt], [lod]): terrain in the view of camera3d (D60)
+// g:draw3d([hscale], [tpt], [lod], [under]): terrain in the view of camera3d (D60)
 static int m_draw3d(lua_State *L)
 {
     Iso *iso = check_iso(L);
     lua_Number hscale = luaL_optnumber(L, 2, 1.0 / 16);
     lua_Integer tpt = luaL_optinteger(L, 3, 0);
     lua_Number lod = luaL_optnumber(L, 4, 0);
+    int under = -1;
+    if (!lua_isnoneornil(L, 5))
+    {
+        lua_Integer c = luaL_checkinteger(L, 5);
+        luaL_argcheck(L, c >= 0 && c <= 0xffffff, 5, "color must be 0-15 or 0xRRGGBB");
+        under = ll_gfx_color((u32)c);
+    }
     luaL_argcheck(L, hscale >= 0 && hscale <= 8, 2, "hscale must be 0..8");
     luaL_argcheck(L, tpt >= 0 && tpt <= 32, 3, "tpt must be 0..32");
     luaL_argcheck(L, lod >= 0 && lod <= 1000, 4, "lod must be 0..1000");
     ll_3d_terrain(iso_image(L), &iso->g, (int32_t)(hscale * 4096 + 0.5f), (int)tpt,
-                  (float)lod);
+                  (float)lod, under);
     return 0;
 }
 

@@ -50,13 +50,16 @@ fog3d(SKY, 15, 30)]],
     },
     {
       name = "grid:draw3d", kind = "function",
-      sig = "grid:draw3d([hscale], [tpt], [lod])",
+      sig = "grid:draw3d([hscale], [tpt], [lod], [under])",
       args = {
         { "hscale", "number", "tiles up per height unit, default 1/16" },
         { "tpt", "integer", "texels per tile 1..32: one repeated texture "
             .. "instead of frames; default 0 = frames" },
         { "lod", "number", "with tpt: farther than this from the eye (tiles) "
             .. "every second corner, a quarter of the polygons; 0 = off" },
+        { "under", "number", "color of a flat quad just under each chunk: "
+            .. "fills the cracks the DS leaves between polygons (use the "
+            .. "average ground color); default none" },
       },
       desc = "Draws an isogrid as terrain in the view of camera3d: cell (c, r) "
           .. "is the square c..c+1, r..r+1, its corners raised by their "
@@ -69,7 +72,7 @@ fog3d(SKY, 15, 30)]],
           .. "grid or the arguments change.",
       example = [[
 ground = isogrid(image("grass"), 48, 48, { heights = hs, colors = cols })
-ground:draw3d(1 / 16, 32)]],
+ground:draw3d(1 / 16, 32, 20, 0x426430)]],
     },
     {
       name = "billboards", kind = "function",

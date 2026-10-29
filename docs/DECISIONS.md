@@ -1446,4 +1446,12 @@ Propozycja agenta, użytkownik za (wariant A: jeden kąt kamery, bez obrotu — 
   - **Pomiar melonDS, 1500 żołnierzy:** dist 10 z mgłą — 836 wielokątów (było 1168),
     teren 2,1 ms; dist 40 z LOD — 1188 wielokątów / 3846 wierzchołków, 30 FPS (bez LOD:
     limit 2048 i 20 FPS — przyczyna „znikania” dalekich jednostek). Na DSi do sprawdzenia.
+- **Szpary na DSi (2026-10-29, użytkownik: „gęsto, psuje efekt”):** rasteryzer DS zostawia
+  1-pikselowe szpary między wielokątami o wspólnej krawędzi (jak w D58), więcej na stykach
+  LOD (T-złącza) i kawałków; w melonDS prawie ich nie widać. Przez szparę było widać niebo.
+  Poprawka: **podkład** — `g:draw3d(hs, tpt, lod, under)` rysuje płaski czworokąt koloru
+  ziemi tuż pod każdym widocznym kawałkiem (jego najniższy narożnik − 1/8 pola), więc szpary
+  pokazują zieleń. Na kawałek, nie jeden na mapę: jeden duży wystawał spod krawędzi mapy.
+  Koszt: 1 wielokąt na widoczny kawałek. Jeśli szpary LOD dalej będą widać — „fartuchy”
+  albo krawędzie rzadkiego kawałka w pełnej gęstości (`IDEAS_3D.md`).
 - Kolor narodu przez paletę, ozdoby terenu (drzewa) i nazwy API — dalej.
