@@ -81,6 +81,14 @@ typedef struct {
 void ll_gfx_isogrid(const LLImage *img, const LLIsoGrid *g, int x, int y,
                     int32_t scale);
 
+// For the 3D layer (D60, ll_3d.c). ll_gfx_3d_begin returns false outside
+// _draw or with an empty clip, otherwise gives the clip rectangle (the
+// viewport); ll_gfx_bind binds a texture (0 = none) and keeps track of it;
+// ll_gfx_3d_end brings back the 2D projection of the current clip.
+bool ll_gfx_3d_begin(int *x, int *y, int *w, int *h);
+void ll_gfx_bind(int tex);
+void ll_gfx_3d_end(void);
+
 // Registers the drawing functions as globals.
 void ll_gfx_register(lua_State *L);
 

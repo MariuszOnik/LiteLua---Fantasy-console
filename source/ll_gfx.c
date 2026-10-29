@@ -35,6 +35,7 @@
 
 #include "lauxlib.h"
 
+#include "ll_3d.h"
 #include "ll_gfx.h"
 #include "ll_image.h"
 #include "ll_log.h"
@@ -479,8 +480,33 @@ void ll_gfx_reset(void)
     gs.warned = false;
 }
 
+bool ll_gfx_3d_begin(int *x, int *y, int *w, int *h)
+{
+    if (!gs.active || gs.clip_w <= 0 || gs.clip_h <= 0)
+        return false;
+    *x = gs.clip_x, *y = gs.clip_y, *w = gs.clip_w, *h = gs.clip_h;
+    return true;
+}
+
+void ll_gfx_bind(int tex)
+{
+    if (gs.bound != tex)
+    {
+        glBindTexture(0, tex);
+        gs.bound = tex;
+    }
+}
+
+void ll_gfx_3d_end(void)
+{
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    apply_clip();
+}
+
 void ll_gfx_begin(int screen)
 {
+    ll_3d_reset();
     gs.screen = screen ? 1 : 0;
     glBegin2D();
     // glBegin2D scales the modelview matrix by 4; our vertices are already

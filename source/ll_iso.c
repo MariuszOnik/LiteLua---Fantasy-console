@@ -8,6 +8,7 @@
 //   g = isogrid(img, cols, rows, [opts])
 //   g:draw(x, y, [scale])             top corner of cell (0, 0) at world x, y;
 //                                     heights times scale (default 1, 0..8) pixels up
+//   g:draw3d([hscale], [tpt])        the grid as 3D terrain (D60, ll_3d.c)
 //   g:frame(x, y, [f]) -> f           cell x, y (0-based): frame of img, -1 = none
 //   g:height(x, y, [h]) -> h          corner x, y (0..cols, 0..rows): 0..32767
 //   g:color(x, y, [col]) -> col       corner color (shading), 0xRRGGBB
@@ -32,6 +33,7 @@
 #include "lauxlib.h"
 #include "lua.h"
 
+#include "ll_3d.h"
 #include "ll_gfx.h"
 #include "ll_image.h"
 #include "ll_iso.h"
@@ -50,6 +52,11 @@ typedef struct {
 static Iso *check_iso(lua_State *L)
 {
     return luaL_checkudata(L, 1, ISO_MT);
+}
+
+const LLIsoGrid *ll_iso_check(lua_State *L, int idx)
+{
+    return &((Iso *)luaL_checkudata(L, idx, ISO_MT))->g;
 }
 
 static LLImage *iso_image(lua_State *L)
@@ -172,6 +179,18 @@ static int m_draw(lua_State *L)
     return 0;
 }
 
+// g:draw3d([hscale], [tpt]): terrain in the view of camera3d (D60)
+static int m_draw3d(lua_State *L)
+{
+    Iso *iso = check_iso(L);
+    lua_Number hscale = luaL_optnumber(L, 2, 1.0 / 16);
+    lua_Integer tpt = luaL_optinteger(L, 3, 0);
+    luaL_argcheck(L, hscale >= 0 && hscale <= 8, 2, "hscale must be 0..8");
+    luaL_argcheck(L, tpt >= 0 && tpt <= 32, 3, "tpt must be 0..32");
+    ll_3d_terrain(iso_image(L), &iso->g, (int32_t)(hscale * 4096 + 0.5f), (int)tpt);
+    return 0;
+}
+
 static int arg_index(lua_State *L, int w, int h, const char *what)
 {
     lua_Integer x = luaL_checkinteger(L, 2), y = luaL_checkinteger(L, 3);
@@ -280,7 +299,7 @@ static int m_tostring(lua_State *L)
 void ll_iso_register(lua_State *L)
 {
     static const luaL_Reg methods[] = {
-        { "draw", m_draw }, { "frame", m_frame }, { "height", m_height },
+        { "draw", m_draw }, { "draw3d", m_draw3d }, { "frame", m_frame }, { "height", m_height },
         { "color", m_color }, { NULL, NULL },
     };
     luaL_newmetatable(L, ISO_MT);

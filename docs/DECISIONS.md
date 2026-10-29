@@ -1388,3 +1388,42 @@ Propozycja agenta, użytkownik za (wariant A: jeden kąt kamery, bez obrotu — 
   przez użytkownika (także przeciąganie mapy).
 - Wskazówka dla twórców gier w README (Input): stuknięcia przez `touchp()` + `btnr("touch")`,
   martwa strefa przed przewijaniem.
+
+## D60 (2026-10-29) — Warstwa 3D (eksperymentalna): `camera3d`, `isogrid:draw3d`, `billboards`
+- **Skąd:** użytkownik rozważa grę w stylu Imperial Glory z żołnierzami z Cossacks (sprajty
+  z jego ekstraktora `DSCossac/cossacks-ce/tools/extract_sprites.py`, tylko lokalnie) i pyta,
+  ilu żołnierzy DS pociągnie w walce turowej z kamerą 3D (inny kąt, obrót, zoom). Decyzja
+  użytkownika: rozszerzenie LiteLua (nie osobny program w C), najpierw test pomiarowy.
+  Ściąga: `Pico8DS/engine/ds/iso3d_editor` użytkownika (macierze ładowane wprost, całkowity
+  początek kamery) — kod napisany od nowa.
+- **Warstwa 3D w tej samej klatce co 2D:** perspektywa ładowana z `glLoadMatrix4x4`, z
+  przesunięta na tylną połowę zakresu głębi (`z' = (z + w) / 2`), bo 2D zajmuje przednią
+  (D1: rosnąca głębia w ortho). Więc 3D jest zawsze za 2D tego ekranu — `cls` = niebo, HUD
+  w 2D. Po rysowaniu 3D wraca projekcja 2D. Kamera resetowana w każdym `_draw` (D30).
+- **Współrzędne:** wierzchołki v16 względem punktu kamery w 1/512 pola (macierz widoku × 8),
+  więc da się narysować ~60 pól wokół niego. Macierze i ślad widoku (gdzie promienie przez
+  rogi ekranu trafiają w ziemię) liczone raz na wywołanie we floatach, wierzchołki całkowite.
+  Pola i żołnierze poza śladem są pomijane w C.
+- **Teren:** `isogrid:draw3d(hscale, [tpt])` — pole (c, r) to kwadrat c..c+1, r..r+1, z
+  wysokościami i kolorami narożników `isogrid`. Z `tpt` (teksele na pole) cały obraz powtarza
+  się po ziemi (`glTexParameter` z zawijaniem) i każdy wiersz to jeden `GL_QUAD_STRIP`: ~2
+  wierzchołki na pole zamiast 4. Pole, droga = kolory narożników.
+- **Żołnierze:** `billboards(img, n, {dirs, scale})` — batch czworokątów zwróconych do kamery
+  (sferyczne, bo sprajty są już narysowane pod kątem); klatka kierunku względem obrotu kamery
+  (9 zapisanych + odbicia = 16; `dirs = 5` → 8), animacje `b:anim`, `b:set`, ruch `b:move`
+  (prędkość od czasu t, pozycja liczona w C przy rysowaniu), `b:get`, `b:ground(g)` (wysokość
+  z terenu, dwuliniowo). Czworokąt przesunięty o pół klatki do kamery, żeby stopy nie
+  wchodziły w ziemię. W pętli bez dzieleń (tablica UV klatek, tablica kierunków, mnożenie
+  przez odwrotność) — dzielenie 64-bit podwajało czas.
+- **Atlas:** `tools/cossacks_atlas.py` — z PNG ekstraktora: wspólna komórka wokół kotwicy,
+  skala 0,4, 15 kolorów + przezroczysty (4 bpp), cień jako szachownica. STAND + WALK
+  (10 kroków) + PATTACK (ładowanie i strzał, 11): komórka 20×30, 16 kierunków = 198 klatek,
+  64 KB VRAM; 8 kierunków (`--dirs 5`, PATTACK 9) = 32 KB. Bez śmierci i leżącego ciała
+  (decyzja użytkownika — za szerokie: komórka 44×42). Grafika gry tylko lokalnie
+  (`.gitignore`).
+- **Pomiar (melonDS, tryb DS, `tests/carts/army3d`, kamera 40°, 10 pól):**
+  teren pasami 4,2 ms (pola osobno 7,8 ms), 1500 żołnierzy 10,8 ms (marsz 13,3 ms, Lua
+  0,2 ms), razem 30 FPS na ekran (dual30). Wielokąty 1155, wierzchołki 3810 z 6144.
+  Wcześniej bez pasów teren zjadał ~2700 wierzchołków i przy 1000 żołnierzy brakowało limitu.
+  Na DSi do sprawdzenia.
+- Kolor narodu przez paletę, LOD terenu, mgła, cień i nazwy API — po teście na konsoli.

@@ -24,6 +24,7 @@
 #include "ll_gfx.h"
 #include "ll_image.h"
 #include "ll_input.h"
+#include "ll_3d.h"
 #include "ll_iso.h"
 #include "ll_log.h"
 #include "ll_map.h"
@@ -311,6 +312,7 @@ static void register_api(lua_State *L, const LLCart *cart)
     ll_map_register(L, cart);
     ll_path_register(L);
     ll_iso_register(L);
+    ll_3d_register(L);
     ll_sound_register(L);
 }
 

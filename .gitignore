@@ -35,3 +35,7 @@ tests/carts/sound/music/rock.wav
 /HeroesDS/carts/*/src/combat/
 /HeroesDS/carts/*/sfx/
 /HeroesDS/carts/*/music/
+
+# Cossacks art for the 3D test (D60): made locally by tools/cossacks_atlas.py
+/tests/carts/army3d/gfx/soldier*.png
+/tests/carts/army3d/src/

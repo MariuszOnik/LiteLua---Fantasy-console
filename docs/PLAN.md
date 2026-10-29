@@ -8,6 +8,11 @@ tego pliku, **dokumentacja API** (`docs/api/*.lua` + `python tools/apidoc.py`, D
 ## Gdzie skończyliśmy
 - **Nowy projekt (2026-10-26): HeroesDS** — gra w stylu Heroes IV na LiteLua, folder
   `HeroesDS/`. Ma własny plan: **zacznij od `HeroesDS/docs/PLAN.md`** („Gdzie skończyliśmy”).
+- **D60 (2026-10-29, eksperyment):** warstwa 3D — `camera3d`, `isogrid:draw3d` (teren w
+  perspektywie, pasami), `billboards` (żołnierze z 16 kierunków, ruch i animacja w C) pod
+  pomysł gry w stylu Imperial Glory z sprajtami Cossacks. Test `tests/carts/army3d` (atlas:
+  `tools/cossacks_atlas.py`, grafika tylko lokalnie): melonDS 1500 żołnierzy + teren w
+  30 FPS; **czeka na pomiar na DSi** (wysłane FTP). Potem decyzja: zostaje / zmiany API.
 - **D58 (2026-10-27):** teren izometryczny z wysokością — `quad(img, frame, 4 rogi)` i
   `isogrid(img, cols, rows, opts)` + `g:draw/frame/height/color` (z HeroesDS, kartridż
   `HeroesDS/carts/m1`); sprawdzone w melonDS, **na konsoli jeszcze nie**.
