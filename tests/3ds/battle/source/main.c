@@ -78,6 +78,17 @@ static int decorCount;
 static C3D_Tex groundTex, borderTex;
 static bool forest[ROWS][COLS];
 
+// tree sprites (romfs:/trees.bin from make_trees.py), drawn as billboards turned to the camera
+typedef struct { float u0, v0, u1, v1, w, h; } Sprite;
+typedef struct { float x, y, z, s, tint; int sprite; } Tree;
+#define MAX_TREES 1200
+static Sprite sprites[8];
+static int nsprites;
+static C3D_Tex treeTex;
+static Tree trees[MAX_TREES];
+static int ntrees;
+static TVert* treeVerts;       // linear memory: 6 per tree, refilled every frame
+
 static shaderProgram_s soldierProg, terrainProg;
 static DVLB_s *soldierDvlb, *terrainDvlb;
 static int uSProj, uSModelView, uSBlend, uTProj, uTModelView;
@@ -274,11 +285,18 @@ static void buildDecor(void)
 		for (int c = 0; c < COLS; c++) {
 			float cx, cz;
 			hexCentre(c, r, &cx, &cz);
-			int trees = forest[r][c] ? 9 : (frand() < 0.2f ? 1 : 0);
-			for (int t = 0; t < trees && v - buf < maxVerts - 400; t++) {
-				float a = frand() * 6.283f, d = sqrtf(frand()) * HEX * 0.8f;
+			int count = forest[r][c] ? (nsprites ? 14 : 9) : (frand() < 0.2f ? 1 : 0);
+			for (int t = 0; t < count && v - buf < maxVerts - 400; t++) {
+				float a = frand() * 6.283f, d = sqrtf(frand()) * HEX * 0.85f;
 				float x = cx + d * cosf(a), z = cz + d * sinf(a), y = height(x, z) - 0.2f;
 				float s = 0.8f + 0.5f * frand();
+				if (nsprites && ntrees < MAX_TREES) {   // a sprite: crowns and conifers, bushes at the edge
+					int k = frand() < 0.45f ? 2 : (frand() < 0.5f ? 0 : 1);
+					if (d > HEX * 0.7f && frand() < 0.5f) k = 3 + (frand() < 0.5f);
+					if (k >= nsprites) k = 0;
+					trees[ntrees++] = (Tree){ x, y + 0.2f, z, s, 0.85f + 0.3f * frand(), k };
+					continue;
+				}
 				if (frand() < 0.6f) {   // pine: trunk and three cones
 					v = cone(v, x, y, z, 0.25f * s, 0.18f * s, 1.5f * s, 6, 0.45f, 0.30f, 0.18f);
 					for (int k = 0; k < 3; k++)
@@ -299,6 +317,63 @@ static void buildDecor(void)
 	decorCount = v - buf;
 	decor = linearCopy(buf, decorCount * sizeof(TVert));
 	free(buf);
+}
+
+static void loadTrees(void)
+{
+	size_t size;
+	u8* buf = readFile("romfs:/trees.bin", &size);
+	if (!buf) return;
+	u16 h[2];
+	memcpy(h, buf + 4, 4);
+	size_t tex = (size_t)h[0] * h[0] * 2;
+	if (memcmp(buf, "LLTR", 4) || h[1] > 8 || 8 + h[1] * sizeof(Sprite) + tex != size) { free(buf); return; }
+	nsprites = h[1];
+	memcpy(sprites, buf + 8, nsprites * sizeof(Sprite));
+	C3D_TexInit(&treeTex, h[0], h[0], GPU_RGBA5551);
+	C3D_TexUpload(&treeTex, buf + 8 + nsprites * sizeof(Sprite));
+	C3D_TexSetFilter(&treeTex, GPU_LINEAR, GPU_LINEAR);
+	C3D_TexSetWrap(&treeTex, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
+	free(buf);
+	treeVerts = linearAlloc(MAX_TREES * 6 * sizeof(TVert));
+}
+
+// every tree a quad standing on its foot, turned about the vertical to face the camera
+static void drawTrees(float yaw)
+{
+	if (!ntrees) return;
+	float rx = cosf(yaw), rz = -sinf(yaw);        // the camera's right on the ground
+	TVert* v = treeVerts;
+	for (int i = 0; i < ntrees; i++) {
+		Tree* t = &trees[i];
+		Sprite* s = &sprites[t->sprite];
+		float hw = s->w * t->s / 2, h = s->h * t->s;
+		float r = 0.62f * t->tint, g = 0.80f * t->tint, b = 0.45f * t->tint;   // greener than the source
+		// v from the top, as for the knights (the tile order already flips the rows)
+		TVert a = { t->x - rx * hw, t->y, t->z - rz * hw, s->u0, s->v1, 0, 0.5f, r, g, b };
+		TVert c = { t->x + rx * hw, t->y, t->z + rz * hw, s->u1, s->v1, 0, 0.5f, r, g, b };
+		TVert d = { t->x + rx * hw, t->y + h, t->z + rz * hw, s->u1, s->v0, 0, 0.5f, r, g, b };
+		TVert e = { t->x - rx * hw, t->y + h, t->z - rz * hw, s->u0, s->v0, 0, 0.5f, r, g, b };
+		*v++ = a; *v++ = c; *v++ = d;
+		*v++ = a; *v++ = d; *v++ = e;
+	}
+	GSPGPU_FlushDataCache(treeVerts, ntrees * 6 * sizeof(TVert));
+	C3D_TexBind(0, &treeTex);
+	C3D_TexEnv* env = C3D_GetTexEnv(0);
+	C3D_TexEnvInit(env);
+	C3D_TexEnvSrc(env, C3D_RGB, GPU_TEXTURE0, GPU_PRIMARY_COLOR, 0);
+	C3D_TexEnvFunc(env, C3D_RGB, GPU_MODULATE);
+	C3D_TexEnvScale(env, C3D_RGB, GPU_TEVSCALE_2);
+	C3D_TexEnvSrc(env, C3D_Alpha, GPU_TEXTURE0, 0, 0);
+	C3D_TexEnvFunc(env, C3D_Alpha, GPU_REPLACE);
+	C3D_TexEnvInit(C3D_GetTexEnv(1));
+	C3D_AlphaTest(true, GPU_GREATER, 0x80);
+	C3D_CullFace(GPU_CULL_NONE);
+	C3D_BufInfo* buf = C3D_GetBufInfo();
+	BufInfo_Init(buf);
+	BufInfo_Add(buf, treeVerts, sizeof(TVert), 4, 0x3210);
+	C3D_DrawArrays(GPU_TRIANGLES, 0, ntrees * 6);
+	C3D_AlphaTest(false, GPU_ALWAYS, 0);
 }
 
 static void texturesInit(void)
@@ -395,6 +470,8 @@ static void setTerrainBuffers(const TVert* v)
 	BufInfo_Add(buf, v, sizeof(TVert), 4, 0x3210);
 }
 
+static float camYaw;           // trees turn to it
+
 static void drawWorld(const C3D_Mtx* proj, const C3D_Mtx* view, float now)
 {
 	// terrain: grass * shading * hex border
@@ -424,6 +501,7 @@ static void drawWorld(const C3D_Mtx* proj, const C3D_Mtx* view, float now)
 	C3D_TexEnvInit(C3D_GetTexEnv(1));
 	setTerrainBuffers(decor);
 	C3D_DrawArrays(GPU_TRIANGLES, 0, decorCount);
+	drawTrees(camYaw);
 
 	// knights
 	C3D_BindProgram(&soldierProg);
@@ -496,6 +574,7 @@ int main(void)
 		gfxExit();
 		return 0;
 	}
+	loadTrees();               // sprites if romfs:/trees.bin is there, else trees made of cones
 	buildDecor();              // decides the forests first: the terrain darkens them
 	buildTerrain();
 	texturesInit();
@@ -578,10 +657,11 @@ int main(void)
 		C3D_RenderTargetClear(top, C3D_CLEAR_ALL, 0x9CC4E8FF, 0);
 		C3D_FrameDrawOn(top);
 		C3D_DepthTest(true, GPU_GREATER, GPU_WRITE_ALL);
+		camYaw = yaw;
 		drawWorld(&proj, &view, now);
 		C3D_FrameEnd(0);
 
-		int tris = terrainCount / 3 + decorCount / 3;
+		int tris = terrainCount / 3 + decorCount / 3 + ntrees * 2;
 		for (int m = 0; m < 2; m++) {
 			int n = 0;
 			for (int i = 0; i < nknights; i++) n += units[knights[i].unit].model == m;
@@ -591,7 +671,8 @@ int main(void)
 		printf("hexes     %d x %d, forests %s  \n", COLS, ROWS, "dark");
 		printf("knights   %d (%d units of %d)   \n", nknights, nunits, PER_HEX);
 		printf("triangles %6d                   \n", tris);
-		printf("  terrain %6d, trees %6d      \n", terrainCount / 3, decorCount / 3);
+		printf("  terrain %6d, rocks %5d     \n", terrainCount / 3, decorCount / 3);
+		printf("  trees   %6d sprites (%d tris) \n", ntrees, ntrees * 2);
 		printf("fps       %5.1f                  \n", fps);
 		printf("cpu ms    %5.2f  gpu ms %5.2f    \n", C3D_GetProcessingTime(), C3D_GetDrawingTime());
 		printf("cmdbuf    %3d%%                  \n", (int)(C3D_GetCmdBufUsage() * 100));
@@ -607,6 +688,10 @@ int main(void)
 	}
 	C3D_TexDelete(&groundTex);
 	C3D_TexDelete(&borderTex);
+	if (nsprites) {
+		C3D_TexDelete(&treeTex);
+		linearFree(treeVerts);
+	}
 	linearFree(terrain);
 	linearFree(decor);
 	shaderProgramFree(&soldierProg);

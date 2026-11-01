@@ -20,6 +20,8 @@ foreach ($unit in "teutonic", "polish") {
     python (Join-Path $here "..\army\make_knight.py") --unit $unit --anim idle,fidget,run,charge --tris 700 --out $romfs
     if ($LASTEXITCODE) { exit $LASTEXITCODE }
 }
+python (Join-Path $here "make_trees.py")   # tree sprites from the local Imperial Glory archive
+if ($LASTEXITCODE) { exit $LASTEXITCODE }
 # make does not see changes inside romfs/: drop the .3dsx so the models are always packed anew
 Remove-Item -ErrorAction SilentlyContinue (Join-Path $here "battle3d.3dsx")
 & $bash -lc "$env_ && make"

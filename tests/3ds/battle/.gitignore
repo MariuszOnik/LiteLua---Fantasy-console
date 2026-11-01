@@ -5,3 +5,4 @@ build/
 *.map
 # game models made locally by ../army/make_knight.py (private use only)
 romfs/*.bin
+romfs/_trees_preview.png
