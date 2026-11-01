@@ -7,50 +7,56 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
   w przeciwległych narożnikach — **zmienione decyzją H5**: walka na polu bitwy z małymi
   sprite'ami, bez zbliżenia.
 
-## Gdzie skończyliśmy (notka dla nowego czatu, 2026-10-27)
+## Gdzie skończyliśmy (notka dla nowego czatu, 2026-11-01)
 
-**Przejście na 3DS (H13, 2026-11-01) — M3: mapa polityczna w pełnym 3D.**
-`tools/make_m3.py` (ląd z `make_m2.generate`, ziarno 77): granice prowincji i stref
-morskich jako wspólne łańcuchy z „noisy edges” (fraktalne ząbki jak na mapie rysowanej
-ręcznie, bez przecięć). Każde podejście ma build w `3ds/builds/` (poza gitem;
-`3ds\build.ps1 -tag <nazwa> -gen "<argumenty make_m3>"`, `run` = Azahar):
-`m3a-smooth` (wygładzone granice, płyty lądu ze ściankami), `m3b-noisy` (fraktalne
-granice w meshu, ~52 tys. trójkątów, ~12–16 ms na klatkę w Azaharze), `m3c-flat` (płaska
-mapa = jeden prostokąt z teksturą 1024² z mipmapami, ~2,3 ms), `m3d` (kafle 1024²,
-doczytywane w tle; `m3d-tiles2x2`, `m3d-big4x4`), `m3e` (szczegóły wg
-oddalenia), `m3f` (klikanie powiatów), **`m3g` (obecny): scenariusz, państwa-miasta,
-mgła wojny, Lua na 3DS** — `m3g-scenario-2x2` (`-gen "--tiles 2 --scenario
-../scenarios/six-realms.lua"`) i `m3g-scenario-big4x4`. Lua 5.4 z `vendor/lua` (jak na DS,
-`LUA_32BITS`) wkompilowane w program 3DS; `romfs:/scenario.lua` czytane parserem LiteLua
-`ll_data.c` (format w `FORMATS.md`, wzór do edycji: `HeroesDS/scenarios/six-realms.lua`):
-państwa (do 32, też państwa-miasta), gracz, mgła, właściciele i nazwy prowincji, nazwy
-powiatów. Mgła: widać własne prowincje gracza i ich sąsiadów (ląd i morze), raz widziane
-zostają szare, nieznane ciemne, bez nazw i granic państw. X = mgła wł./wył., Y = widok
-następnego państwa. **`m3h-fastfog-2x2` / `-big4x4`:** mgła to osobna tekstura 512²
-nad całą mapą (RGBA4, piksel → region liczony raz z przeglądu), więc zmiana trwa
-milisekundy, a kafle mapy się nie zmieniają (wcześniej: przemalowanie wszystkich kafli,
-sekundy); miękkie brzegi z filtrowania. **`m3i-pastelfog-*`:** mgła pastelowa (za jasna);
-**`m3j-graphitefog-*` (obecna):** grafitowa szara mgła, widziane wcześniej — szara zasłona. Wcześniej **`m3f`: klikanie powiatów** — `m3f-counties-2x2` i
-`m3f-counties-big4x4` (z bliska, gdy widać linie powiatów — `COUNTY_ZOOM` — stuknięcie
-zaznacza powiat: jasne światło i obrys, prowincja słabiej; dalej cała prowincja; nazwy
-państw pastelowe z cieniem, na najbliższej środka prowincji państwa, która mieści napis
-na ekranie i nie zasłania innego państwa; kształty do podświetlenia w zwykłej pamięci,
-do pamięci karty kopiowany tylko zaznaczony). Wcześniej `m3e-lod-2x2` (`-gen "--tiles 2"`; 80 regionów, 279 powiatów) i
-`m3e-lod-big4x4` (`-gen "--size 144 --provinces 180 --tiles 4"`; 284 regiony, 1059
-powiatów, 16 kafli). Prowincje lądu dzielone na powiaty (~12 komórek); linie powiatów
-tylko na najdokładniejszych poziomach mipmap, prowincji na średnich, daleko samo
-wybrzeże. Granice państw rysuje 3DS (paski, szerokość rośnie z oddaleniem, liczone
-z właścicieli — zmienią się przy podbojach). Nazwy: państw z daleka (duże), prowincji,
-powiatów z bliska; rozmiar wg odległości jak napis na mapie, nachodzące pomijane, też na
-górnym ekranie. Kamera bez obrotu: L/R = kąt patrzenia (25–88°). Stuknięcie = powiat →
-prowincja (opis: „prowincja - powiat”). Pod spodem tekstura przeglądowa; w pamięci do 6
-kafli, doczytywane w wątku (zlib przez `vendor/miniz`). Azahar: 60 FPS; kafel 0,6–1,9 s
-(do zmierzenia na konsoli). Format w `FORMATS.md`, testy `tests/test_make_m3.py`
-(`pip install mapbox-earcut`). Dolny ekran — mapa, stuknięcie wybiera, przeciąganie
-i gałka przesuwają, góra/dół zoom; górny — bliższy widok stereo i opis. **Na 3DS XL do
-sprawdzenia** (pliki z `builds/` do `/3ds/` na karcie SD, Homebrew Launcher): czas
-wczytania kafla, wolna pamięć, płynność. Do ustalenia: Lua na 3DS (H13). Dalej: rzeźba
-terenu w teksturze, pionki armii i miast (modele 3D na płaskiej mapie).
+**Teraz: wersja na 3DS (H13) — mapa polityczna M3 w pełnym 3D.** Gra przechodzi z DS na
+3DS XL (devkitPro: libctru, citro3d, citro2d; emulator Azahar w
+`D:\Programowanie\azahar-windows-mxe-2127.0-alpha3\...\azahar.exe`). **Lua 5.4 z
+`vendor/lua` wkompilowane jak na DS** (H13 rozstrzygnięte; logika gry — walka, `war.lua` —
+przejdzie tą drogą). Konsola jeszcze nie dojechała: wszystko sprawdzone tylko w Azaharze.
+
+**Jak to działa:**
+- PC: `tools/make_m3.py` (ląd z `make_m2.generate`, ziarno 77) → `3ds/romfs/`:
+  `map3d.bin` (regiony, powiaty, kształty do podświetlenia, granice prowincji jako paski),
+  `overview.bin` + `tiles/<x>_<y>.bin` (tekstury 1024² z mipmapami, zlib; linie powiatów
+  tylko na dokładnych poziomach, prowincji na średnich), `scenario.lua`. Granice: łańcuchy
+  „noisy edges” wspólne dla sąsiadów (bez przecięć). Formaty: `docs/FORMATS.md`.
+- 3DS (`3ds/source/main.c`): płaska mapa w 3D — przegląd całej mapy + do 6 kafli przy
+  kamerze doczytywanych w wątku (kolory właścicieli przy wczytaniu); granice państw jako
+  paski liczone z właścicieli; nazwy wg oddalenia (państwa / prowincje / powiaty,
+  nachodzące pomijane); mgła wojny = tekstura 512² nad mapą (milisekundy, grafitowa);
+  klikanie: piksel → powiat → prowincja (z bliska zaznacza powiat).
+- Scenariusz (`HeroesDS/scenarios/six-realms.lua`, `--scenario` / `--dump-scenario`):
+  państwa (do 32), **państwa-miasta** (`city = true` — osobne państwa z kolorem, granicą
+  i nazwą; logiki — relacji, pokojowego przejęcia z H12 — jeszcze nie ma), gracz, mgła,
+  właściciele i nazwy prowincji, nazwy powiatów. Czytany na 3DS parserem LiteLua `ll_data.c`.
+
+**Budowanie:** `HeroesDS\3ds\build.ps1 -tag <nazwa> -gen "<argumenty make_m3>"` (make
+w msys2 devkitPro; `run` = Azahar). Każdy pomysł = osobny commit i osobny build w
+`3ds/builds/heroes3d-<tag>.3dsx` (poza gitem; stare zostają do porównań). Obecne:
+`m3j-graphitefog-2x2` (`-gen "--tiles 2 --scenario ../scenarios/six-realms.lua"`) i
+`m3j-graphitefog-big4x4` (`-gen "--size 144 --provinces 180 --tiles 4"`: 284 regiony,
+1059 powiatów, 16 kafli). Historia: m3a gładkie płyty → m3b fraktale w meshu → m3c
+płaska mapa z teksturą → m3d kafle → m3e szczegóły wg oddalenia → m3f klikanie powiatów
+→ m3g scenariusz/mgła/Lua → m3h szybka mgła → m3i/m3j kolor mgły.
+**Sterowanie:** stuknięcie = prowincja (z bliska powiat), przeciąganie / gałka = przesuw,
+L/R = kąt kamery, krzyżak góra/dół = zoom, X = mgła wł./wył., Y = widok następnego państwa.
+**Testy:** `python -m unittest discover -s HeroesDS/tests` (`pip install mapbox-earcut`;
+`test_make_m3.py`). **Na 3DS XL do zmierzenia:** czas wczytania kafla (Azahar 0,6–1,9 s),
+wolna pamięć, płynność (linia statystyk na górnym ekranie).
+
+**Następne kroki (propozycja, do wyboru z użytkownikiem):**
+1. Pomysły z mapgen4 (`ref/redblob/`, spis `ref/redblob/README.md`; Apache 2.0 dozwolone —
+   D61): rzeźba terenu w teksturze (cieniowanie wzgórz, kontury gór jak na starych mapach
+   — artykuły elevation, oblique projection, outlines), rzeki (drzewa spływu; granice
+   prowincji wzdłuż rzek), lepsze rozmieszczenie nazw (labels on maps), szlaki handlowe.
+2. Ostra, gładka krawędź mgły bez kosztu (kontrast filtrowanej tekstury w texenv) —
+   zaproponowane, nie zrobione.
+3. Gra na mapie: pionki armii i miast (3D), logika państw-miast (H12), ruch w Lua.
+4. Porządek pod inne platformy (Switch/PC/Android): rysowanie citro3d w jednym miejscu,
+   reszta (dane, Lua) niezależna.
+
+**Wcześniej (DS, tor M2 i walka) — szczegóły niżej.**
 
 **Dziś: mapa przygody (tor M).** Format `.h4c` rozpracowany (teren, przejścia, drogi,
 wysokość, poziomy, obiekty z obszarem i wejściami) — `docs/FORMATS.md`, narzędzia
