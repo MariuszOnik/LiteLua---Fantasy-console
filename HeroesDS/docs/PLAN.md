@@ -15,6 +15,11 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
 `vendor/lua` wkompilowane jak na DS** (H13 rozstrzygnięte; logika gry — walka, `war.lua` —
 przejdzie tą drogą). Konsola jeszcze nie dojechała: wszystko sprawdzone tylko w Azaharze.
 
+**Równolegle: pole bitwy na 3DS** (`tests/3ds/battle`, notka: **`tests/3ds/battle/NEXT.md`**) —
+turowa bitwa na heksach w 3D (wzgórza, lasy, oddziały rycerzy z Medieval II, dotyk na dolnym
+ekranie). Z czasem połączy się z tą mapą prowincji (armie z mapy → bitwa → wynik na mapę);
+najpierw trzeba dopracować rozgrywkę bitwy. Buildy obu trafiają do `3ds/builds/`.
+
 **Jak to działa:**
 - PC: `tools/make_m3.py` (ląd z `make_m2.generate`, ziarno 77) → `3ds/romfs/`:
   `map3d.bin` (regiony, powiaty, kształty do podświetlenia, granice prowincji jako paski),

@@ -29,7 +29,14 @@ Remove-Item -ErrorAction SilentlyContinue (Join-Path $here "battle3d.3dsx"), (Jo
 $title = ("Battle 3D $tag " + (Get-Date -Format "MM-dd HH:mm")).Replace("  ", " ")
 & $bash -lc "$env_ && make APP_TITLE='$title' APP_DESCRIPTION='$title'"   # Azahar on Android lists the description
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
+# a copy next to the province map's builds (HeroesDS/3ds/builds): one place for the devices
+$builds = Join-Path $here "..\..\..\HeroesDS\3ds\builds"
+New-Item -ItemType Directory -Force $builds | Out-Null
+$name = if ($tag) { "battle3d-$tag.3dsx" } else { "battle3d.3dsx" }
+$copy = Join-Path $builds $name
+Copy-Item -Force (Join-Path $here "battle3d.3dsx") $copy
+Write-Host "copy: $copy"
 if ($what -eq "run") {
     $azahar = "D:\Programowanie\azahar-windows-mxe-2127.0-alpha3\azahar-windows-mxe-2127.0-alpha3\azahar.exe"
-    Start-Process $azahar -ArgumentList "`"$(Join-Path $here 'battle3d.3dsx')`""
+    Start-Process $azahar -ArgumentList "`"$copy`""
 }
