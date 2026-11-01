@@ -587,12 +587,12 @@ static bool fogInit(void)
 	return true;
 }
 
-// the fog as the player sees now: never seen -- a pale mist, seen before -- a light veil, seen
+// the fog as the player sees now: never seen -- a graphite mist, seen before -- a grey veil, seen
 // now -- clear (a few milliseconds: the map's textures stay as they are)
 static void fogPaint(void)
 {
 	// RGBA4: r g b a, 4 bits each
-	static const u16 look[3] = { 0xDDCD, 0xEEE6, 0x0000 };   // pastel mist, a light veil, clear
+	static const u16 look[3] = { 0x667C, 0x9996, 0x0000 };   // graphite mist, a grey veil, clear
 	u16* out = fogTex.data;
 	for (u32 k = 0; k < FOG_TEX * FOG_TEX; k++) {
 		u16 r = fogRegion[k];
