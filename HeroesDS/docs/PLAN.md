@@ -20,6 +20,11 @@ turowa bitwa na heksach w 3D (wzgórza, lasy, oddziały rycerzy z Medieval II, d
 ekranie). Z czasem połączy się z tą mapą prowincji (armie z mapy → bitwa → wynik na mapę);
 najpierw trzeba dopracować rozgrywkę bitwy. Buildy obu trafiają do `3ds/builds/`.
 
+**Wizja (2026-11-01):** wciągający miks Heroes i Imperial Glory, w którym **liczy się rozgrywka,
+nie grafika** (stąd DS — ukochana konsola użytkownika; kocha planszówki). Zasady najpierw: papier
+/ Tabletop Simulator, potem czysty Lua z testami; grafika jest tylko widokiem. Następny krok
+przy bitwach: sesja projektowa i `DESIGN.md` (szczegóły: `tests/3ds/battle/NEXT.md`).
+
 **Jak to działa:**
 - PC: `tools/make_m3.py` (ląd z `make_m2.generate`, ziarno 77) → `3ds/romfs/`:
   `map3d.bin` (regiony, powiaty, kształty do podświetlenia, granice prowincji jako paski),

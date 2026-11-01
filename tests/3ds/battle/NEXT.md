@@ -1,5 +1,14 @@
 # Pole bitwy na 3DS — notka dla nowego czatu (2026-11-01)
 
+> **Wizja użytkownika (najważniejsze):** wciągający miks **Heroes** (bohaterowie, rozwój, mapa)
+> i **Imperial Glory** (prowincje, armie, bitwy taktyczne). Liczy się **rozgrywka, nie grafika** —
+> projekt zaczął się na DS, żeby to udowodnić; DS to ukochana konsola, użytkownik kocha gry
+> planszowe. Kolejność pracy: **zasady najpierw** (prototyp na papierze / w Tabletop Simulatorze,
+> potem czysty Lua z testami na PC — jak silnik walki HeroesDS), grafika potem (DS: LiteLua,
+> billboardy 1500 żołnierzy w 30 FPS; 3DS i rycerze 3D z tej notki to dodatek, nie warunek).
+> Następny krok: sesja projektowa i **`DESIGN.md`** (filary, pętla mapa → bitwa → skutki,
+> pierwsze zasady bitwy) — pytania z sekcji „Rozgrywka — do ustalenia” są punktem startu.
+
 **Cel.** Turowa bitwa na heksach w 3D (3DS), robiona **równolegle z mapą prowincji**
 (`HeroesDS/3ds`, plan: `HeroesDS/docs/PLAN.md`). Z czasem oba projekty mają się połączyć:
 mapa strategiczna → bitwy taktyczne → wynik wraca na mapę. Temat: średniowiecze, pierwsza
