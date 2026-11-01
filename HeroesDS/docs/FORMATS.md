@@ -203,3 +203,29 @@ Ustalenia z 2026-10-26 — do trybu mapy kontynentu i ewentualnie terenu walki.
   narysować jako siatkę z teksturą i jasnością w wierzchołkach (cieniowanie prawie za
   darmo). Alternatywa: prerender mapy na PC do płaskich obrazków (dużo pamięci).
   Romby 64×32 trzeba zmniejszyć (np. 32×16). Decyzja przy trybie mapy.
+
+## `map3d.bin` — mapa polityczna 3D dla 3DS (H13, nasz format)
+
+Robi go `tools/make_m3.py`, czyta `3ds/source/main.c` (`romfs:/map3d.bin`). Little-endian,
+sekcje bez przerw, każda wyrównana do 4 bajtów. Współrzędne: komórka siatki M2 = 1×1,
+środek mapy w (0, 0), x = kolumna, z = wiersz, y w górę; ląd ma wierzch na `land_h`,
+morze na 0.
+
+```
+nagłówek (28 B)
+  char[4] "HM3D"; u16 wersja = 1; u16 nregions; u16 nland; u16 nfactions
+  u32 nverts; u32 nidx; u32 nbverts; f32 land_h
+nfactions × 20 B:  u8 r, g, b, 0; char[16] nazwa
+nregions × 76 B (region = prowincja, strefa morska albo ląd bez prowincji):
+  i16 id (numer z M2; -1 = ląd bez prowincji); i8 rodzaj (0 ląd, 1 morze, 2 ląd bez
+  prowincji); i8 właściciel (frakcja, -1 brak); u8 liczba sąsiadów; 3 × 0
+  char[24] nazwa
+  f32 cx, cz (stolica / środek strefy: napis); f32 x0, z0, x1, z1 (prostokąt otaczający)
+  u32 vstart, vcount (wierzchołki regionu); u32 istart, icount (indeksy);
+  u32 itop (pierwsze itop indeksów to wierzch, reszta to ścianki)
+u32 × 3              liczby wierzchołków wstęg granic: ląd/ląd, wybrzeże, morze/morze
+i16 × Σ sąsiadów     listy sąsiadów regionów po kolei (id), dopełnione do 4 B
+nverts × 16 B        f32 x, y, z, jasność (1 = wierzch, ścianki wg kierunku światła)
+nidx × u16           trójkąty, indeksy względem vstart regionu (< 65536), dopełnione do 4 B
+nbverts × 12 B       f32 x, y, z — trójkąty wstęg, klasami po kolei
+```

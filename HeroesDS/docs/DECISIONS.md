@@ -122,3 +122,17 @@ Warstwa strategiczna jak w Imperial Glory (prowincje, oblężenia, AI z profilam
   z sąsiadem. Strefy morskie mają ~110 kafli (na mapie 84×84 to ~37 stref zamiast 12),
   żeby flota miała gdzie pływać. Ziarna państw wybierane są na największym lądzie
   (wcześniej państwo mogło utknąć na wysepce z 1 prowincją). Ziarno 77 daje inną mapę.
+
+## H13 (2026-11-01) — Mapa polityczna w pełnym 3D na Nintendo 3DS
+Użytkownik kupił 3DS XL i przenosimy grę na 3DS (devkitPro: libctru + citro3d/citro2d,
+emulator Azahar w `D:\Programowanie\azahar-windows-mxe-2127.0-alpha3`). Mapa polityczna
+jest w pełnym 3D (wzór: obrazki „Risk” — płaskie prowincje jak płytki, falujące granice):
+- Prowincje i strefy morskie to **siatki 3D** z `tools/make_m3.py` (ten sam generator lądu
+  co M2, to samo ziarno): wielokąty z wygładzonymi, wspólnymi granicami, ląd jako płyty
+  nad morzem ze ściankami, granice jako wstęgi. Format `map3d.bin` w `docs/FORMATS.md`.
+- Klikanie: dolny ekran (dotykowy) pokazuje mapę 3D; promień z kamery przez punkt dotyku
+  przecina płaszczyznę lądu, potem morza, i szuka trójkąta prowincji (CPU, bez bufora ID).
+  Górny ekran: bliższy widok stereo i informacje.
+- Prototyp `3ds/` jest w C (bez Lua). **Do ustalenia:** czy logika gry (silnik walki
+  `combat/` w Lua, `war.lua`) idzie na 3DS przez port LiteLua, czy przez samo Lua 5.4
+  wbudowane w program 3DS. Wersja DS (m2, c4) zostaje, jak jest.

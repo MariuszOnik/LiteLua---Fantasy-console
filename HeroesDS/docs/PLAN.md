@@ -9,6 +9,20 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
 
 ## Gdzie skończyliśmy (notka dla nowego czatu, 2026-10-27)
 
+**Przejście na 3DS (H13, 2026-11-01) — M3: mapa polityczna w pełnym 3D.**
+`tools/make_m3.py` (ląd z `make_m2.generate`, ziarno 77): granice prowincji i stref
+morskich jako wspólne, wygładzone łańcuchy (Chaikin + lekkie falowanie), wierzchy przez
+ear cutting (`pip install mapbox-earcut`, ISC), ląd jako płyty ze ściankami, granice jako
+wstęgi → `3ds/romfs/map3d.bin` (80 regionów, ~8 tys. trójkątów; `--png` = podgląd z góry;
+format w `FORMATS.md`, testy `tests/test_make_m3.py`). Program `3ds/` (C, citro3d +
+citro2d; `3ds\build.ps1` = generator + make w msys2 devkitPro, `build.ps1 run` = Azahar):
+dolny ekran — mapa 3D z nazwami, stuknięcie wybiera prowincję / strefę (promień z kamery,
+trójkąty na CPU), przeciąganie i gałka przesuwają, L/R obrót, góra/dół zoom; wybrana
+prowincja unosi się i pulsuje; górny ekran — bliższy widok stereo (suwak 3D) i opis.
+Sprawdzone w Azaharze: 60 FPS, stuknięcia trafiają. **Na 3DS XL do sprawdzenia**
+(`heroes3d.3dsx` do `/3ds/` na karcie SD, Homebrew Launcher). Do ustalenia: Lua na 3DS
+(H13). Dalej: armie/floty z `war.lua`, tekstura pergaminu, ikony miast.
+
 **Dziś: mapa przygody (tor M).** Format `.h4c` rozpracowany (teren, przejścia, drogi,
 wysokość, poziomy, obiekty z obszarem i wejściami) — `docs/FORMATS.md`, narzędzia
 `tools/h4map.py`, `h4mapview.py` (podgląd PNG), `h4objects.py` (obiekty, przechodniość),
