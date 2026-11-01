@@ -57,7 +57,11 @@ false`, `select.mode = "fill"` (lekka poświata; są też `glow`, `line`, `none`
 i delikatnie migocze jasno-ciemno (`flicker`, `light`, `dark`): `m3v-leather-softselect`,
 `m3w-parchment-softselect`. M3x: poświata mnoży mapę (zostaje kolor prowincji, tylko
 jaśniejszy), miękko gaśnie przy granicy (3 pasy w stencilu, `soft`), wolno i słabo pulsuje
-(`period` 3,5 s, `flicker` 0,35): `m3x-leather-gentleselect`, `m3y-parchment-gentleselect`. Historia: m3a gładkie płyty → m3b fraktale w meshu → m3c
+(`period` 3,5 s, `flicker` 0,35): `m3x-leather-gentleselect`, `m3y-parchment-gentleselect`.
+**Edytor stylu na PC:** `python HeroesDS/tools/styler.py [--style ...] [--sd E:/3ds/heroes3d/style.lua]`
+— przeglądarka: mapa z góry, suwaki części `view` (mgła, granice, napisy, zaznaczenie z
+migotaniem, klik = zaznacz), zapis na SD Azahara (`%APPDATA%/Azahar/sdmc/3ds/heroes3d/`)
+albo do `styles/`. Nie pokazuje ziarna GPU ani pochylenia 3D. Historia: m3a gładkie płyty → m3b fraktale w meshu → m3c
 płaska mapa z teksturą → m3d kafle → m3e szczegóły wg oddalenia → m3f klikanie powiatów
 → m3g scenariusz/mgła/Lua → m3h szybka mgła → m3i/m3j kolor mgły → m3k–m3o style.
 **Sterowanie:** stuknięcie = prowincja (z bliska powiat), przeciąganie / gałka = przesuw,
