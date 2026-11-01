@@ -20,6 +20,8 @@ if (Test-Path "E:\AI\M2TW\tools") {   # the knight only where the Medieval II fi
     foreach ($unit in "teutonic", "polish") {
         python (Join-Path $here "make_knight.py") --unit $unit
         if ($LASTEXITCODE) { exit $LASTEXITCODE }
+        python (Join-Path $here "make_knight.py") --unit $unit --tris 700   # the light copy, *_lo.bin
+        if ($LASTEXITCODE) { exit $LASTEXITCODE }
     }
 }
 # make does not see changes inside romfs/: drop the .3dsx so the model is always packed anew

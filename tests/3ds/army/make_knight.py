@@ -7,7 +7,8 @@ rider become one mesh (both have their origin in the saddle); their three textur
 shrunk into one atlas, a quarter each; the animation is baked into vertex frames.
 
   python make_knight.py [--unit teutonic|polish] [--m2 E:/AI/M2TW] [--anim run|charge]
-                        [--variant 0] [--quarter 256]
+                        [--variant 0] [--quarter 256] [--tris 700]
+--tris makes a lighter copy (optimize.py: hidden triangles out, then collapses), *_lo.bin.
 """
 import argparse, os, struct, sys
 import numpy as np
@@ -40,6 +41,7 @@ def main():
     ap.add_argument("--variant", type=int, default=0)
     ap.add_argument("--quarter", type=int, default=256)   # texels per side of each texture
     ap.add_argument("--speed", type=float, default=7.0)   # metres per second, a gallop
+    ap.add_argument("--tris", type=int, default=0)        # >0: lighter (optimize.py), file *_lo.bin
     a = ap.parse_args()
     sys.path.insert(0, os.path.join(a.m2, "tools"))
     import m2anim, m2bake, m2gltf, m2mesh
@@ -82,7 +84,18 @@ def main():
         uvs.append(out)
         base += len(sub["pos"])
     uv = np.concatenate(uvs).astype("<f4")
-    tri = np.concatenate(tris).astype("<u2")
+    tri = np.concatenate(tris)
+    if a.tris:   # hidden triangles out, then collapses down to --tris (optimize.py)
+        import optimize
+        fr = np.array(frames)
+        tri = tri[optimize.hidden(fr, tri)]
+        fr, uv, tri = optimize.compact(fr, uv, tri)
+        tri = optimize.decimate(fr, uv, tri, a.tris)
+        fr, uv, tri = optimize.compact(fr, uv, tri)
+        frames = list(fr)
+        uv = uv.astype("<f4")
+        out_name = out_name.replace(".bin", "_lo.bin")
+    tri = tri.astype("<u2")
     nv, nt = len(uv), len(tri)
 
     out = bytearray(b"LLMS")

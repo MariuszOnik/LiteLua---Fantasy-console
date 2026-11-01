@@ -7,3 +7,4 @@ build/
 romfs/soldier.bin
 romfs/knight.bin
 romfs/polish.bin
+romfs/*_lo.bin

@@ -15,7 +15,7 @@
 #include "soldier_shbin.h"
 
 #define MAX_SOLDIERS 2000
-#define MAX_MODELS 4
+#define MAX_MODELS 8
 #define COLUMNS 20
 #define GROUND_TEX 64          // checker texture size
 #define GROUND_TILE 4.0f       // metres per checker texture
@@ -189,6 +189,8 @@ int main(void)
 	if (loadModel(&models[nmodels], "romfs:/soldier.bin", "fusilier (Imperial Glory)", 200)) nmodels++;
 	if (loadModel(&models[nmodels], "romfs:/knight.bin", "Ritterbruder (Medieval II)", 40)) nmodels++;
 	if (loadModel(&models[nmodels], "romfs:/polish.bin", "Polish knight (Medieval II)", 40)) nmodels++;
+	if (loadModel(&models[nmodels], "romfs:/knight_lo.bin", "Ritterbruder, light (optimize.py)", 120)) nmodels++;
+	if (loadModel(&models[nmodels], "romfs:/polish_lo.bin", "Polish knight, light (optimize.py)", 120)) nmodels++;
 	if (!nmodels) {
 		printf("No model in romfs:/\nRun make_army.py / make_knight.py,\nthen rebuild.\nSTART: exit\n");
 		while (aptMainLoop()) {
