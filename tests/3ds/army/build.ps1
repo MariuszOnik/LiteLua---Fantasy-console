@@ -1,6 +1,7 @@
 # Builds army3d.3dsx (devkitPro make under its own msys2), as HeroesDS/3ds/build.ps1.
 # Usage:
-#   .\build.ps1          make_army.py (soldier from local Imperial Glory files) + make
+#   .\build.ps1          make_army.py (soldier from local Imperial Glory files),
+#                        make_knight.py (Medieval II knight, when unpacked) + make
 #   .\build.ps1 clean
 #   .\build.ps1 run      build, then open in the Azahar emulator
 param([string]$what = "")
@@ -15,6 +16,12 @@ if ($what -eq "clean") {
 }
 python (Join-Path $here "make_army.py")
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
+if (Test-Path "E:\AI\M2TW\tools") {   # the knight only where the Medieval II files are unpacked
+    foreach ($unit in "teutonic", "polish") {
+        python (Join-Path $here "make_knight.py") --unit $unit
+        if ($LASTEXITCODE) { exit $LASTEXITCODE }
+    }
+}
 # make does not see changes inside romfs/: drop the .3dsx so the model is always packed anew
 Remove-Item -ErrorAction SilentlyContinue (Join-Path $here "army3d.3dsx")
 & $bash -lc "$env_ && make"

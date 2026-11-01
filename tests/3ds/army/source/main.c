@@ -1,10 +1,11 @@
 // Army test for the 3DS: a formation of 3D soldiers marching (romfs:/soldier.bin from
-// make_army.py). Every soldier is one draw of the same mesh; the vertex shader blends two
-// frames of the walk (morph animation, no skeleton), each soldier at its own phase.
-// The ground is a repeating checker moved under the formation, so it marches on the spot.
+// make_army.py, knight.bin and polish.bin from make_knight.py). Every soldier is one draw of the
+// same mesh; the vertex shader blends two frames of the animation (morph, no skeleton),
+// each soldier at its own phase. The ground is a repeating checker moved under the
+// formation, so it marches on the spot. Spacing and camera come from the model's size.
 // Top screen: the view. Bottom: the numbers. Circle pad: turn and tilt the camera,
-// L/R: zoom, D-pad: soldiers +-50 / +-10, A: march / stand, Y: back faces on / off,
-// START: exit.
+// L/R: zoom, D-pad: soldiers +-50 / +-10, X: next model, A: march / stand,
+// Y: back faces on / off, START: exit.
 #include <3ds.h>
 #include <citro3d.h>
 #include <math.h>
@@ -14,10 +15,11 @@
 #include "soldier_shbin.h"
 
 #define MAX_SOLDIERS 2000
+#define MAX_MODELS 4
 #define COLUMNS 20
 #define GROUND_TEX 64          // checker texture size
 #define GROUND_TILE 4.0f       // metres per checker texture
-#define GROUND_SIZE 160.0f     // metres
+#define GROUND_SIZE 240.0f     // metres
 
 #define DISPLAY_TRANSFER_FLAGS \
 	(GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(0) | GX_TRANSFER_RAW_COPY(0) | \
@@ -30,14 +32,23 @@ typedef struct {
 	float seconds, speed;
 } ModelHeader;
 
-static ModelHeader hdr;
-static float* uvs;             // linear memory
-static u16* indices;           // linear memory
-static float* frames;          // linear memory: frames * verts * 3
-static C3D_Tex soldierTex, groundTex;
+typedef struct {
+	const char* name;
+	ModelHeader hdr;
+	float* uvs;                // linear memory
+	u16* indices;              // linear memory
+	float* frames;             // linear memory: frames * verts * 3
+	C3D_Tex tex;
+	float spaceX, spaceZ, height;
+	int count;                 // soldiers shown
+} Model;
+
+static Model models[MAX_MODELS];
+static int nmodels;
+static C3D_Tex groundTex;
 static float* groundPos;       // linear memory: 4 corners (x, y, z)
 static float* groundUv;
-static float phase[MAX_SOLDIERS];   // each soldier's offset in the walk, 0..1
+static float phase[MAX_SOLDIERS];   // each soldier's offset in the animation, 0..1
 
 static DVLB_s* dvlb;
 static shaderProgram_s program;
@@ -75,32 +86,54 @@ static u32 texIndex(u32 x, u32 y, u32 size)
 	return tile * 64 + m;
 }
 
-static bool loadModel(char* err, size_t errSize)
+// one model file; false (and no model) when it is missing or broken
+static bool loadModel(Model* m, const char* path, const char* name, int count)
 {
 	size_t size;
-	u8* buf = readFile("romfs:/soldier.bin", &size);
-	if (!buf) { snprintf(err, errSize, "no romfs:/soldier.bin"); return false; }
-	memcpy(&hdr, buf, sizeof hdr);
-	if (memcmp(hdr.magic, "LLMS", 4)) { snprintf(err, errSize, "soldier.bin: bad magic"); free(buf); return false; }
-	size_t uvSize = hdr.verts * 8, idxSize = hdr.tris * 6, idxPad = (idxSize + 3) & ~3u;
-	size_t frameSize = (size_t)hdr.frames * hdr.verts * 12, texSize = (size_t)hdr.texSize * hdr.texSize * 2;
-	if (sizeof hdr + uvSize + idxPad + frameSize + texSize != size) {
-		snprintf(err, errSize, "soldier.bin: size %u", (unsigned)size);
+	u8* buf = readFile(path, &size);
+	if (!buf) return false;
+	memcpy(&m->hdr, buf, sizeof m->hdr);
+	ModelHeader* h = &m->hdr;
+	size_t uvSize = h->verts * 8, idxSize = h->tris * 6, idxPad = (idxSize + 3) & ~3u;
+	size_t frameSize = (size_t)h->frames * h->verts * 12, texSize = (size_t)h->texSize * h->texSize * 2;
+	if (memcmp(h->magic, "LLMS", 4) || sizeof *h + uvSize + idxPad + frameSize + texSize != size) {
 		free(buf);
 		return false;
 	}
-	u8* p = buf + sizeof hdr;
-	uvs = linearCopy(p, uvSize);
+	u8* p = buf + sizeof *h;
+	m->uvs = linearCopy(p, uvSize);
 	p += uvSize;
-	indices = linearCopy(p, idxSize);
+	m->indices = linearCopy(p, idxSize);
 	p += idxPad;
-	frames = linearCopy(p, frameSize);
+	m->frames = linearCopy(p, frameSize);
 	p += frameSize;
-	C3D_TexInit(&soldierTex, hdr.texSize, hdr.texSize, GPU_RGB565);
-	C3D_TexUpload(&soldierTex, p);
-	C3D_TexSetFilter(&soldierTex, GPU_LINEAR, GPU_LINEAR);
+	C3D_TexInit(&m->tex, h->texSize, h->texSize, GPU_RGB565);
+	C3D_TexUpload(&m->tex, p);
+	C3D_TexSetFilter(&m->tex, GPU_LINEAR, GPU_LINEAR);
 	free(buf);
+
+	// spacing in the formation from the first frame's size
+	float lo[3] = { 1e9, 1e9, 1e9 }, hi[3] = { -1e9, -1e9, -1e9 };
+	for (int i = 0; i < h->verts; i++)
+		for (int k = 0; k < 3; k++) {
+			float v = m->frames[i * 3 + k];
+			if (v < lo[k]) lo[k] = v;
+			if (v > hi[k]) hi[k] = v;
+		}
+	m->spaceX = (hi[0] - lo[0]) * 0.8f + 0.3f;
+	m->spaceZ = (hi[2] - lo[2]) * 0.9f + 0.4f;
+	m->height = hi[1];
+	m->name = name;
+	m->count = count;
 	return true;
+}
+
+static void freeModel(Model* m)
+{
+	C3D_TexDelete(&m->tex);
+	linearFree(m->uvs);
+	linearFree(m->indices);
+	linearFree(m->frames);
 }
 
 static void groundInit(void)
@@ -153,9 +186,11 @@ int main(void)
 	romfsInit();
 	C3D_Init(0x100000);   // one draw per soldier: a big command buffer
 
-	char err[96];
-	if (!loadModel(err, sizeof err)) {
-		printf("%s\nRun make_army.py, then rebuild.\nSTART: exit\n", err);
+	if (loadModel(&models[nmodels], "romfs:/soldier.bin", "fusilier (Imperial Glory)", 200)) nmodels++;
+	if (loadModel(&models[nmodels], "romfs:/knight.bin", "Ritterbruder (Medieval II)", 40)) nmodels++;
+	if (loadModel(&models[nmodels], "romfs:/polish.bin", "Polish knight (Medieval II)", 40)) nmodels++;
+	if (!nmodels) {
+		printf("No model in romfs:/\nRun make_army.py / make_knight.py,\nthen rebuild.\nSTART: exit\n");
 		while (aptMainLoop()) {
 			hidScanInput();
 			if (hidKeysDown() & KEY_START) break;
@@ -183,9 +218,9 @@ int main(void)
 	AttrInfo_AddLoader(&attr, 1, GPU_FLOAT, 3);
 	AttrInfo_AddLoader(&attr, 2, GPU_FLOAT, 2);
 
-	int count = 200;
+	int cur = nmodels - 1;     // the newest model first
 	bool marching = true, cull = true;
-	float yaw = 0.5f, pitch = 0.2f, dist = 9, walked = 0, animTime = 0;
+	float yaw = 0.5f, pitch = 0.2f, zoom = 1, walked = 0, animTime = 0;
 	u64 last = osGetTime();
 	float fps = 0, cpuMs = 0, gpuMs = 0;
 	int fpsFrames = 0;
@@ -194,13 +229,19 @@ int main(void)
 	while (aptMainLoop()) {
 		hidScanInput();
 		u32 down = hidKeysDown(), held = hidKeysHeld();
+		Model* m = &models[cur];
 		if (down & KEY_START) break;
-		if (down & KEY_DUP) count += 50;
-		if (down & KEY_DDOWN) count -= 50;
-		if (down & KEY_DRIGHT) count += 10;
-		if (down & KEY_DLEFT) count -= 10;
-		if (count < 1) count = 1;
-		if (count > MAX_SOLDIERS) count = MAX_SOLDIERS;
+		if (down & KEY_X) {
+			cur = (cur + 1) % nmodels;
+			m = &models[cur];
+			consoleClear();
+		}
+		if (down & KEY_DUP) m->count += 50;
+		if (down & KEY_DDOWN) m->count -= 50;
+		if (down & KEY_DRIGHT) m->count += 10;
+		if (down & KEY_DLEFT) m->count -= 10;
+		if (m->count < 1) m->count = 1;
+		if (m->count > MAX_SOLDIERS) m->count = MAX_SOLDIERS;
 		if (down & KEY_A) marching = !marching;
 		if (down & KEY_Y) cull = !cull;
 		circlePosition cp;
@@ -209,18 +250,19 @@ int main(void)
 		if (abs(cp.dy) > 15) pitch += cp.dy / 156.0f * 0.03f;
 		if (pitch < 0.08f) pitch = 0.08f;
 		if (pitch > 1.5f) pitch = 1.5f;
-		if (held & KEY_L) dist *= 1.03f;
-		if (held & KEY_R) dist /= 1.03f;
-		if (dist < 2) dist = 2;
-		if (dist > 120) dist = 120;
+		if (held & KEY_L) zoom *= 1.03f;
+		if (held & KEY_R) zoom /= 1.03f;
+		if (zoom < 0.2f) zoom = 0.2f;
+		if (zoom > 15) zoom = 15;
 
+		const ModelHeader* h = &m->hdr;
 		u64 now = osGetTime();
 		float dt = (now - last) / 1000.0f;
 		last = now;
 		if (dt > 0.1f) dt = 0.1f;
 		if (marching) {
 			animTime += dt;
-			walked += dt * hdr.speed;
+			walked += dt * h->speed;
 		}
 		if (++fpsFrames == 30) {
 			fps = fpsFrames * 1000.0f / (now - fpsStart);
@@ -228,13 +270,13 @@ int main(void)
 			fpsFrames = 0;
 		}
 
-		int rows = (count + COLUMNS - 1) / COLUMNS;
-		float spaceX = 0.75f, spaceZ = 1.2f;
-		C3D_FVec target = FVec3_New(0, 1.0f, -(rows - 1) * spaceZ / 4);
+		int rows = (m->count + COLUMNS - 1) / COLUMNS;
+		float dist = m->height * 4.5f * zoom;
+		C3D_FVec target = FVec3_New(0, m->height * 0.5f, -(rows - 1) * m->spaceZ / 4);
 		C3D_FVec eye = FVec3_New(target.x + dist * cosf(pitch) * sinf(yaw), target.y + dist * sinf(pitch),
 			target.z + dist * cosf(pitch) * cosf(yaw));
 		C3D_Mtx proj, view, model, mv;
-		Mtx_PerspTilt(&proj, C3D_AngleFromDegrees(45), C3D_AspectRatioTop, 0.2f, 300, false);
+		Mtx_PerspTilt(&proj, C3D_AngleFromDegrees(45), C3D_AspectRatioTop, 0.2f, 400, false);
 		Mtx_LookAt(&view, eye, target, FVec3_New(0, 1, 0), false);
 
 		C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
@@ -260,40 +302,38 @@ int main(void)
 		// soldiers
 		C3D_CullFace(cull ? GPU_CULL_BACK_CCW : GPU_CULL_NONE);
 		texEnvTexture(1.25f);
-		C3D_TexBind(0, &soldierTex);
-		float cycle = animTime / hdr.seconds;
-		for (int i = 0; i < count; i++) {
+		C3D_TexBind(0, &m->tex);
+		float cycle = animTime / h->seconds;
+		for (int i = 0; i < m->count; i++) {
 			int c = i % COLUMNS, r = i / COLUMNS;
-			float f = fmodf(cycle + phase[i], 1.0f) * hdr.frames;
-			int fa = (int)f, fb = (fa + 1) % hdr.frames;
+			float f = fmodf(cycle + phase[i], 1.0f) * h->frames;
+			int fa = (int)f, fb = (fa + 1) % h->frames;
 			Mtx_Identity(&model);
-			Mtx_Translate(&model, (c - (COLUMNS - 1) / 2.0f) * spaceX, 0, -r * spaceZ, true);
+			Mtx_Translate(&model, (c - (COLUMNS - 1) / 2.0f) * m->spaceX, 0, -r * m->spaceZ, true);
 			Mtx_Multiply(&mv, &view, &model);
 			C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uModelView, &mv);
 			C3D_FVUnifSet(GPU_VERTEX_SHADER, uBlend, f - fa, 0, 0, 0);
-			setBuffers(frames + (size_t)fa * hdr.verts * 3, frames + (size_t)fb * hdr.verts * 3, uvs);
-			C3D_DrawElements(GPU_TRIANGLES, hdr.tris * 3, C3D_UNSIGNED_SHORT, indices);
+			setBuffers(m->frames + (size_t)fa * h->verts * 3, m->frames + (size_t)fb * h->verts * 3, m->uvs);
+			C3D_DrawElements(GPU_TRIANGLES, h->tris * 3, C3D_UNSIGNED_SHORT, m->indices);
 		}
 		C3D_FrameEnd(0);
 		cpuMs = C3D_GetProcessingTime();
 		gpuMs = C3D_GetDrawingTime();
 
-		printf("\x1b[1;1HArmy 3D test (Imperial Glory model)\n\n");
-		printf("soldiers  %5d  (D-pad +-50/+-10)  \n", count);
-		printf("triangles %6d  (%d per soldier)  \n", count * hdr.tris + 2, hdr.tris);
+		printf("\x1b[1;1HArmy 3D test\n%-38s\n\n", m->name);
+		printf("soldiers  %5d  (D-pad +-50/+-10)  \n", m->count);
+		printf("triangles %7d (%d per soldier) \n", m->count * h->tris + 2, h->tris);
 		printf("fps       %5.1f                  \n", fps);
 		printf("cpu ms    %5.2f                  \n", cpuMs);
 		printf("gpu ms    %5.2f                  \n", gpuMs);
 		printf("cmdbuf    %3d%%                  \n", (int)(C3D_GetCmdBufUsage() * 100));
 		printf("\nA march: %s   Y back faces: %s  \n", marching ? "on " : "off", cull ? "culled" : "drawn ");
+		printf("X: next model (%d of %d)\n", cur + 1, nmodels);
 		printf("pad: turn/tilt  L/R: zoom  START: exit\n");
 	}
 
-	C3D_TexDelete(&soldierTex);
+	for (int i = 0; i < nmodels; i++) freeModel(&models[i]);
 	C3D_TexDelete(&groundTex);
-	linearFree(uvs);
-	linearFree(indices);
-	linearFree(frames);
 	linearFree(groundPos);
 	linearFree(groundUv);
 	shaderProgramFree(&program);

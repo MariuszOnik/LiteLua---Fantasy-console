@@ -3,5 +3,7 @@ build/
 *.smdh
 *.elf
 *.map
-# Imperial Glory model made locally by make_army.py (private use only)
+# game models made locally by make_army.py / make_knight.py (private use only)
 romfs/soldier.bin
+romfs/knight.bin
+romfs/polish.bin
