@@ -29,7 +29,8 @@ zostają szare, nieznane ciemne, bez nazw i granic państw. X = mgła wł./wył.
 następnego państwa. **`m3h-fastfog-2x2` / `-big4x4`:** mgła to osobna tekstura 512²
 nad całą mapą (RGBA4, piksel → region liczony raz z przeglądu), więc zmiana trwa
 milisekundy, a kafle mapy się nie zmieniają (wcześniej: przemalowanie wszystkich kafli,
-sekundy); miękkie brzegi z filtrowania. Wcześniej **`m3f`: klikanie powiatów** — `m3f-counties-2x2` i
+sekundy); miękkie brzegi z filtrowania. **`m3i-pastelfog-*`:** mgła pastelowa (jasna mgiełka, widziane
+wcześniej — lekka zasłona) zamiast brunatnej. Wcześniej **`m3f`: klikanie powiatów** — `m3f-counties-2x2` i
 `m3f-counties-big4x4` (z bliska, gdy widać linie powiatów — `COUNTY_ZOOM` — stuknięcie
 zaznacza powiat: jasne światło i obrys, prowincja słabiej; dalej cała prowincja; nazwy
 państw pastelowe z cieniem, na najbliższej środka prowincji państwa, która mieści napis
