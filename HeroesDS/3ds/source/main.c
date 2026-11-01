@@ -1,6 +1,8 @@
-// HeroesDS 3D political map prototype for the 3DS: provinces and sea zones from
-// romfs:/map3d.bin (tools/make_m3.py) as 3D meshes. Bottom screen: the map, tap a
-// province to select it, drag to pan. Top screen: a closer stereo view and the info.
+// HeroesDS 3D political map prototype for the 3DS (tools/make_m3.py): a flat map in 3D --
+// one quad with the picture of romfs:/map_tex.bin (all the detail: fractal borders,
+// coast, paper, waves), owners' colours put on here -- and each region's exact shape from
+// romfs:/map3d.bin, drawn only to light up the selected one. Bottom screen: the map, tap
+// a province to select it, drag to pan. Top screen: a closer stereo view and the info.
 #include <3ds.h>
 #include <citro3d.h>
 #include <citro2d.h>
@@ -9,8 +11,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include "map_shbin.h"
+#include "maptex_shbin.h"
 
-#define CLEAR_COLOR 0x14283AFF   // RGBA: deep sea
+#define CLEAR_COLOR 0x96BEC8FF   // RGBA: the sea of the picture
+#define TINT 0.62f               // as in make_m3.py: how strong the owners' colours are
 
 #define DISPLAY_TRANSFER_FLAGS \
 	(GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(0) | GX_TRANSFER_RAW_COPY(0) | \
@@ -18,14 +22,14 @@
 	GX_TRANSFER_SCALING(GX_TRANSFER_SCALE_NO))
 
 enum { KIND_LAND, KIND_SEA, KIND_NEUTRAL };
-enum { BORDER_CLASSES = 3, MAX_REGIONS = 256 };
+enum { MAX_REGIONS = 255, NO_REGION = 255 };
 
-// map3d.bin, see docs/FORMATS.md
+// map3d.bin and map_tex.bin, see docs/FORMATS.md
 typedef struct {
 	char magic[4];
 	u16 version, nregions, nland, nfactions;
-	u32 nverts, nidx, nbverts;
-	float land_h;
+	u32 nverts, nidx, tex;
+	float world;               // the map's width (and depth) in world units
 } MapHeader;
 
 typedef struct {
@@ -39,12 +43,11 @@ typedef struct {
 	u8 nneigh, pad[3];
 	char name[24];
 	float cx, cz, x0, z0, x1, z1;
-	u32 vstart, vcount, istart, icount, itop;
-	u32 ishore;              // top + shore walls; the rest: walls between land regions
+	u32 vstart, vcount, istart, icount, itop, reserved;
 } Region;
 
 typedef struct { float x, y, z, shade; } Vertex;
-typedef struct { float x, y, z; } BVertex;
+typedef struct { float x, y, z, u, v; } TexVertex;
 
 _Static_assert(sizeof(MapHeader) == 28, "header");
 _Static_assert(sizeof(Faction) == 20, "faction");
@@ -53,18 +56,22 @@ _Static_assert(sizeof(Region) == 80, "region");
 static MapHeader hdr;
 static Faction factions[8];
 static Region* regions;
-static s16* neighbours;      // all lists one after another
-static u16* neighStart;
 static Vertex* verts;        // linear memory
 static u16* indices;         // linear memory
-static BVertex* bverts;      // linear memory
-static u32 bcount[BORDER_CLASSES];
+static TexVertex* quad;      // linear memory
+static u8* paper;            // the picture without owners' colours, RGB, texture order
+static u8* ids;              // region index per pixel, texture order
+static C3D_Tex mapTex;
 
-static DVLB_s* dvlb;
-static shaderProgram_s program;
-static int uProj, uModelView, uTint;
-static C3D_AttrInfo attrMap, attrBorder;
-static C3D_BufInfo bufBorder;
+typedef struct {
+	shaderProgram_s program;
+	DVLB_s* dvlb;
+	int uProj, uModelView, uTint;
+} Shader;
+
+static Shader overlay, textured;
+static C3D_AttrInfo attrOverlay, attrTex;
+static C3D_BufInfo bufQuad;
 
 typedef struct {
 	float tx, tz;            // looked-at point on the ground
@@ -75,7 +82,6 @@ typedef struct {
 
 static Camera cam;
 static int selected = -1;
-static float lift;           // current extra height of the selected province
 static float pulse;
 
 static C2D_TextBuf nameBuf, infoBuf;
@@ -108,36 +114,78 @@ static bool loadMap(void)
 	if (!buf) return false;
 	u8* p = buf;
 	memcpy(&hdr, p, sizeof hdr); p += sizeof hdr;
-	if (memcmp(hdr.magic, "HM3D", 4) || hdr.version != 2 || hdr.nregions > MAX_REGIONS || hdr.nfactions > 8) {
+	if (memcmp(hdr.magic, "HM3D", 4) || hdr.version != 3 || hdr.nregions > MAX_REGIONS
+		|| hdr.nfactions > 8 || hdr.tex != 1024) {
 		free(buf);
 		return false;
 	}
 	memcpy(factions, p, hdr.nfactions * sizeof(Faction)); p += hdr.nfactions * sizeof(Faction);
 	regions = malloc(hdr.nregions * sizeof(Region));
 	memcpy(regions, p, hdr.nregions * sizeof(Region)); p += hdr.nregions * sizeof(Region);
-	memcpy(bcount, p, sizeof bcount); p += sizeof bcount;
 	u32 nn = 0;
-	neighStart = malloc((hdr.nregions + 1) * sizeof(u16));
-	for (int i = 0; i < hdr.nregions; i++) {
-		neighStart[i] = nn;
-		nn += regions[i].nneigh;
-	}
-	neighStart[hdr.nregions] = nn;
-	neighbours = malloc(nn * sizeof(s16) + 2);
-	memcpy(neighbours, p, nn * sizeof(s16)); p += (nn * sizeof(s16) + 3) & ~3;
+	for (int i = 0; i < hdr.nregions; i++) nn += regions[i].nneigh;
+	p += (nn * sizeof(s16) + 3) & ~3;   // neighbour lists: not used yet
 	verts = linearCopy(p, hdr.nverts * sizeof(Vertex)); p += hdr.nverts * sizeof(Vertex);
-	indices = linearCopy(p, hdr.nidx * sizeof(u16)); p += (hdr.nidx * sizeof(u16) + 3) & ~3;
-	bverts = linearCopy(p, hdr.nbverts * sizeof(BVertex));
+	indices = linearCopy(p, hdr.nidx * sizeof(u16));
 	free(buf);
+
+	// all mipmap levels: 1024 down to 8 pixels, as C3D_TexInitMipmap lays them out
+	u32 pixels = C3D_TexCalcTotalSize(hdr.tex * hdr.tex, C3D_TexCalcMaxLevel(hdr.tex, hdr.tex));
+	u8* tex = readFile("romfs:/map_tex.bin", &size);
+	if (!tex || size != pixels * 4) return false;
+	paper = tex;
+	ids = tex + pixels * 3;
 	return true;
+}
+
+// index of pixel (column x, row y from the top) in the texture: 8x8 tiles from the
+// bottom row up, Morton order inside a tile (tile_order in make_m3.py)
+static u32 texIndex(u32 x, u32 y, u32 size)
+{
+	u32 yf = size - 1 - y;
+	u32 tile = (yf >> 3) * (size >> 3) + (x >> 3);
+	u32 xs = x & 7, ys = yf & 7;
+	u32 m = (xs & 1) | ((ys & 1) << 1) | ((xs & 2) << 1) | ((ys & 2) << 2) | ((xs & 4) << 2) | ((ys & 4) << 3);
+	return tile * 64 + m;
+}
+
+static void regionTint(int i, u8* rgb)
+{
+	const Region* g = &regions[i];
+	if (g->kind == KIND_SEA) {
+		rgb[0] = rgb[1] = rgb[2] = 255;
+	} else if (g->kind == KIND_NEUTRAL || g->owner < 0) {
+		rgb[0] = 190; rgb[1] = 180; rgb[2] = 160;
+	} else {
+		const Faction* f = &factions[g->owner];
+		rgb[0] = TINT * f->r + (1 - TINT) * 255;
+		rgb[1] = TINT * f->g + (1 - TINT) * 255;
+		rgb[2] = TINT * f->b + (1 - TINT) * 255;
+	}
+}
+
+// the picture times every region's colour into the texture (after an owner changes)
+static void paintMap(void)
+{
+	u8 tint[256][3];
+	for (int i = 0; i < 256; i++) tint[i][0] = tint[i][1] = tint[i][2] = 255;
+	for (int i = 0; i < hdr.nregions; i++) regionTint(i, tint[i]);
+	u16* out = mapTex.data;
+	u32 n = C3D_TexCalcTotalSize(mapTex.size, mapTex.maxLevel) / 2;   // every level
+	for (u32 k = 0; k < n; k++) {
+		const u8* c = paper + 3 * k;
+		const u8* t = tint[ids[k]];
+		u32 r = c[0] * t[0] >> 8, g = c[1] * t[1] >> 8, b = c[2] * t[2] >> 8;
+		out[k] = (r >> 3) << 11 | (g >> 2) << 5 | (b >> 3);
+	}
+	C3D_TexFlush(&mapTex);
 }
 
 static void cameraUpdate(Camera* c)
 {
 	float cp = cosf(c->pitch), sp = sinf(c->pitch);
-	C3D_FVec target = FVec3_New(c->tx, hdr.land_h, c->tz);
-	c->eye = FVec3_New(c->tx + sinf(c->yaw) * cp * c->dist, hdr.land_h + sp * c->dist,
-		c->tz + cosf(c->yaw) * cp * c->dist);
+	C3D_FVec target = FVec3_New(c->tx, 0, c->tz);
+	c->eye = FVec3_New(c->tx + sinf(c->yaw) * cp * c->dist, sp * c->dist, c->tz + cosf(c->yaw) * cp * c->dist);
 	c->f = FVec3_Normalize(FVec3_Subtract(target, c->eye));
 	c->r = FVec3_Normalize(FVec3_Cross(c->f, FVec3_New(0, 1, 0)));
 	c->u = FVec3_Cross(c->r, c->f);
@@ -163,81 +211,63 @@ static bool cameraProject(const Camera* c, float x, float y, float z, float w, f
 	return *px > -40 && *px < w + 40 && *py > -10 && *py < h + 10;
 }
 
-static bool inTriangle(float x, float z, const Vertex* a, const Vertex* b, const Vertex* c)
-{
-	float d1 = (x - b->x) * (a->z - b->z) - (a->x - b->x) * (z - b->z);
-	float d2 = (x - c->x) * (b->z - c->z) - (b->x - c->x) * (z - c->z);
-	float d3 = (x - a->x) * (c->z - a->z) - (c->x - a->x) * (z - a->z);
-	bool neg = d1 < 0 || d2 < 0 || d3 < 0, pos = d1 > 0 || d2 > 0 || d3 > 0;
-	return !(neg && pos);
-}
-
-// region whose top contains (x, z), only regions of the given surface (land or sea)
-static int regionAt(float x, float z, bool sea)
-{
-	for (int i = 0; i < hdr.nregions; i++) {
-		const Region* g = &regions[i];
-		if ((g->kind == KIND_SEA) != sea) continue;
-		if (x < g->x0 || x > g->x1 || z < g->z0 || z > g->z1) continue;
-		const Vertex* v = verts + g->vstart;
-		const u16* t = indices + g->istart;
-		for (u32 k = 0; k + 2 < g->itop; k += 3)
-			if (inTriangle(x, z, &v[t[k]], &v[t[k + 1]], &v[t[k + 2]])) return i;
-	}
-	return -1;
-}
-
+// the region under a screen pixel: the ray meets the map, the pixel there says which
 static int pick(const Camera* c, float px, float py)
 {
 	C3D_FVec d = cameraRay(c, px, py, 320, 240);
 	if (d.y > -1e-4f) return -1;
-	// the land plates first, then the sea under them
-	float s = (hdr.land_h - c->eye.y) / d.y;
-	int i = regionAt(c->eye.x + d.x * s, c->eye.z + d.z * s, false);
-	if (i >= 0) return regions[i].kind == KIND_LAND ? i : -1;
-	s = -c->eye.y / d.y;
-	return regionAt(c->eye.x + d.x * s, c->eye.z + d.z * s, true);
+	float s = -c->eye.y / d.y;
+	float x = c->eye.x + d.x * s, z = c->eye.z + d.z * s;
+	float tx = (x / hdr.world + 0.5f) * hdr.tex, ty = (z / hdr.world + 0.5f) * hdr.tex;
+	if (tx < 0 || ty < 0 || tx >= hdr.tex || ty >= hdr.tex) return -1;
+	int i = ids[texIndex(tx, ty, hdr.tex)];
+	if (i == NO_REGION || regions[i].kind == KIND_NEUTRAL) return -1;
+	return i;
 }
 
-static void regionColor(int i, float* rgb)
+static void shaderInit(Shader* s, u32* bin, u32 size)
 {
-	const Region* g = &regions[i];
-	static const float parch[3] = { 226, 210, 170 };
-	if (g->kind == KIND_SEA) {
-		float k = (g->id & 1) ? 1.0f : 0.94f;
-		rgb[0] = 100 * k; rgb[1] = 140 * k; rgb[2] = 185 * k;
-	} else if (g->kind == KIND_NEUTRAL || g->owner < 0) {
-		rgb[0] = 180; rgb[1] = 170; rgb[2] = 150;
-	} else {
-		const Faction* f = &factions[g->owner];
-		rgb[0] = 0.55f * f->r + 0.45f * parch[0];
-		rgb[1] = 0.55f * f->g + 0.45f * parch[1];
-		rgb[2] = 0.55f * f->b + 0.45f * parch[2];
-	}
-	for (int k = 0; k < 3; k++) rgb[k] /= 255;
-	if (i == selected) {
-		float b = 0.25f + 0.1f * sinf(pulse);
-		for (int k = 0; k < 3; k++) rgb[k] += (1 - rgb[k]) * b;
-	}
+	s->dvlb = DVLB_ParseFile(bin, size);
+	shaderProgramInit(&s->program);
+	shaderProgramSetVsh(&s->program, &s->dvlb->DVLE[0]);
+	s->uProj = shaderInstanceGetUniformLocation(s->program.vertexShader, "projection");
+	s->uModelView = shaderInstanceGetUniformLocation(s->program.vertexShader, "modelView");
+	s->uTint = shaderInstanceGetUniformLocation(s->program.vertexShader, "tint");
+}
+
+static void shaderFree(Shader* s)
+{
+	shaderProgramFree(&s->program);
+	DVLB_Free(s->dvlb);
 }
 
 static void sceneInit(void)
 {
-	dvlb = DVLB_ParseFile((u32*)map_shbin, map_shbin_size);
-	shaderProgramInit(&program);
-	shaderProgramSetVsh(&program, &dvlb->DVLE[0]);
-	uProj = shaderInstanceGetUniformLocation(program.vertexShader, "projection");
-	uModelView = shaderInstanceGetUniformLocation(program.vertexShader, "modelView");
-	uTint = shaderInstanceGetUniformLocation(program.vertexShader, "tint");
+	shaderInit(&overlay, (u32*)map_shbin, map_shbin_size);
+	shaderInit(&textured, (u32*)maptex_shbin, maptex_shbin_size);
 
-	AttrInfo_Init(&attrMap);
-	AttrInfo_AddLoader(&attrMap, 0, GPU_FLOAT, 3);   // v0 = position
-	AttrInfo_AddLoader(&attrMap, 1, GPU_FLOAT, 1);   // v1 = shade
-	AttrInfo_Init(&attrBorder);
-	AttrInfo_AddLoader(&attrBorder, 0, GPU_FLOAT, 3);
-	AttrInfo_AddFixed(&attrBorder, 1);
-	BufInfo_Init(&bufBorder);
-	BufInfo_Add(&bufBorder, bverts, sizeof(BVertex), 1, 0x0);
+	AttrInfo_Init(&attrOverlay);
+	AttrInfo_AddLoader(&attrOverlay, 0, GPU_FLOAT, 3);   // v0 = position
+	AttrInfo_AddLoader(&attrOverlay, 1, GPU_FLOAT, 1);   // v1 = shade
+	AttrInfo_Init(&attrTex);
+	AttrInfo_AddLoader(&attrTex, 0, GPU_FLOAT, 3);       // v0 = position
+	AttrInfo_AddLoader(&attrTex, 1, GPU_FLOAT, 2);       // v1 = texcoord
+
+	// the map: picture row 0 (north, -z) is at t = 0
+	float h = hdr.world / 2;
+	TexVertex q[6] = {
+		{ -h, 0, -h, 0, 0 }, { h, 0, -h, 1, 0 }, { h, 0, h, 1, 1 },
+		{ -h, 0, -h, 0, 0 }, { h, 0, h, 1, 1 }, { -h, 0, h, 0, 1 },
+	};
+	quad = linearCopy(q, sizeof q);
+	BufInfo_Init(&bufQuad);
+	BufInfo_Add(&bufQuad, quad, sizeof(TexVertex), 2, 0x10);
+
+	C3D_TexInitMipmap(&mapTex, hdr.tex, hdr.tex, GPU_RGB565);
+	C3D_TexSetFilter(&mapTex, GPU_LINEAR, GPU_LINEAR);
+	C3D_TexSetFilterMipmap(&mapTex, GPU_LINEAR);
+	C3D_TexSetWrap(&mapTex, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
+	paintMap();
 
 	nameBuf = C2D_TextBufNew(4096);
 	infoBuf = C2D_TextBufNew(512);
@@ -249,54 +279,52 @@ static void sceneInit(void)
 
 static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view)
 {
-	C3D_BindProgram(&program);
 	C3D_DepthTest(true, GPU_GREATER, GPU_WRITE_ALL);
 	C3D_CullFace(GPU_CULL_NONE);
+	for (int k = 1; k < 6; k++) C3D_TexEnvInit(C3D_GetTexEnv(k));
+
+	// the map
+	C3D_BindProgram(&textured.program);
+	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, textured.uProj, proj);
+	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, textured.uModelView, view);
+	C3D_SetAttrInfo(&attrTex);
+	C3D_SetBufInfo(&bufQuad);
+	C3D_TexBind(0, &mapTex);
 	C3D_TexEnv* env = C3D_GetTexEnv(0);
+	C3D_TexEnvInit(env);
+	C3D_TexEnvSrc(env, C3D_Both, GPU_TEXTURE0, 0, 0);
+	C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
+	C3D_DrawArrays(GPU_TRIANGLES, 0, 6);
+
+	if (selected < 0) return;
+
+	// the selected region: a pulsing light over its exact shape and an outline inside it
+	const Region* g = &regions[selected];
+	C3D_BindProgram(&overlay.program);
+	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, overlay.uProj, proj);
+	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, overlay.uModelView, view);
+	C3D_SetAttrInfo(&attrOverlay);
+	C3D_BufInfo buf;
+	BufInfo_Init(&buf);
+	BufInfo_Add(&buf, verts + g->vstart, sizeof(Vertex), 2, 0x10);
+	C3D_SetBufInfo(&buf);
+	env = C3D_GetTexEnv(0);
 	C3D_TexEnvInit(env);
 	C3D_TexEnvSrc(env, C3D_Both, GPU_PRIMARY_COLOR, 0, 0);
 	C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
-	for (int k = 1; k < 6; k++) C3D_TexEnvInit(C3D_GetTexEnv(k));
-	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uProj, proj);
-
-	C3D_SetAttrInfo(&attrMap);
-	C3D_BufInfo buf;
-	for (int i = 0; i < hdr.nregions; i++) {
-		const Region* g = &regions[i];
-		C3D_Mtx mv = *view;
-		if (i == selected && lift > 0.001f) Mtx_Scale(&mv, 1, (hdr.land_h + lift) / hdr.land_h, 1);
-		C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uModelView, &mv);
-		float c[3];
-		regionColor(i, c);
-		C3D_FVUnifSet(GPU_VERTEX_SHADER, uTint, c[0], c[1], c[2], 1);
-		BufInfo_Init(&buf);
-		BufInfo_Add(&buf, verts + g->vstart, sizeof(Vertex), 2, 0x10);
-		C3D_SetBufInfo(&buf);
-		// walls between land regions only show when the province is raised
-		u32 n = i == selected && lift > 0.001f ? g->icount : g->ishore;
-		C3D_DrawElements(GPU_TRIANGLES, n, C3D_UNSIGNED_SHORT, indices + g->istart);
-	}
-
-	static const float bcol[BORDER_CLASSES][3] = {
-		{ 70 / 255.f, 50 / 255.f, 30 / 255.f },    // land / land
-		{ 30 / 255.f, 20 / 255.f, 10 / 255.f },    // coast
-		{ 150 / 255.f, 185 / 255.f, 215 / 255.f }, // sea / sea
-	};
-	C3D_SetAttrInfo(&attrBorder);
-	C3D_SetBufInfo(&bufBorder);
-	C3D_FixedAttribSet(1, 1, 1, 1, 1);
-	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, uModelView, view);
-	u32 first = 0;
-	for (int k = 0; k < BORDER_CLASSES; k++) {
-		C3D_FVUnifSet(GPU_VERTEX_SHADER, uTint, bcol[k][0], bcol[k][1], bcol[k][2], 1);
-		if (bcount[k]) C3D_DrawArrays(GPU_TRIANGLES, first, bcount[k]);
-		first += bcount[k];
-	}
+	C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
+	C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA,
+		GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA);
+	float a = 0.18f + 0.1f * sinf(pulse);
+	C3D_FVUnifSet(GPU_VERTEX_SHADER, overlay.uTint, 1, 1, 0.9f, a);
+	C3D_DrawElements(GPU_TRIANGLES, g->itop, C3D_UNSIGNED_SHORT, indices + g->istart);
+	C3D_FVUnifSet(GPU_VERTEX_SHADER, overlay.uTint, 1, 0.95f, 0.6f, 0.75f + 0.2f * sinf(pulse));
+	C3D_DrawElements(GPU_TRIANGLES, g->icount - g->itop, C3D_UNSIGNED_SHORT, indices + g->istart + g->itop);
 }
 
 static void viewMatrix(const Camera* c, C3D_Mtx* view)
 {
-	Mtx_LookAt(view, c->eye, FVec3_New(c->tx, hdr.land_h, c->tz), FVec3_New(0, 1, 0), false);
+	Mtx_LookAt(view, c->eye, FVec3_New(c->tx, 0, c->tz), FVec3_New(0, 1, 0), false);
 }
 
 static void drawLabels(const Camera* c, float w, float h)
@@ -304,8 +332,8 @@ static void drawLabels(const Camera* c, float w, float h)
 	for (int i = 0; i < hdr.nregions; i++) {
 		const Region* g = &regions[i];
 		if (g->kind != KIND_LAND) continue;
-		float y = hdr.land_h + (i == selected ? lift : 0), px, py;
-		if (!cameraProject(c, g->cx, y, g->cz, w, h, &px, &py)) continue;
+		float px, py;
+		if (!cameraProject(c, g->cx, 0, g->cz, w, h, &px, &py)) continue;
 		u32 col = i == selected ? C2D_Color32(255, 255, 255, 255) : C2D_Color32(20, 12, 4, 255);
 		C2D_DrawText(&names[i], C2D_AlignCenter | C2D_WithColor, px, py - 5, 0.5f, 0.36f, 0.36f, col);
 	}
@@ -348,7 +376,7 @@ int main(void)
 
 	if (!loadMap()) {
 		consoleInit(GFX_BOTTOM, NULL);
-		printf("Cannot read romfs:/map3d.bin\nRun tools/make_m3.py, then rebuild.\nSTART: exit\n");
+		printf("Cannot read romfs:/map3d.bin or map_tex.bin\nRun tools/make_m3.py, then rebuild.\nSTART: exit\n");
 		while (aptMainLoop()) {
 			hidScanInput();
 			if (hidKeysDown() & KEY_START) break;
@@ -371,6 +399,7 @@ int main(void)
 
 	bool touching = false, dragged = false;
 	touchPosition t0 = { 0 }, tl = { 0 };
+	float lim = hdr.world / 2;
 
 	while (aptMainLoop()) {
 		hidScanInput();
@@ -384,13 +413,11 @@ int main(void)
 		float mx = cp.dx / 156.0f, my = cp.dy / 156.0f;
 		// on the ground: right = (cos yaw, -sin yaw), forward (away from the eye) = (-sin yaw, -cos yaw)
 		float rx = cosf(cam.yaw), rz = -sinf(cam.yaw), fx = -sinf(cam.yaw), fz = -cosf(cam.yaw);
-		if (held & KEY_DLEFT) cam.yaw += 0.03f;
-		if (held & KEY_DRIGHT) cam.yaw -= 0.03f;
-		if (held & KEY_L) cam.yaw += 0.03f;
-		if (held & KEY_R) cam.yaw -= 0.03f;
+		if (held & (KEY_DLEFT | KEY_L)) cam.yaw += 0.03f;
+		if (held & (KEY_DRIGHT | KEY_R)) cam.yaw -= 0.03f;
 		if (held & KEY_DUP) cam.dist *= 0.98f;
 		if (held & KEY_DDOWN) cam.dist *= 1.02f;
-		if (cam.dist < 12) cam.dist = 12;
+		if (cam.dist < 8) cam.dist = 8;
 		if (cam.dist > 110) cam.dist = 110;
 		cam.tx += (rx * mx + fx * my) * step;
 		cam.tz += (rz * mx + fz * my) * step;
@@ -405,8 +432,8 @@ int main(void)
 		} else if (touching && (held & KEY_TOUCH)) {
 			if (abs(tp.px - t0.px) + abs(tp.py - t0.py) > 5) dragged = true;
 			if (dragged) {
-				float k = cam.dist * 0.0035f;
 				// the map follows the stylus
+				float k = cam.dist * 0.0035f;
 				float dr = -(tp.px - tl.px) * k, df = (tp.py - tl.py) * k / sinf(cam.pitch);
 				cam.tx += rx * dr + fx * df;
 				cam.tz += rz * dr + fz * df;
@@ -417,18 +444,14 @@ int main(void)
 			if (!dragged) {
 				int i = pick(&cam, t0.px, t0.py);
 				selected = i == selected ? -1 : i;
-				lift = 0;
 			}
 		}
-		if (cam.tx < -45) cam.tx = -45;
-		if (cam.tx > 45) cam.tx = 45;
-		if (cam.tz < -45) cam.tz = -45;
-		if (cam.tz > 50) cam.tz = 50;
+		if (cam.tx < -lim) cam.tx = -lim;
+		if (cam.tx > lim) cam.tx = lim;
+		if (cam.tz < -lim) cam.tz = -lim;
+		if (cam.tz > lim) cam.tz = lim;
 		cameraUpdate(&cam);
-
 		pulse += 0.12f;
-		float want = selected >= 0 && regions[selected].kind == KIND_LAND ? 0.5f : 0;
-		lift += (want - lift) * 0.2f;
 
 		// top: closer, lower view of the same spot
 		Camera top = cam;
@@ -471,11 +494,13 @@ int main(void)
 
 	C2D_TextBufDelete(nameBuf);
 	C2D_TextBufDelete(infoBuf);
-	shaderProgramFree(&program);
-	DVLB_Free(dvlb);
+	C3D_TexDelete(&mapTex);
+	shaderFree(&overlay);
+	shaderFree(&textured);
 	linearFree(verts);
 	linearFree(indices);
-	linearFree(bverts);
+	linearFree(quad);
+	free(paper);
 	C2D_Fini();
 	C3D_Fini();
 	romfsExit();

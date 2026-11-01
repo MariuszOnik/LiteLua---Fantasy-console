@@ -136,3 +136,9 @@ jest w pełnym 3D (wzór: obrazki „Risk” — płaskie prowincje jak płytki,
 - Prototyp `3ds/` jest w C (bez Lua). **Do ustalenia:** czy logika gry (silnik walki
   `combat/` w Lua, `war.lua`) idzie na 3DS przez port LiteLua, czy przez samo Lua 5.4
   wbudowane w program 3DS. Wersja DS (m2, c4) zostaje, jak jest.
+- **Uzupełnienie (2026-11-01, decyzja użytkownika):** mapa jest **płaska** (bez unoszenia
+  prowincji i bez ścianek), **detale są w teksturze**, mesh prosty: cała mapa to jeden
+  prostokąt; dokładne kształty regionów tylko do podświetlenia wybranego. Klikanie przez
+  mapę numerów regionów (piksele tekstury) zamiast trójkątów. Każdy pomysł = osobny commit
+  i osobny build w `3ds/builds/heroes3d-<tag>.3dsx` (stare zostają do porównań). Głębię
+  dadzą później pionki (armie, miasta) na mapie.

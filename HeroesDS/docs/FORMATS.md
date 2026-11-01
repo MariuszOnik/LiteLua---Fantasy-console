@@ -204,17 +204,19 @@ Ustalenia z 2026-10-26 — do trybu mapy kontynentu i ewentualnie terenu walki.
   darmo). Alternatywa: prerender mapy na PC do płaskich obrazków (dużo pamięci).
   Romby 64×32 trzeba zmniejszyć (np. 32×16). Decyzja przy trybie mapy.
 
-## `map3d.bin` — mapa polityczna 3D dla 3DS (H13, nasz format)
+## `map3d.bin` + `map_tex.bin` — mapa polityczna 3D dla 3DS (H13, nasz format)
 
-Robi go `tools/make_m3.py`, czyta `3ds/source/main.c` (`romfs:/map3d.bin`). Little-endian,
-sekcje bez przerw, każda wyrównana do 4 bajtów. Współrzędne: komórka siatki M2 = 1×1,
-środek mapy w (0, 0), x = kolumna, z = wiersz, y w górę; ląd ma wierzch na `land_h`,
-morze na 0.
+Robi je `tools/make_m3.py`, czyta `3ds/source/main.c` (`romfs:/`). Mapa jest płaska
+(płaszczyzna y = 0): jeden prostokąt z teksturą, w której są wszystkie detale; dokładne
+kształty regionów służą tylko do podświetlenia wybranego. Little-endian, sekcje bez
+przerw, każda wyrównana do 4 bajtów. Współrzędne: komórka siatki M2 = 1×1, środek mapy
+w (0, 0), x = kolumna, z = wiersz (północ = −z).
 
+`map3d.bin` (wersja 3):
 ```
 nagłówek (28 B)
-  char[4] "HM3D"; u16 wersja = 2; u16 nregions; u16 nland; u16 nfactions
-  u32 nverts; u32 nidx; u32 nbverts; f32 land_h
+  char[4] "HM3D"; u16 wersja = 3; u16 nregions; u16 nland; u16 nfactions
+  u32 nverts; u32 nidx; u32 tex (bok tekstury, 1024); f32 world (szerokość mapy = kolumny)
 nfactions × 20 B:  u8 r, g, b, 0; char[16] nazwa
 nregions × 80 B (region = prowincja, strefa morska albo ląd bez prowincji):
   i16 id (numer z M2; -1 = ląd bez prowincji); i8 rodzaj (0 ląd, 1 morze, 2 ląd bez
@@ -222,12 +224,17 @@ nregions × 80 B (region = prowincja, strefa morska albo ląd bez prowincji):
   char[24] nazwa
   f32 cx, cz (stolica / środek strefy: napis); f32 x0, z0, x1, z1 (prostokąt otaczający)
   u32 vstart, vcount (wierzchołki regionu); u32 istart, icount (indeksy);
-  u32 itop (pierwsze itop indeksów to wierzch); u32 ishore (do tego miejsca: wierzch +
-  ścianki wybrzeża; dalej ścianki między regionami lądu, widoczne tylko po uniesieniu)
-u32 × 3              liczby wierzchołków wstęg granic: ląd/ląd, wybrzeże, morze/morze
+  u32 itop (pierwsze itop indeksów: dokładny wierzch; reszta: pas obrysu wewnątrz
+  granicy, szeroki 0,3); u32 0
 i16 × Σ sąsiadów     listy sąsiadów regionów po kolei (id), dopełnione do 4 B
-nverts × 16 B        f32 x, y, z, jasność (1 = wierzch; ścianki: 2 wierzchołki na punkt
-                     obwodu, góra i dół, jasność wg kierunku światła)
+nverts × 16 B        f32 x, y (= 0), z, 1
 nidx × u16           trójkąty, indeksy względem vstart regionu (< 65536), dopełnione do 4 B
-nbverts × 12 B       f32 x, y, z — trójkąty wstęg, klasami po kolei
 ```
+
+`map_tex.bin`: wszystkie poziomy mipmap (1024, 512, … 8 px — tak jak układa je
+`C3D_TexInitMipmap`), każdy w kolejności tekstury 3DS (kafle 8×8 od dolnego wiersza,
+w kaflu porządek Mortona; `tile_order`). Najpierw obraz bez kolorów właścicieli
+(3 B na piksel RGB: morze, papier lądu, linie), potem numer regionu (indeks w tabeli
+regionów, 255 = brak) na piksel — wszystkie poziomy po kolei. 3DS mnoży obraz przez
+kolor właściciela regionu piksela (`0,62 × kolor frakcji + 0,38 × biały`; morze bez
+zmian) do tekstury RGB565 i z numerów czyta region pod stuknięciem.

@@ -11,17 +11,18 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
 
 **Przejście na 3DS (H13, 2026-11-01) — M3: mapa polityczna w pełnym 3D.**
 `tools/make_m3.py` (ląd z `make_m2.generate`, ziarno 77): granice prowincji i stref
-morskich jako wspólne, wygładzone łańcuchy (Chaikin + lekkie falowanie), wierzchy przez
-ear cutting (`pip install mapbox-earcut`, ISC), ląd jako płyty ze ściankami, granice jako
-wstęgi → `3ds/romfs/map3d.bin` (80 regionów, ~8 tys. trójkątów; `--png` = podgląd z góry;
-format w `FORMATS.md`, testy `tests/test_make_m3.py`). Program `3ds/` (C, citro3d +
-citro2d; `3ds\build.ps1` = generator + make w msys2 devkitPro, `build.ps1 run` = Azahar):
-granice „noisy edges” (fraktalne ząbki jak na mapach rysowanych ręcznie, bez przecięć; `--obj` = podgląd w Blenderze; ~52 tys. trójkątów, ścianki między prowincjami lądu rysowane tylko dla uniesionej); dolny ekran — mapa 3D z nazwami, stuknięcie wybiera prowincję / strefę (promień z kamery,
-trójkąty na CPU), przeciąganie i gałka przesuwają, L/R obrót, góra/dół zoom; wybrana
-prowincja unosi się i pulsuje; górny ekran — bliższy widok stereo (suwak 3D) i opis.
-Sprawdzone w Azaharze: 60 FPS, stuknięcia trafiają. **Na 3DS XL do sprawdzenia**
-(`heroes3d.3dsx` do `/3ds/` na karcie SD, Homebrew Launcher). Do ustalenia: Lua na 3DS
-(H13). Dalej: armie/floty z `war.lua`, tekstura pergaminu, ikony miast.
+morskich jako wspólne łańcuchy z „noisy edges” (fraktalne ząbki jak na mapie rysowanej
+ręcznie, bez przecięć). Trzy podejścia, każde z buildem w `3ds/builds/` (poza gitem; `3dsuild.ps1 -tag <nazwa>`, `run` = Azahar):
+`m3a-smooth` (wygładzone granice, płyty lądu ze ściankami), `m3b-noisy` (fraktalne
+granice w meshu, ~52 tys. trójkątów, ~12–16 ms na klatkę w Azaharze), **`m3c-flat`
+(obecny)**: płaska mapa = jeden prostokąt z teksturą 1024² z mipmapami (pergamin, linie,
+cień wybrzeża, fale; kolory właścicieli nakłada 3DS), wybrana prowincja = pulsujące
+światło i obrys po dokładnym kształcie, stuknięcie = numer regionu z mapy pikseli; ~2,3 ms
+na klatkę. Format w `FORMATS.md`, testy `tests/test_make_m3.py` (`pip install mapbox-earcut`).
+Dolny ekran — mapa z nazwami, stuknięcie wybiera, przeciąganie i gałka przesuwają, L/R
+obrót, góra/dół zoom; górny — bliższy widok stereo i opis. **Na 3DS XL do sprawdzenia**
+(plik z `builds/` do `/3ds/` na karcie SD, Homebrew Launcher). Do ustalenia: Lua na 3DS
+(H13). Dalej: rzeźba terenu w teksturze, pionki armii i miast (modele 3D na płaskiej mapie).
 
 **Dziś: mapa przygody (tor M).** Format `.h4c` rozpracowany (teren, przejścia, drogi,
 wysokość, poziomy, obiekty z obszarem i wejściami) — `docs/FORMATS.md`, narzędzia

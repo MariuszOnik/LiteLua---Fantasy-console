@@ -1,4 +1,4 @@
-"""Tests for tools/make_m3.py (province meshes for the 3DS map).
+"""Tests for tools/make_m3.py (the flat textured 3D map for the 3DS).
 
 Run from the repo root:  python -m unittest discover -s HeroesDS/tests
 """
@@ -31,10 +31,10 @@ class MeshTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.m = make_m3.m2.generate(5, 40, 14, 1.0)
-        cls.regions, cls.borders, cls.chains = make_m3.build(cls.m)
+        cls.regions, cls.chains = make_m3.build(cls.m)
 
     def test_outlines_close(self):
-        # a 2x2 province with a diagonal pinch elsewhere: rings are closed loops
+        # a province touching itself diagonally: rings are still simple loops
         prov = np.array([[0, 0, 1], [0, 1, 1], [2, 2, 1]])
         rings = make_m3.outlines(prov)
         for a, rs in rings.items():
@@ -42,7 +42,7 @@ class MeshTest(unittest.TestCase):
                 self.assertEqual(len(ring), len(set(ring)), (a, ring))
 
     def test_tops_cover_the_map(self):
-        # smoothing moves borders, but the tops still tile the whole grid
+        # the borders move, but the tops still tile the whole grid
         rows, cols = self.m["province"].shape
         total = sum(tri_area(r["verts"], r["idx"][:r["top"]]) for r in self.regions)
         self.assertAlmostEqual(total, rows * cols, delta=rows * cols * 0.01)
@@ -55,28 +55,57 @@ class MeshTest(unittest.TestCase):
             self.assertAlmostEqual(got, cells, delta=max(2.0, cells * 0.15), msg=r["name"])
 
     def test_borders_do_not_cross(self):
-        self.assertEqual(make_m3.crossings({k: (p, k[1]) for k, (p, _) in self.chains.cache.items()}), set())
+        lines = {k: (p, k[1]) for k, (p, _) in self.chains.cache.items()}
+        self.assertEqual(make_m3.crossings(lines), set())
 
-    def test_vertex_limit_and_heights(self):
+    def test_vertex_limit_and_flat(self):
         for r in self.regions:
             self.assertLess(len(r["verts"]), 65536)
-            ys = {v[1] for v in r["verts"][:1]}
-            want = 0.0 if r["kind"] == make_m3.KIND_SEA else make_m3.LAND_H
-            self.assertEqual(ys, {want})
+            self.assertEqual({v[1] for v in r["verts"]}, {0.0})
+
+    def test_tile_order_is_a_permutation(self):
+        for size in (8, 64):
+            order = make_m3.tile_order(size).ravel()
+            self.assertEqual(sorted(order), list(range(size * size)))
+
+    def test_mip_levels(self):
+        img = np.zeros((64, 64, 3), np.uint8)
+        levels = make_m3.mip_levels(img)
+        self.assertEqual([lv.shape[0] for lv in levels], [64, 32, 16, 8])
+
+    def test_texture_ids_match_regions(self):
+        old = make_m3.TEX
+        make_m3.TEX = 256
+        try:
+            rgb, ids = make_m3.render_texture(self.m, self.regions, self.chains, size=256)
+        finally:
+            make_m3.TEX = old
+        self.assertEqual(rgb.shape, (256, 256, 3))
+        rows, cols = self.m["province"].shape
+        prov = self.m["province"]
+        # a cell whose whole neighbourhood is one region: its middle pixel says that region
+        index = {r["id"]: i for i, r in enumerate(self.regions)}
+        hits = 0
+        for r in range(2, rows - 2):
+            for c in range(2, cols - 2):
+                block = prov[r - 2:r + 3, c - 2:c + 3]
+                if (block == prov[r, c]).all():
+                    y, x = int((r + 0.5) * 256 / rows), int((c + 0.5) * 256 / cols)
+                    self.assertEqual(ids[y, x], index[int(prov[r, c])])
+                    hits += 1
+        self.assertGreater(hits, 50)
 
     def test_file_layout(self):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "map3d.bin")
-            nv, ni, nb = make_m3.write(path, self.m, self.regions, self.borders)
+            nv, ni = make_m3.write(path, self.m, self.regions)
             with open(path, "rb") as f:
                 data = f.read()
         magic, ver, nreg, nland, nfac = struct.unpack_from("<4sHHHH", data)
-        self.assertEqual((magic, ver, nreg, nland), (b"HM3D", 2, len(self.regions), self.m["land"]))
+        self.assertEqual((magic, ver, nreg, nland), (b"HM3D", 3, len(self.regions), self.m["land"]))
         off = 28 + 20 * nfac + 80 * nreg
-        bc = struct.unpack_from("<3I", data, off)
-        self.assertEqual(sum(bc), nb)
         nn = sum(len(r["neigh"]) for r in self.regions)
-        size = off + 12 + ((2 * nn + 3) & ~3) + 16 * nv + ((2 * ni + 3) & ~3) + 12 * nb
+        size = off + ((2 * nn + 3) & ~3) + 16 * nv + ((2 * ni + 3) & ~3)
         self.assertEqual(len(data), size)
 
 

@@ -1,6 +1,7 @@
-"""Makes the political map as 3D meshes for the 3DS (the land of make_m2.py, same seed):
-every province and sea zone is a flat polygon with smooth, wavy borders, land provinces
-are plates raised over the sea with walls down to it, and the borders are thin ribbons.
+"""Makes the political map for the 3DS (the land of make_m2.py, same seed): a flat map
+in 3D -- one quad with a picture where all the detail lives (hand-drawn, fractal borders,
+the coast's shadow, paper, waves) -- plus, per province and sea zone, its exact shape,
+drawn only to light up the selected one. Owners' colours are put on by the 3DS.
 
   python HeroesDS/tools/make_m3.py [--seed 77] [--coast 1] [--out 3ds/romfs/map3d.bin]
                                    [--png preview.png] [--obj map.obj]
@@ -18,12 +19,14 @@ Steps:
      pushed sideways at random by up to ROUGH x its length, then both halves the same way
      down to MIN_SEG (detail at every scale, like a hand-drawn map; Red Blob Games'
      "noisy edges"); a line crossing another one (or itself) is redone calmer
-  5. triangles: the top of each region by ear cutting (mapbox_earcut, holes included);
-     land gets walls down to the sea (shade from a fixed light; walls on the shore first,
-     walls between land regions after -- the 3DS draws those only for a raised
-     province); borders become ribbons a little over the surface (land/land, coast --
-     inside the land only, sea/sea)
-The file format is in docs/FORMATS.md ("map3d.bin").
+  5. exact shapes: the top of each region by ear cutting (mapbox_earcut, holes included)
+     and a strip inside its border (the selection outline)
+  6. the picture (TEX x TEX, drawn twice as big and scaled down): sea lighter near the
+     shore, the land's shadow on it, waves; land as pale paper, darker along its
+     borders; lines (land/land, coast, sea/sea); and the region index of every pixel
+     (taps on the 3DS) -- both with all mipmap levels, in the 3DS texture order
+     (tile_order)
+The file formats are in docs/FORMATS.md ("map3d.bin", "map_tex.bin").
 """
 import argparse
 import os
@@ -36,19 +39,21 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 import make_m2 as m2  # noqa: E402
 
-LAND_H = 0.8          # top of the land plates (a cell is 1 x 1)
 CHAIKIN = 1           # smoothing steps of the base line (takes the grid's stairs off)
 BASE = 0.3            # Douglas-Peucker tolerance of the base line, in cells
 ROUGH = {"land": 0.3, "coast": 0.36, "sea": 0.2}   # noisy edges: sideways shift / length
 MIN_SEG = 0.2         # noisy edges stop at segments this long, in cells
 OUTSIDE = -2          # region number of the space outside the grid
 NEUTRAL = -1          # land without a province (tiny islets)
-LIGHT = np.array((-0.5, -0.7))  # light comes from this side (x, z), for the walls
-BORDER = {            # class: (width, height over the surface)
-    0: (0.10, 0.015),   # land / land
-    1: (0.22, 0.015),   # coast (inside the land)
-    2: (0.08, 0.010),   # sea / sea
-}
+OUTLINE = 0.3         # width of the selection outline, in cells
+TEX = 1024            # the picture's size (the largest 3DS texture)
+SEA_RGB = (150, 190, 200)
+PAPER_RGB = (252, 248, 238)
+SEA_LINE = (200, 222, 228)
+LAND_LINE = (70, 48, 30)
+COAST_LINE = (40, 28, 18)
+NEUTRAL_RGB = (190, 180, 160)
+TINT = 0.62           # how strong the owners' colours are (1 = the faction colour)
 KIND_LAND, KIND_SEA, KIND_NEUTRAL = 0, 1, 2
 
 # a cell's sides, walked clockwise on screen (row down, col right): the cell is on the
@@ -358,39 +363,29 @@ def triangulate(rings):
 
 
 def build(m):
+    """Regions: name, owner, label point, the exact top (triangles) and an outline strip
+    inside its border -- both only drawn for the selected region; the map itself is
+    one flat quad with the texture (render_texture)."""
     prov = m["province"].copy()
     land = m["land"]
-    rings, walls, chains = region_rings(prov, land)
+    rings, _, chains = region_rings(prov, land)
     off = np.array([prov.shape[1] / 2, prov.shape[0] / 2])
     regions = []
     for a in sorted(rings):
         kind = KIND_NEUTRAL if a == NEUTRAL else KIND_LAND if a < land else KIND_SEA
-        top_y = 0.0 if kind == KIND_SEA else LAND_H
         pts2, tris = triangulate(rings[a])
         pts2 = pts2 - off
-        verts = [(x, top_y, z, 1.0) for x, z in pts2]
+        verts = [(x, 0.0, z, 1.0) for x, z in pts2]
         idx = [int(i) for t in tris for i in t]   # drawn without culling
         top = len(idx)
-        shore, inner = [], []
-        if kind != KIND_SEA:
-            for ring, outer in zip(rings[a], walls[a]):
-                p = ring - off
-                d = np.roll(p, -1, 0) - p
-                n = np.stack([d[:, 1], -d[:, 0]], 1)            # out of the region
-                n /= np.maximum(np.hypot(n[:, 0], n[:, 1]), 1e-9)[:, None]
-                vn = n + np.roll(n, 1, 0)                        # per point: both sides
-                vn /= np.maximum(np.hypot(vn[:, 0], vn[:, 1]), 1e-9)[:, None]
-                shade = 0.45 + 0.45 * np.maximum(0.0, vn @ (LIGHT / np.hypot(*LIGHT)))
-                v0, k = len(verts), len(p)
-                for (x, z), sh in zip(p, shade):
-                    verts += [(x, top_y, z, float(sh)), (x, 0.0, z, float(sh))]
-                for i in range(k):
-                    t1, b1 = v0 + 2 * i, v0 + 2 * i + 1
-                    t2, b2 = v0 + 2 * ((i + 1) % k), v0 + 2 * ((i + 1) % k) + 1
-                    (shore if outer[i] else inner).extend((t1, b2, t2, t1, b1, b2))
-        idx += shore
-        coast = len(idx)
-        idx += inner
+        for ring in rings[a]:
+            inner = ring_inset(ring - off, OUTLINE)
+            v0, n = len(verts), len(ring)
+            for (x, z), (x2, z2) in zip(ring - off, inner):
+                verts += [(x, 0.0, z, 1.0), (x2, 0.0, z2, 1.0)]
+            for i in range(n):
+                a1, b1, a2, b2 = v0 + 2 * i, v0 + 2 * i + 1, v0 + 2 * ((i + 1) % n), v0 + 2 * ((i + 1) % n) + 1
+                idx += [a1, b1, b2, a1, b2, a2]
         assert len(verts) < 65536, (a, len(verts))
         xs, zs = pts2[:, 0], pts2[:, 1]
         if a >= 0:
@@ -402,129 +397,211 @@ def build(m):
         neigh = sorted(int(b) for b in m["neighbours"].get(a, ()) if b >= 0) if a >= 0 else []
         regions.append(dict(id=a, kind=kind, owner=owner, name=name, cx=cx, cz=cz,
                             box=(float(xs.min()), float(zs.min()), float(xs.max()), float(zs.max())),
-                            verts=verts, idx=idx, top=top, coast=coast, neigh=neigh))
-    borders = {k: [] for k in BORDER}
-    for (seq, closed), (pts, (ra, rb)) in chains.cache.items():
-        if OUTSIDE in (ra, rb):
-            continue   # the sea at the map edge: no line
-        # ra walks the chain this way round, so it lies on the ribbon's + side
-        land_a = ra == NEUTRAL or 0 <= ra < land
-        land_b = rb == NEUTRAL or 0 <= rb < land
-        if land_a and land_b:
-            cls, lo, hi = 0, -0.5, 0.5
-        elif land_a or land_b:
-            cls = 1
-            lo, hi = (0.0, 1.0) if land_a else (-1.0, 0.0)
-        else:
-            cls, lo, hi = 2, -0.5, 0.5
-        w, lift = BORDER[cls]
-        y = (LAND_H if cls < 2 else 0.0) + lift
-        borders[cls] += ribbon(pts - off, closed, w * lo, w * hi, y)
-    return regions, borders, chains
+                            rings=rings[a], verts=verts, idx=idx, top=top, neigh=neigh))
+    return regions, chains
 
 
-def ribbon(p, closed, lo, hi, y):
-    """Triangles (x, y, z) of a strip from lo to hi along the right-hand normal."""
-    n = len(p)
-    if closed:
-        p = np.vstack([p, p[:1]])
-    d = np.diff(p, axis=0)
+def ring_inset(p, w):
+    """The ring's points moved w inward (into the region the ring belongs to)."""
+    d = np.roll(p, -1, 0) - p
     d /= np.maximum(np.hypot(d[:, 0], d[:, 1]), 1e-9)[:, None]
-    seg_n = np.stack([-d[:, 1], d[:, 0]], 1)   # into the region walking this way round
-    vn = np.zeros_like(p)
-    vn[:-1] += seg_n
-    vn[1:] += seg_n
-    if closed:
-        vn[0] += seg_n[-1]
-        vn[-1] = vn[0]
-    ln = np.hypot(vn[:, 0], vn[:, 1])
-    vn /= np.maximum(ln, 1e-9)[:, None]
-    # miter, limited
-    cos = np.ones(len(p))
-    cos[:-1] = np.minimum(cos[:-1], np.abs((vn[:-1] * seg_n).sum(1)))
-    vn /= np.maximum(cos, 0.5)[:, None]
-    a, b = p + vn * lo, p + vn * hi
-    out = []
-    for i in range(len(p) - 1):
-        q = [(a[i][0], y, a[i][1]), (b[i][0], y, b[i][1]), (b[i + 1][0], y, b[i + 1][1]), (a[i + 1][0], y, a[i + 1][1])]
-        out += [q[0], q[1], q[2], q[0], q[2], q[3]]
+    seg_n = np.stack([-d[:, 1], d[:, 0]], 1)
+    vn = seg_n + np.roll(seg_n, 1, 0)
+    vn /= np.maximum(np.hypot(vn[:, 0], vn[:, 1]), 1e-9)[:, None]
+    cos = np.abs((vn * seg_n).sum(1))
+    return p + vn * (w / np.maximum(cos, 0.5))[:, None]   # miter, limited
+
+
+def blur(a, radius):
+    from PIL import Image, ImageFilter
+    img = Image.fromarray(np.clip(a * 255, 0, 255).astype(np.uint8))
+    return np.asarray(img.filter(ImageFilter.GaussianBlur(radius)), float) / 255
+
+
+def value_noise(rng, h, w, cells):
+    """Smooth noise 0..1 from a coarse random grid, scaled up bilinearly."""
+    from PIL import Image
+    g = (rng.random((cells, cells)) * 255).astype(np.uint8)
+    return np.asarray(Image.fromarray(g).resize((w, h), Image.BILINEAR), float) / 255
+
+
+def render_texture(m, regions, chains, size=TEX, ss=2):
+    """The map's picture without the owners' colours (land is pale paper -- the 3DS
+    multiplies it by the owner's colour) and the region index of every pixel.
+    Returns (rgb uint8 (size, size, 3), index uint8 (size, size); 255 = none)."""
+    from PIL import Image, ImageDraw
+    rows, cols = m["province"].shape
+    big = size * ss
+    k = big / cols                       # pixels per cell (the grid is square)
+    rng = np.random.default_rng(m["seed"] + 1000)
+    land_set = {i for i, r in enumerate(regions) if r["kind"] != KIND_SEA}
+
+    # region index per pixel, from the exact triangles
+    ids = Image.new("L", (big, big), 255)
+    d = ImageDraw.Draw(ids)
+    off = np.array([cols / 2, rows / 2])
+    for i, r in enumerate(regions):
+        v = r["verts"]
+        t = r["idx"][:r["top"]]
+        for j in range(0, len(t), 3):
+            d.polygon([((v[q][0] + off[0]) * k, (v[q][2] + off[1]) * k) for q in t[j:j + 3]], fill=i)
+    ids_big = np.asarray(ids)
+    land = np.isin(ids_big, list(land_set)).astype(float)
+
+    # lines: land/land, coast, sea/sea -- each a mask
+    masks = {c: Image.new("L", (big, big), 0) for c in ("land", "coast", "sea")}
+    width = {"land": 0.11, "coast": 0.15, "sea": 0.07}
+    for (seq, closed), (pts, sides) in chains.cache.items():
+        kind = chains.kind(sides)
+        if kind == "edge":
+            continue
+        xy = [(float(x) * k, float(z) * k) for x, z in pts]
+        if closed:
+            xy.append(xy[0])
+        ImageDraw.Draw(masks[kind]).line(xy, fill=255, width=max(1, round(width[kind] * k)), joint="curve")
+    line = {c: np.asarray(mk, float) / 255 for c, mk in masks.items()}
+
+    # sea: blue-green, lighter near the shore, the land's shadow, waves far out
+    noise = value_noise(rng, big, big, 24) - 0.5
+    near = blur(land, 0.9 * k)
+    sea = np.empty((big, big, 3))
+    sea[:] = SEA_RGB
+    sea += noise[..., None] * 10
+    sea += (np.array((235, 240, 225)) - sea) * np.clip(near * 1.6, 0, 1)[..., None] * 0.55
+    shadow = np.roll(blur(land, 0.18 * k), (round(0.22 * k), round(0.22 * k)), (0, 1))
+    sea *= (1 - 0.35 * np.clip(shadow, 0, 1))[..., None]
+    waves = Image.new("L", (big, big), 0)
+    wd = ImageDraw.Draw(waves)
+    for _ in range(int(cols * rows / 9)):
+        x, y = rng.uniform(0, big, 2)
+        if near[int(y), int(x)] > 0.04:
+            continue
+        w = k * rng.uniform(0.7, 1.2)
+        for s in (0, 1):
+            wd.arc((x + s * w, y, x + (s + 1) * w, y + w * 0.6), 200 if s == 0 else 20, 340 if s == 0 else 160,
+                   fill=255, width=max(1, round(0.06 * k)))
+    sea *= (1 - 0.18 * np.asarray(waves, float) / 255)[..., None]
+
+    # land: pale paper with grain, a little darker along its borders
+    grain = value_noise(rng, big, big, 160) - 0.5
+    paper = np.empty((big, big, 3))
+    paper[:] = PAPER_RGB
+    paper *= (1 + 0.05 * grain + 0.04 * noise)[..., None]
+    edges = blur(np.clip(line["land"] + line["coast"], 0, 1), 0.35 * k)
+    paper *= (1 - 0.22 * np.clip(edges * 2, 0, 1))[..., None]
+
+    img = sea * (1 - land[..., None]) + paper * land[..., None]
+    for c, col in (("sea", SEA_LINE), ("land", LAND_LINE), ("coast", COAST_LINE)):
+        a = line[c][..., None]
+        img = img * (1 - a) + np.array(col, float) * a
+    img = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8)).resize((size, size), Image.LANCZOS)
+    return np.asarray(img), ids_big[ss // 2::ss, ss // 2::ss].copy()
+
+
+def tile_order(size):
+    """Where pixel (row, col) of a picture goes in a 3DS texture: 8x8 tiles from the
+    bottom row up, Morton order inside a tile. Returns the flat index per pixel."""
+    y, x = np.mgrid[0:size, 0:size]
+    yf = size - 1 - y
+    tile = (yf // 8) * (size // 8) + x // 8
+    xs, ys = x & 7, yf & 7
+    morton = ((xs & 1) | ((ys & 1) << 1) | ((xs & 2) << 1) | ((ys & 2) << 2)
+              | ((xs & 4) << 2) | ((ys & 4) << 3))
+    return tile * 64 + morton
+
+
+def mip_levels(img, nearest=False):
+    """The picture at TEX, TEX/2, ... down to 8 (the 3DS mipmap levels); region indices
+    are picked, not mixed."""
+    from PIL import Image
+    out, size = [img], img.shape[0]
+    while size > 8:
+        size //= 2
+        if nearest:
+            step = img.shape[0] // size
+            out.append(img[step // 2::step, step // 2::step].copy())
+        else:
+            out.append(np.asarray(Image.fromarray(img).resize((size, size), Image.LANCZOS)))
     return out
 
 
-def write(path, m, regions, borders):
-    """map3d.bin, see docs/FORMATS.md."""
-    head = struct.pack("<4sHHHH", b"HM3D", 2, len(regions), m["land"], len(m2.FACTIONS))
+def tiled(img):
+    """The picture's bytes in the 3DS texture order."""
+    size = img.shape[0]
+    flat = img.reshape(size * size, -1)
+    out = np.empty_like(flat)
+    out[tile_order(size).ravel()] = flat
+    return out.tobytes()
+
+
+def tint_colors(m, regions):
+    """Per region: the colour the 3DS multiplies the paper by (white for the sea)."""
+    out = []
+    for r in regions:
+        if r["kind"] == KIND_SEA:
+            out.append((255, 255, 255))
+        elif r["kind"] == KIND_NEUTRAL or r["owner"] < 0:
+            out.append(NEUTRAL_RGB)
+        else:
+            out.append(tuple(int(TINT * c + (1 - TINT) * 255) for c in m2.FACTIONS[r["owner"]][1]))
+    return out
+
+
+def write(path, m, regions, tex_path=None, tex=None):
+    """map3d.bin (and map_tex.bin with the picture), see docs/FORMATS.md."""
+    rows, cols = m["province"].shape
     nv = sum(len(r["verts"]) for r in regions)
     ni = sum(len(r["idx"]) for r in regions)
-    nb = sum(len(v) for v in borders.values())
-    head += struct.pack("<IIIf", nv, ni, nb, LAND_H)
+    head = struct.pack("<4sHHHHIIIf", b"HM3D", 3, len(regions), m["land"], len(m2.FACTIONS),
+                       nv, ni, TEX, float(cols))
     for fname, col in m2.FACTIONS:
         head += struct.pack("<BBBx16s", *col, fname.encode())
-    body, nlist, v0, i0 = b"", b"", 0, 0
+    nlist, v0, i0 = b"", 0, 0
     for r in regions:
         head += struct.pack("<hbbB3x24s6f6I", r["id"], r["kind"], r["owner"], len(r["neigh"]),
                             r["name"].encode()[:23], r["cx"], r["cz"], *r["box"],
-                            v0, len(r["verts"]), i0, len(r["idx"]), r["top"], r["coast"])
+                            v0, len(r["verts"]), i0, len(r["idx"]), r["top"], 0)
         nlist += struct.pack("<%dh" % len(r["neigh"]), *r["neigh"])
         v0 += len(r["verts"])
         i0 += len(r["idx"])
+    if len(nlist) % 4:
+        nlist += b"\0\0"
     verts = b"".join(struct.pack("<4f", *v) for r in regions for v in r["verts"])
     idx = b"".join(struct.pack("<%dH" % len(r["idx"]), *r["idx"]) for r in regions)
     if len(idx) % 4:
         idx += b"\0\0"
-    bhead = b"".join(struct.pack("<I", len(borders[k])) for k in sorted(borders))
-    bverts = b"".join(struct.pack("<3f", *v) for k in sorted(borders) for v in borders[k])
-    if len(nlist) % 4:
-        nlist += b"\0\0"
-    body = bhead + nlist + verts + idx + bverts
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "wb") as f:
-        f.write(head + body)
-    return nv, ni, nb
+        f.write(head + nlist + verts + idx)
+    if tex_path:
+        rgb, ids = tex
+        with open(tex_path, "wb") as f:
+            f.write(b"".join(tiled(level) for level in mip_levels(rgb)))
+            f.write(b"".join(tiled(level) for level in mip_levels(ids, nearest=True)))
+    return nv, ni
 
 
 def write_obj(path, regions):
-    """Every region as an object (top and all walls), to look at in Blender."""
+    """Every region's exact top as an object, to look at in Blender."""
     with open(path, "w", encoding="utf-8") as f:
         base = 1
         for r in regions:
             f.write("o %s_%d\n" % (r["name"].replace(" ", "_") or "neutral", r["id"]))
             for x, y, z, _ in r["verts"]:
                 f.write("v %.4f %.4f %.4f\n" % (x, y, -z))
-            idx = r["idx"]
+            idx = r["idx"][:r["top"]]
             for t in range(0, len(idx), 3):
                 f.write("f %d %d %d\n" % tuple(base + i for i in idx[t:t + 3]))
             base += len(r["verts"])
 
 
-def preview(path, m, regions, borders, scale=10):
-    from PIL import Image, ImageDraw
-    rows, cols = m["province"].shape
-    img = Image.new("RGB", (cols * scale, rows * scale), (20, 40, 80))
-    d = ImageDraw.Draw(img)
-    off = np.array([cols / 2, rows / 2])
-
-    def xy(x, z):
-        return ((x + off[0]) * scale, (z + off[1]) * scale)
-    for r in regions:
-        if r["kind"] == KIND_SEA:
-            col = (110, 150, 190) if r["id"] % 2 else (100, 140, 185)
-        elif r["kind"] == KIND_NEUTRAL:
-            col = (180, 170, 150)
-        else:
-            col = tuple(int(0.55 * c + 0.45 * p) for c, p in zip(m2.FACTIONS[r["owner"]][1], m2.PARCHMENT))
-        v = r["verts"]
-        idx = r["idx"][:r["top"]]
-        for t in range(0, len(idx), 3):
-            d.polygon([xy(v[i][0], v[i][2]) for i in idx[t:t + 3]], fill=col)
-    for cls, col in ((2, (150, 185, 215)), (0, (70, 50, 30)), (1, (30, 20, 10))):
-        tri = borders[cls]
-        for t in range(0, len(tri), 3):
-            d.polygon([xy(p[0], p[2]) for p in tri[t:t + 3]], fill=col)
-    for r in regions:
-        if r["kind"] == KIND_LAND:
-            d.text(xy(r["cx"], r["cz"]), r["name"], fill=(0, 0, 0), anchor="mm")
-    img.save(path)
+def preview(path, m, regions, tex):
+    """The picture with the owners' colours, as the 3DS shows it from above."""
+    from PIL import Image
+    rgb, ids = tex
+    tint = np.array(tint_colors(m, regions) + [(255, 255, 255)] * (256 - len(regions)), float)
+    out = rgb.astype(float) * tint[ids] / 255
+    Image.fromarray(out.astype(np.uint8)).save(path)
 
 
 def main(argv):
@@ -539,12 +616,14 @@ def main(argv):
     p.add_argument("--obj", help="also write a Wavefront .obj (one object per region) for Blender")
     a = p.parse_args(argv)
     m = m2.generate(a.seed, a.size, a.provinces, a.coast)
-    regions, borders, _ = build(m)
-    nv, ni, nb = write(a.out, m, regions, borders)
-    print("%s: %d regions (%d land), %d vertices, %d triangles, %d border triangles, %d KB"
-          % (a.out, len(regions), m["land"], nv, ni // 3, nb // 3, os.path.getsize(a.out) // 1024))
+    regions, chains = build(m)
+    tex = render_texture(m, regions, chains)
+    tex_path = os.path.join(os.path.dirname(a.out), "map_tex.bin")
+    nv, ni = write(a.out, m, regions, tex_path, tex)
+    print("%s: %d regions (%d land), %d vertices, %d triangles (selection only), texture %d^2"
+          % (a.out, len(regions), m["land"], nv, ni // 3, TEX))
     if a.png:
-        preview(a.png, m, regions, borders)
+        preview(a.png, m, regions, tex)
     if a.obj:
         write_obj(a.obj, regions)
 
