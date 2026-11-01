@@ -8,7 +8,7 @@ return {
     sea = { 124, 120, 98 },
     shore = { 172, 146, 106 },
     rim = 0.6,
-    gamma = 1.35,                -- lighter half-tones: 1 = as drawn
+    gamma = 1.6,                 -- lighter half-tones: 1 = as drawn
     lines = {
       coast = { 36, 20, 10 },
       land = { 58, 34, 18 },
@@ -21,8 +21,8 @@ return {
     tint = 0.45,
     neutral = { 190, 160, 120 },
     fog = {
-      unseen = { 58, 38, 24, 225 },
-      seen = { 112, 82, 56, 100 },
+      unseen = { 132, 98, 68, 215 },
+      seen = { 150, 116, 82, 85 },
     },
     border = { color = { 222, 182, 92 }, alpha = 0.9, width = 1.0 },
     labels = {
