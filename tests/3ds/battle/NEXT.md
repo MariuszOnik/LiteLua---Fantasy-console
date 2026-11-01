@@ -36,10 +36,10 @@ dopracować rozgrywkę** (sekcja „Rozgrywka — do ustalenia”): technika ju�
 
 ## Zasoby gier — tylko lokalnie (prywatny użytek, poza repo)
 Pełny przewodnik po czytnikach i eksporterach: **`docs/GAME_TOOLS.md`**.
-- **Imperial Glory** (GOG): `data.pak` = ZIP. Format V3D rozpracowany: `E:\AI\IG\tools\v3d.py`
+- **Imperial Glory** (GOG): `data.pak` = ZIP. Format V3D rozpracowany: `tools/gameformats/ig/v3d.py`
   (opis w docstringu). Wypakowane w `E:\AI\IG`.
 - **Medieval II** (Steam, Kingdoms/Teutonic): wypakowane do `E:\AI\M2TW` (unpacker gry, „Y” na
-  pytanie o licencję wpisuje użytkownik). Narzędzia `E:\AI\M2TW\tools`: `m2mesh.py` (.mesh),
+  pytanie o licencję wpisuje użytkownik). Narzędzia `tools/gameformats/m2tw`: `m2mesh.py` (.mesh),
   `m2anim.py` (animacje z `data/animations/pack.idx/.dat` w katalogu gry), `m2bake.py`
   (wypiekanie szkieletu do klatek, jeździec na koniu), `m2gltf.py`, `modeldb.py`.
 - Pamięć asystenta ma notatki `imperial-glory-assets`, `medieval2-assets`,

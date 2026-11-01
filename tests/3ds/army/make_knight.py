@@ -1,8 +1,8 @@
 """Knight for the 3DS army test: a Medieval II rider + horse -> romfs/knight.bin (one mesh,
 one texture), in the format of make_army.py.
 
-The game's assets stay local (private use): this uses the readers kept outside the repo
-(E:/AI/M2TW/tools: m2mesh.py, m2anim.py, m2bake.py -- formats in their docstrings). Horse and
+The game's assets stay local (private use, --m2 is where they were unpacked); the readers are
+tools/gameformats/m2tw (m2mesh.py, m2anim.py, m2bake.py -- formats in their docstrings). Horse and
 rider become one mesh (both have their origin in the saddle); their three textures are
 shrunk into one atlas, a quarter each; the animation is baked into vertex frames.
 
@@ -58,7 +58,7 @@ def main():
     ap.add_argument("--speed", type=float, default=7.0)   # metres per second, a gallop
     ap.add_argument("--tris", type=int, default=0)        # >0: lighter (optimize.py), file *_lo.bin
     a = ap.parse_args()
-    sys.path.insert(0, os.path.join(a.m2, "tools"))
+    sys.path.insert(0, os.path.join(HERE, "..", "..", "..", "tools", "gameformats", "m2tw"))
     import m2anim, m2bake, m2gltf, m2mesh
 
     teu = os.path.join(a.m2, "teutonic")

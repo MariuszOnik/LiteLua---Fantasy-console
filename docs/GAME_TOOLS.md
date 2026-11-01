@@ -6,8 +6,8 @@ Rozpracowane 2026-11-01 na potrzeby testów 3D na 3DS (`tests/3ds/army`, `tests/
 Gdzie co leży:
 | co | gdzie | w repo? |
 |---|---|---|
-| czytniki formatów IG | `E:\AI\IG\tools\` | **nie** (zrób kopię!) |
-| czytniki formatów M2TW | `E:\AI\M2TW\tools\` | **nie** (zrób kopię!) |
+| czytniki formatów IG | `tools/gameformats/ig/` | tak |
+| czytniki formatów M2TW | `tools/gameformats/m2tw/` | tak |
 | wypakowane pliki gier | `E:\AI\IG\`, `E:\AI\M2TW\base`, `E:\AI\M2TW\teutonic` | nie (nie wolno) |
 | eksportery dla 3DS | `tests/3ds/army/*.py`, `tests/3ds/battle/make_trees.py` | tak |
 
@@ -39,7 +39,7 @@ Bloki `u16 tag, u16 0, u32 rozmiar` (z nagłówkiem), dane niewyrównane. Obiekt
 (morph, bez szkieletu)**; w klatce macierz M i pozycje zapisane jako `pozycja @ M`. Kawaleria:
 2 obiekty (koń, jeździec), działo: 13 części w hierarchii. Jednostki: cm, Y w górę.
 
-### Narzędzia (`E:\AI\IG\tools`)
+### Narzędzia (`tools/gameformats/ig`)
 | skrypt | do czego |
 |---|---|
 | `v3d.py` | czytnik V3D + eksport do glTF (animacje jako morph targets) |
@@ -53,13 +53,13 @@ Bloki `u16 tag, u16 0, u32 rozmiar` (z nagłówkiem), dane niewyrównane. Obiekt
 ```powershell
 # fizylier polski z chodem i strzałem -> glTF (Blender: shape keys <Anim>_<klatka>)
 $i = "E:\AI\IG\Models\00EjercitoBase\Infanteria\GenericoA"
-python E:\AI\IG\tools\v3d.py "$i\GenericoA.V3D" E:\AI\IG\Models\20Polonia\Infanteria\Fusilero.dds out.gltf "$i\Andar1.V3D" "$i\DispararDePie.V3D"
+python tools\gameformats\ig\v3d.py "$i\GenericoA.V3D" E:\AI\IG\Models\20Polonia\Infanteria\Fusilero.dds out.gltf "$i\Andar1.V3D" "$i\DispararDePie.V3D"
 # kawaleria: jedna tekstura na obiekt (koń, jeździec), po przecinku
-python E:\AI\IG\tools\v3d.py "$c\GenericoE2\GenericoE2.V3D" "$pl\HusarCaballo.dds,$pl\Husar.dds" husar.gltf "$c\GenericoE2\Galopar1.V3D"
+python tools\gameformats\ig\v3d.py "$c\GenericoE2\GenericoE2.V3D" "$pl\HusarCaballo.dds,$pl\Husar.dds" husar.gltf "$c\GenericoE2\Galopar1.V3D"
 # artyleria: 'auto' = tekstury z materiałów (obok siatki), kwadraty cieni pomijane
-python E:\AI\IG\tools\v3d.py "$a\Canon\Canon\Canon.V3D" auto canon.gltf "$a\Canon\Canon\Disparar.V3D"
+python tools\gameformats\ig\v3d.py "$a\Canon\Canon\Canon.V3D" auto canon.gltf "$a\Canon\Canon\Disparar.V3D"
 # podgląd klatek
-& $blender -b -P E:\AI\IG\tools\render.py -- out.gltf OUTDIR pref base Andar1_3
+& $blender -b -P tools\gameformats\ig\render.py -- out.gltf OUTDIR pref base Andar1_3
 ```
 Wypakowanie z archiwum: `zipfile.ZipFile(data.pak).extract(...)` (np. do `E:\AI\IG`).
 Tempo animacji: `v3d.py` zapisuje 15 kl./s; prawdziwe jest w `_ANM.sb` (`.TOTALTIME`, `.MOVBYSEC`).
@@ -98,7 +98,7 @@ uruchamia użytkownik i dwa razy wciska Y. Wynik: `E:\AI\M2TW\base\data` (gra) i
   przesunięcia kości na klatkę; hierarchii tu nie ma (wzięta z danych, sprawdzona `check_bind.py`).
   Kolejność kości = jak w `.mesh`. Poza wiązania: kości bez obrotu (T-pose).
 
-### Narzędzia (`E:\AI\M2TW\tools`)
+### Narzędzia (`tools/gameformats/m2tw`)
 | skrypt | do czego |
 |---|---|
 | `modeldb.py MODEL [frakcja]` | co modeldb mówi o modelu (siatki, tekstury, szkielety) |
@@ -111,7 +111,7 @@ uruchamia użytkownik i dwa razy wciska Y. Wynik: `E:\AI\M2TW\base\data` (gra) i
 
 ### Przepisy
 ```powershell
-cd E:\AI\M2TW\tools
+cd tools\gameformats\m2tw
 python modeldb.py polish_knights poland            # siatki i tekstury polskiego rycerza
 python m2mesh.py "...\_units\cm_standard\ritterbruder_lod3.mesh"
 python m2gltf.py MESH.mesh UNIT.texture out.gltf 0 "head=ATTACH.texture" "shield=ATTACH.texture"
@@ -137,7 +137,7 @@ przypięte do głowy/dłoni (`RIDER_FALLBACK`); ogon i tylne nogi konia wychodz�
 Formaty plików dla 3DS: **LLMS** (jedna animacja) i **LLM2** (tabela animacji) — opis w
 docstringach `make_army.py` / `make_knight.py`; **LLTR** — w `make_trees.py`. Tekstury w
 kolejności kafelków 3DS (`tile_order`), **v od góry obrazka**. `build.ps1` w obu testach
-odpala te skrypty sam (modele M2TW tylko gdy istnieje `E:\AI\M2TW\tools`).
+odpala te skrypty sam (modele M2TW tylko gdy istnieje `E:\AI\M2TW\teutonic`).
 
 Nowa jednostka M2TW (np. Litwini): `modeldb.py <model> <frakcja>` → dopisać wpis do `UNITS`
 w `make_knight.py` (siatka, tekstura, dodatki, tekstura konia, nazwa pliku) → sprawdzić

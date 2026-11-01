@@ -1,7 +1,8 @@
 """Soldier model for the 3DS army test: an Imperial Glory unit -> romfs/soldier.bin.
 
 The game's assets stay local (private use, like the H4 and Cossacks art): this reads them
-with the V3D reader kept outside the repo (E:/AI/IG/tools/v3d.py, see its docstring).
+with the V3D reader in tools/gameformats/ig/v3d.py (format in its docstring); --ig is where
+the game's files were unpacked.
 
   python make_army.py [--ig E:/AI/IG] [--nation 20Polonia] [--unit Fusilero]
 
@@ -43,7 +44,7 @@ def main():
     ap.add_argument("--seconds", type=float, default=1.06)   # .TOTALTIME in <mesh>_ANM.sb
     ap.add_argument("--speed", type=float, default=1.6)      # .MOVBYSEC 160 cm
     a = ap.parse_args()
-    sys.path.insert(0, os.path.join(a.ig, "tools"))
+    sys.path.insert(0, os.path.join(HERE, "..", "..", "..", "tools", "gameformats", "ig"))
     import v3d
 
     base = os.path.join(a.ig, "Models", "00EjercitoBase", "Infanteria", a.mesh)

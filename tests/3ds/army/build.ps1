@@ -16,7 +16,7 @@ if ($what -eq "clean") {
 }
 python (Join-Path $here "make_army.py")
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
-if (Test-Path "E:\AI\M2TW\tools") {   # the knight only where the Medieval II files are unpacked
+if (Test-Path "E:\AI\M2TW\teutonic") {   # the knight only where the Medieval II files are unpacked
     foreach ($unit in "teutonic", "polish") {
         python (Join-Path $here "make_knight.py") --unit $unit
         if ($LASTEXITCODE) { exit $LASTEXITCODE }

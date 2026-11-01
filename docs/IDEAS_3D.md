@@ -79,7 +79,7 @@ Tak, w stylu DSCraft:
   gdyby 3D było tylko na jednym — inny tryb, decyzja na później).
 
 ## Modele 3D z Imperial Glory na 3DS (2026-11-01, `tests/3ds/army`)
-- Format V3D z Imperial Glory rozpracowany (narzędzia i opis poza repo: `E:\AI\IG\tools\v3d.py`;
+- Format V3D z Imperial Glory rozpracowany (czytnik: `tools/gameformats/ig/v3d.py`;
   zasoby gry tylko lokalnie). Piechur: 228 wierzchołków, 246 trójkątów, tekstura 256×256 na
   nację; animacje to klatki pozycji wierzchołków (morph, bez szkieletu), np. chód 12 klatek /
   1,06 s. Kawaleria = koń + jeździec w jednym pliku; działo = 13 części w hierarchii.
@@ -90,7 +90,7 @@ Tak, w stylu DSCraft:
   trójkątów, 60 FPS. Na konsoli do zmierzenia (500–2000 żołnierzy).
 - Dalej: postój/strzał/śmierć, kawaleria i działa, instancing (mniej poleceń GPU na żołnierza).
 - (2026-11-01) Medieval II: `.mesh` i animacje `pack.dat` rozpracowane (narzędzia poza repo:
-  `E:\AI\M2TW\tools`), rycerze wypiekani do klatek morph (`make_knight.py`, kilka animacji w
+  `tools/gameformats/m2tw`), rycerze wypiekani do klatek morph (`make_knight.py`, kilka animacji w
   formacie `LLM2`), odchudzanie `optimize.py` (3209 → 700 trójkątów, błąd po wszystkich
   klatkach). `tests/3ds/battle`: heksy 14×12 na wzgórzach (24 trójkąty na heks, obramowanie
   drugą teksturą), drzewa i kamienie w jednej siatce, 10 oddziałów × 8 rycerzy — Azahar 74 tys.
