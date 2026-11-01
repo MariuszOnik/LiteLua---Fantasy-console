@@ -169,3 +169,18 @@ jest w pełnym 3D (wzór: obrazki „Risk” — płaskie prowincje jak płytki,
 - **Mgła jako nakładka (2026-11-01, prośba użytkownika):** mgła nie przemalowuje mapy —
   to tekstura 512² nad mapą (stan regionu na piksel), liczona w milisekundy; kolory mapy
   zależą tylko od właścicieli (przemalowanie kafli tylko przy zmianie właściciela).
+
+## H14 (2026-11-01) — Wygląd mapy: style, przynależność kolorami, granice w teksturze
+- Wygląd mapy politycznej opisuje **plik stylu** (`styles/*.lua`, format w `docs/FORMATS.md`):
+  część `map` wypalana w tekstury przez `tools/make_m3.py` (papier: gładki, pergamin, skóra,
+  obraz z ComfyUI; kolory i wzory linii; spalona krawędź; gamma), część `view` czytana przez
+  3DS przy starcie (mgła, kolory, napisy, zaznaczenie, ziarno papieru). Kopia na karcie
+  `sdmc:/3ds/heroes3d/style.lua` nadpisuje `view` — strojenie bez budowania; na PC edytor
+  `tools/styler.py` (podgląd na żywo, zapis na SD).
+- **Decyzja użytkownika:** przynależność prowincji pokazują **tylko ich kolory**; granica
+  prowincji jest **w teksturze** (wzór kreska-kropka, jak w Imperial Glory) i **jej nie
+  podświetlamy** — bez pasków granic państw (`border.show = false`).
+- Zaznaczenie prowincji: lekka poświata, która mnoży kolor mapy (zostaje kolor prowincji,
+  tylko jaśniejszy), miękko gaśnie przed granicą (pasy w stencilu) i powoli, słabo pulsuje
+  (`select.mode = "fill"`). Styl `classic` zachowuje dawny wygląd (paski, świecenie).
+- Ulubione style użytkownika: skóra (`leather`, jaśniejsza: gamma 1,6) i pergamin.

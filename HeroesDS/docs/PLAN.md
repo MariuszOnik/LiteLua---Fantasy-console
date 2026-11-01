@@ -26,44 +26,34 @@ przejdzie tą drogą). Konsola jeszcze nie dojechała: wszystko sprawdzone tylko
   paski liczone z właścicieli; nazwy wg oddalenia (państwa / prowincje / powiaty,
   nachodzące pomijane); mgła wojny = tekstura 512² nad mapą (milisekundy, grafitowa);
   klikanie: piksel → powiat → prowincja (z bliska zaznacza powiat).
-- **Styl (M3k–M3o)**: `styles/*.lua` (`--style`, format w `docs/FORMATS.md`): `map` wypalane
-  w tekstury (papier gładki / pergamin / skóra / obraz z ComfyUI — `tools/paperart.py`,
-  kolory, linie, spalona krawędź mapy), `view` czyta 3DS (tło, siła kolorów państw, mgła,
-  granice, napisy, ziarno papieru `grain.bin` mnożone na GPU). **`sdmc:/3ds/heroes3d/style.lua`
-  nadpisuje `view` bez budowania** — do strojenia kolorów na konsoli/w Azaharze.
+- **Styl (H14, M3k–M3x)**: `styles/*.lua` (`--style`; format w `docs/FORMATS.md`): `map`
+  wypalane w tekstury (papier `plain`/`parchment`/`leather`/`image` — obraz z ComfyUI przez
+  `tools/paperart.py`; kolory, `patterns` = linie wzorem, `rim`, `gamma`), `view` czyta 3DS
+  (tło, `tint`, mgła, granice państw `border.show`, napisy, zaznaczenie `select`, ziarno
+  `grain.bin` na GPU). **`sdmc:/3ds/heroes3d/style.lua` nadpisuje `view` bez budowania.**
+  Decyzja użytkownika: przynależność tylko kolorami, granica prowincji w teksturze
+  kreska-kropka i nie podświetlana; zaznaczenie = poświata mnożąca kolor prowincji, miękko
+  gasnąca przed granicą (stencil), wolno pulsująca.
+- **Edytor stylu na PC:** `python HeroesDS/tools/styler.py [--style styles/parchment.lua]
+  [--sd E:/3ds/heroes3d/style.lua]` — przeglądarka: mapa z góry jak na 3DS, suwaki `view`,
+  klik = zaznacz, kółko = zoom, przeciąganie = przesuw; zapis na SD Azahara
+  (`%APPDATA%/Azahar/sdmc/3ds/heroes3d/style.lua`) albo do `styles/`. Nie pokazuje ziarna
+  GPU ani pochylenia 3D.
 - Scenariusz (`HeroesDS/scenarios/six-realms.lua`, `--scenario` / `--dump-scenario`):
-  państwa (do 32), **państwa-miasta** (`city = true` — osobne państwa z kolorem, granicą
-  i nazwą; logiki — relacji, pokojowego przejęcia z H12 — jeszcze nie ma), gracz, mgła,
+  państwa (do 32), **państwa-miasta** (`city = true` — osobne państwa z kolorem i nazwą;
+  logiki — relacji, pokojowego przejęcia z H12 — jeszcze nie ma), gracz, mgła,
   właściciele i nazwy prowincji, nazwy powiatów. Czytany na 3DS parserem LiteLua `ll_data.c`.
 
 **Budowanie:** `HeroesDS\3ds\build.ps1 -tag <nazwa> -gen "<argumenty make_m3>"` (make
 w msys2 devkitPro; `run` = Azahar). Każdy pomysł = osobny commit i osobny build w
-`3ds/builds/heroes3d-<tag>.3dsx` (poza gitem; stare zostają do porównań). Obecne:
-`m3j-graphitefog-2x2` (`-gen "--tiles 2 --scenario ../scenarios/six-realms.lua"`) i
-`m3j-graphitefog-big4x4` (`-gen "--size 144 --provinces 180 --tiles 4"`: 284 regiony,
-1059 powiatów, 16 kafli). Style (2x2, six-realms, do porównania): `m3k-style-classic`
-(jak m3j), `m3l-parchment` (pergamin z kodu), `m3m-leather` (skóra, złote granice; jaśniejsza: `m3p-leather-light` gamma 1.35, `m3q-leather-lighter` gamma 1.6 i jasna mgła),
-`m3n-parchment-image` (obraz SDXL `styles/parchment.png`), `m3o-parchment-grain` (gładki
-papier + ziarno na GPU). Wszystkie sprawdzone w Azaharze; użytkownik wybiera.
-Linie jak w Imperial Glory (M3r): granice państw wzorem kreska-kropka, zaznaczona
-prowincja przerywaną linią tuszem po granicy (wzory jako mała tekstura na pasku, `border.pattern`,
-`select` w stylu; `classic` = dawne świecenie): `m3r-leather-dashed`, `m3s-parchment-dashed`
-— zaznaczanie do sprawdzenia przez użytkownika (zrzut z kliknięciem nie wyszedł).
-**Decyzja użytkownika (M3t):** przynależność pokazują kolory prowincji; granica prowincji
-jest w teksturze (kreska-kropka, `map.patterns`) i jej nie podświetlamy — `border.show =
-false`, `select.mode = "fill"` (lekka poświata; są też `glow`, `line`, `none`). Buildy:
-`m3t-leather-texborders`, `m3u-parchment-texborders`. M3v: poświata zaznaczenia mocniejsza
-(`select.fill` 0,38), nie wchodzi na granicę (pas wzdłuż linii prowincji w stencilu, `select.gap`)
-i delikatnie migocze jasno-ciemno (`flicker`, `light`, `dark`): `m3v-leather-softselect`,
-`m3w-parchment-softselect`. M3x: poświata mnoży mapę (zostaje kolor prowincji, tylko
-jaśniejszy), miękko gaśnie przy granicy (3 pasy w stencilu, `soft`), wolno i słabo pulsuje
-(`period` 3,5 s, `flicker` 0,35): `m3x-leather-gentleselect`, `m3y-parchment-gentleselect`.
-**Edytor stylu na PC:** `python HeroesDS/tools/styler.py [--style ...] [--sd E:/3ds/heroes3d/style.lua]`
-— przeglądarka: mapa z góry, suwaki części `view` (mgła, granice, napisy, zaznaczenie z
-migotaniem, klik = zaznacz), zapis na SD Azahara (`%APPDATA%/Azahar/sdmc/3ds/heroes3d/`)
-albo do `styles/`. Nie pokazuje ziarna GPU ani pochylenia 3D. Historia: m3a gładkie płyty → m3b fraktale w meshu → m3c
-płaska mapa z teksturą → m3d kafle → m3e szczegóły wg oddalenia → m3f klikanie powiatów
-→ m3g scenariusz/mgła/Lua → m3h szybka mgła → m3i/m3j kolor mgły → m3k–m3o style.
+`3ds/builds/heroes3d-<tag>.3dsx` (poza gitem; stare zostają do porównań). **Najnowsze:**
+`m3x-leather-gentleselect` i `m3y-parchment-gentleselect` (`-gen "--tiles 2 --scenario
+../scenarios/six-realms.lua --style ../styles/leather.lua"`). Duża mapa: `-gen "--size 144
+--provinces 180 --tiles 4"` (284 regiony, 1059 powiatów, 16 kafli; ostatni build
+`m3j-graphitefog-big4x4`, jeszcze bez stylów). Historia buildów i kroków: `docs/DEVLOG.md`.
+Zrzut z Azahara: `3ds\azshot.ps1 -rom <.3dsx> -png <plik>` (bez `-cx/-cy`: klik myszą trafia
+w inne okno, gdy użytkownik pracuje obok; zaznaczenie testujemy buildem z `selected`
+ustawionym na chwilę w kodzie, np. 15 = Ornor).
 **Sterowanie:** stuknięcie = prowincja (z bliska powiat), przeciąganie / gałka = przesuw,
 L/R = kąt kamery, krzyżak góra/dół = zoom, X = mgła wł./wył., Y = widok następnego państwa.
 **Testy:** `python -m unittest discover -s HeroesDS/tests` (`pip install mapbox-earcut`;
@@ -76,7 +66,7 @@ wolna pamięć, płynność (linia statystyk na górnym ekranie).
    — artykuły elevation, oblique projection, outlines), rzeki (drzewa spływu; granice
    prowincji wzdłuż rzek), lepsze rozmieszczenie nazw (labels on maps), szlaki handlowe.
 2. Ostra, gładka krawędź mgły bez kosztu (kontrast filtrowanej tekstury w texenv) —
-   zaproponowane, nie zrobione.
+   zaproponowane, nie zrobione. Styl dla dużej mapy 4x4 (buildy stylów są tylko 2x2).
 3. Gra na mapie: pionki armii i miast (3D), logika państw-miast (H12), ruch w Lua.
 4. Porządek pod inne platformy (Switch/PC/Android): rysowanie citro3d w jednym miejscu,
    reszta (dane, Lua) niezależna.

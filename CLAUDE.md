@@ -54,7 +54,8 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - `tests/carts/` — kartridże testowe (`bench` — benchmark VM, D19; `files` — piaskownica, D20; `sound` — P7; `song` — utwory `.lsong` na żywo, D41; `edit` — edytor kodu; `map` — mapy kafelkowe, D50; `oop` — pomiar klas/middleclass, D54; `army3d` — warstwa 3D i żołnierze, D60); `build.ps1` kopiuje je na kartę emulatora
 - `tests/tools/` — testy narzędzi PC: `python -m unittest discover -s tests/tools`
   (też edytor `@code` i launcher z atrapami API — wymaga pakietu `lupa`, inaczej pominięty)
-- `HeroesDS/` — gra w stylu Heroes IV (własny `docs/PLAN.md` i `docs/DECISIONS.md`, decyzje H<n>);
+- `HeroesDS/` — gra w stylu Heroes IV (własny `docs/PLAN.md`, `docs/DECISIONS.md` — decyzje H<n>,
+  `docs/DEVLOG.md` — dziennik prac, nowy wpis na górze);
   `HeroesDS/3ds/` — wersja na 3DS (devkitPro, citro3d, Lua 5.4 z `vendor/lua`; `3ds\build.ps1`,
   buildy w `3ds/builds/`, emulator Azahar), mapa z `HeroesDS/tools/make_m3.py`, scenariusze
   w `HeroesDS/scenarios/`;
