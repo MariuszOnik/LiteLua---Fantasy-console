@@ -153,3 +153,6 @@ jest w pełnym 3D (wzór: obrazki „Risk” — płaskie prowincje jak płytki,
   tekstury (karta sama wybiera), granice państw rysuje 3DS z właścicieli, bo zmieniają
   się w grze. Nazwy nie znikają z odległością w jednym widoku — skalowane perspektywą,
   nachodzące pomijane. Kamera bez obrotu; L/R zmienia kąt patrzenia.
+- **Uzupełnienie (2026-11-01, prośba użytkownika):** powiaty da się zaznaczać — z bliska
+  (gdy widać ich linie) stuknięcie wybiera powiat, z dalszej odległości prowincję. Nazwy
+  państw pastelowe (kolor frakcji rozjaśniony do połowy) z cieniem.

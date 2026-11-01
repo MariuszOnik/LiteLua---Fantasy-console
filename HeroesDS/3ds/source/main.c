@@ -25,6 +25,7 @@
 #define TINT 0.62f               // as in make_m3.py: how strong the owners' colours are
 #define SLOTS 6                  // tiles kept at once
 #define MAX_LABELS 512           // names placed on one screen
+#define COUNTY_ZOOM 24.0f        // nearer than this, taps pick counties (their lines show)
 
 #define DISPLAY_TRANSFER_FLAGS \
 	(GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(0) | GX_TRANSFER_RAW_COPY(0) | \
@@ -61,6 +62,7 @@ typedef struct {
 	u16 region, pad;
 	char name[20];
 	float cx, cz;
+	u32 vstart, vcount, istart, icount, itop;   // its shape (none: a province's only county)
 } County;
 
 typedef struct {
@@ -74,7 +76,7 @@ typedef struct { float x, y, z, u, v; } TexVertex;
 _Static_assert(sizeof(MapHeader) == 32, "header");
 _Static_assert(sizeof(Faction) == 20, "faction");
 _Static_assert(sizeof(Region) == 80, "region");
-_Static_assert(sizeof(County) == 32, "county");
+_Static_assert(sizeof(County) == 52, "county");
 _Static_assert(sizeof(Border) == 12, "border");
 
 enum { SLOT_FREE, SLOT_LOADING, SLOT_READY, SLOT_FAILED };
@@ -95,8 +97,19 @@ static County* counties;
 static Border* borders;
 static u32 nborders;
 static u8 (*tint)[3];        // per county: the colour the paper is multiplied by
-static Vertex* verts;        // linear memory
-static u16* indices;         // linear memory
+static Vertex* verts;        // the exact shapes of regions and counties (heap)
+static u16* indices;
+
+// a shape being lit up, copied to linear memory for the GPU (all shapes would not fit
+// there next to the textures)
+typedef struct {
+	Vertex* v;
+	u16* i;
+	u32 itop, icount;
+	int vstart;              // which shape it holds (-1: none)
+} ShapeBuf;
+
+static ShapeBuf shapeProv, shapeCounty;
 static float* lineVerts;     // linear memory: border strips, (x, z, nx, nz) per vertex
 static TexVertex* quad;      // linear memory: one unit quad, scaled per tile
 static Slot overview, slots[SLOTS];
@@ -104,8 +117,10 @@ static u32 texPixels;        // pixels of a texture, all mipmap levels
 static u8* fileBuf;          // a tile file
 static size_t fileBufSize;
 static u16* idsBuf;          // a tile's county indices, all levels
-static float realmX[8], realmZ[8];
+enum { REALM_SPOTS = 64 };
 static int realmSize[8];     // provinces per realm (0: none, no name)
+static int realmSpot[8][REALM_SPOTS];   // provinces to put the name on, best first
+static int realmSpots[8];
 
 // worker thread: loads one slot at a time
 static Thread worker;
@@ -177,25 +192,44 @@ static void regionTint(int i, u8* rgb)
 	}
 }
 
-// after owners change: the counties' colours and where the realms' names go
+// after owners change: the counties' colours and where the realms' names go -- on the
+// realm's provinces nearest its middle (the middle of a realm in pieces can be at sea,
+// or in another realm; the next ones when the name is off the screen or would cover
+// another realm's)
 static void ownersChanged(void)
 {
 	for (int c = 0; c < hdr.ncounties; c++) regionTint(counties[c].region, tint[c]);
+	float mx[8] = { 0 }, mz[8] = { 0 };
 	memset(realmSize, 0, sizeof realmSize);
-	memset(realmX, 0, sizeof realmX);
-	memset(realmZ, 0, sizeof realmZ);
+	memset(realmSpots, 0, sizeof realmSpots);
 	for (int i = 0; i < hdr.nregions; i++) {
 		const Region* g = &regions[i];
 		if (g->kind != KIND_LAND || g->owner < 0 || g->owner >= hdr.nfactions) continue;
-		realmX[g->owner] += g->cx;
-		realmZ[g->owner] += g->cz;
+		mx[g->owner] += g->cx;
+		mz[g->owner] += g->cz;
 		realmSize[g->owner]++;
 	}
-	for (int f = 0; f < hdr.nfactions; f++)
-		if (realmSize[f]) {
-			realmX[f] /= realmSize[f];
-			realmZ[f] /= realmSize[f];
+	for (int f = 0; f < hdr.nfactions; f++) {
+		if (!realmSize[f]) continue;
+		mx[f] /= realmSize[f];
+		mz[f] /= realmSize[f];
+		float best[REALM_SPOTS];
+		for (int i = 0; i < hdr.nregions; i++) {
+			const Region* g = &regions[i];
+			if (g->kind != KIND_LAND || g->owner != f) continue;
+			float d = (g->cx - mx[f]) * (g->cx - mx[f]) + (g->cz - mz[f]) * (g->cz - mz[f]);
+			int n = realmSpots[f], k = n < REALM_SPOTS ? n++ : REALM_SPOTS;
+			if (k == REALM_SPOTS && d >= best[REALM_SPOTS - 1]) continue;
+			if (k == REALM_SPOTS) k--;
+			for (; k > 0 && best[k - 1] > d; k--) {
+				best[k] = best[k - 1];
+				realmSpot[f][k] = realmSpot[f][k - 1];
+			}
+			best[k] = d;
+			realmSpot[f][k] = i;
+			realmSpots[f] = n;
 		}
+	}
 }
 
 static bool loadMap(void)
@@ -205,7 +239,7 @@ static bool loadMap(void)
 	if (!buf) return false;
 	u8* p = buf;
 	memcpy(&hdr, p, sizeof hdr); p += sizeof hdr;
-	if (memcmp(hdr.magic, "HM3D", 4) || hdr.version != 5 || hdr.nregions >= NO_REGION
+	if (memcmp(hdr.magic, "HM3D", 4) || hdr.version != 6 || hdr.nregions >= NO_REGION
 		|| hdr.ncounties >= NO_REGION || hdr.nfactions > 8 || hdr.tex != 1024 || hdr.tiles < 1) {
 		free(buf);
 		return false;
@@ -218,8 +252,10 @@ static bool loadMap(void)
 	u32 nn = 0;
 	for (int i = 0; i < hdr.nregions; i++) nn += regions[i].nneigh;
 	p += (nn * sizeof(s16) + 3) & ~3;   // neighbour lists: not used yet
-	verts = linearCopy(p, hdr.nverts * sizeof(Vertex)); p += hdr.nverts * sizeof(Vertex);
-	indices = linearCopy(p, hdr.nidx * sizeof(u16)); p += (hdr.nidx * sizeof(u16) + 3) & ~3;
+	verts = malloc(hdr.nverts * sizeof(Vertex));
+	memcpy(verts, p, hdr.nverts * sizeof(Vertex)); p += hdr.nverts * sizeof(Vertex);
+	indices = malloc(hdr.nidx * sizeof(u16));
+	memcpy(indices, p, hdr.nidx * sizeof(u16)); p += (hdr.nidx * sizeof(u16) + 3) & ~3;
 	u32 nlv;
 	memcpy(&nborders, p, 4);
 	memcpy(&nlv, p + 4, 4);
@@ -589,6 +625,54 @@ static int ownerOf(int region)
 	return g->kind == KIND_LAND ? g->owner : -1;
 }
 
+static bool shapeInit(ShapeBuf* b, u32 vmax, u32 imax)
+{
+	b->v = linearAlloc(vmax * sizeof(Vertex) + 16);
+	b->i = linearAlloc(imax * sizeof(u16) + 16);
+	b->vstart = -1;
+	return b->v && b->i;
+}
+
+// a shape into its buffer (between frames: the GPU is not reading it)
+static void shapeSet(ShapeBuf* b, u32 vstart, u32 vcount, u32 istart, u32 icount, u32 itop)
+{
+	if (b->vstart == (int)vstart) return;
+	memcpy(b->v, verts + vstart, vcount * sizeof(Vertex));
+	memcpy(b->i, indices + istart, icount * sizeof(u16));
+	GSPGPU_FlushDataCache(b->v, vcount * sizeof(Vertex));
+	GSPGPU_FlushDataCache(b->i, icount * sizeof(u16));
+	b->itop = itop;
+	b->icount = icount;
+	b->vstart = vstart;
+}
+
+// a shape: its top lit with alpha `fill`, its outline strip with alpha `edge`
+static void drawShape(const ShapeBuf* b, float fill, float edge)
+{
+	C3D_BufInfo buf;
+	BufInfo_Init(&buf);
+	BufInfo_Add(&buf, b->v, sizeof(Vertex), 2, 0x10);
+	C3D_SetBufInfo(&buf);
+	C3D_FVUnifSet(GPU_VERTEX_SHADER, overlay.uTint, 1, 1, 0.9f, fill);
+	C3D_DrawElements(GPU_TRIANGLES, b->itop, C3D_UNSIGNED_SHORT, b->i);
+	C3D_FVUnifSet(GPU_VERTEX_SHADER, overlay.uTint, 1, 0.95f, 0.6f, edge);
+	C3D_DrawElements(GPU_TRIANGLES, b->icount - b->itop, C3D_UNSIGNED_SHORT, b->i + b->itop);
+}
+
+static bool shapesInit(void)
+{
+	u32 vmax = 0, imax = 0, cvmax = 0, cimax = 0;
+	for (int i = 0; i < hdr.nregions; i++) {
+		if (regions[i].vcount > vmax) vmax = regions[i].vcount;
+		if (regions[i].icount > imax) imax = regions[i].icount;
+	}
+	for (int i = 0; i < hdr.ncounties; i++) {
+		if (counties[i].vcount > cvmax) cvmax = counties[i].vcount;
+		if (counties[i].icount > cimax) cimax = counties[i].icount;
+	}
+	return shapeInit(&shapeProv, vmax, imax) && shapeInit(&shapeCounty, cvmax, cimax);
+}
+
 static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view, float zoom)
 {
 	// the map is flat: no depth test, later layers simply cover earlier ones
@@ -632,21 +716,16 @@ static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view, float zoom)
 
 	if (selected < 0) return;
 
-	// the selected region: a pulsing light over its exact shape and an outline inside it
-	const Region* g = &regions[selected];
+	// the selected region: a pulsing light over its exact shape and an outline inside it;
+	// with a county selected the province is lit less and the county more
 	C3D_BindProgram(&overlay.program);
 	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, overlay.uProj, proj);
 	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, overlay.uModelView, view);
 	C3D_SetAttrInfo(&attrOverlay);
-	C3D_BufInfo buf;
-	BufInfo_Init(&buf);
-	BufInfo_Add(&buf, verts + g->vstart, sizeof(Vertex), 2, 0x10);
-	C3D_SetBufInfo(&buf);
-	float a = 0.18f + 0.1f * sinf(pulse);
-	C3D_FVUnifSet(GPU_VERTEX_SHADER, overlay.uTint, 1, 1, 0.9f, a);
-	C3D_DrawElements(GPU_TRIANGLES, g->itop, C3D_UNSIGNED_SHORT, indices + g->istart);
-	C3D_FVUnifSet(GPU_VERTEX_SHADER, overlay.uTint, 1, 0.95f, 0.6f, 0.75f + 0.2f * sinf(pulse));
-	C3D_DrawElements(GPU_TRIANGLES, g->icount - g->itop, C3D_UNSIGNED_SHORT, indices + g->istart + g->itop);
+	bool county = selectedCounty >= 0 && counties[selectedCounty].vcount;
+	float s = sinf(pulse);
+	drawShape(&shapeProv, county ? 0.08f : 0.18f + 0.1f * s, county ? 0.5f : 0.75f + 0.2f * s);
+	if (county) drawShape(&shapeCounty, 0.22f + 0.1f * s, 0.8f + 0.2f * s);
 }
 
 static void viewMatrix(const Camera* c, C3D_Mtx* view)
@@ -669,23 +748,30 @@ static int nplaced;
 
 // a name at a map point, sized by its distance (as if written on the map), left out
 // where it would cover a name already placed
-static void label(const Camera* c, float w, float h, C2D_Text* t, float x, float z,
-	float size, float least, float most, u32 rgb, float alpha)
+static bool label(const Camera* c, float w, float h, C2D_Text* t, float x, float z,
+	float size, float least, float most, u32 rgb, float alpha, bool shadow)
 {
-	if (alpha < 0.03f || nplaced == MAX_LABELS) return;
+	if (alpha < 0.03f || nplaced == MAX_LABELS) return false;
 	float px, py, depth;
-	if (!cameraProject(c, x, z, w, h, &px, &py, &depth)) return;
+	if (!cameraProject(c, x, z, w, h, &px, &py, &depth)) return false;
 	float s = size / depth;
-	if (s < least) return;
+	if (s < least) return false;
 	if (s > most) s = most;
 	float tw, th;
 	C2D_TextGetDimensions(t, s, s, &tw, &th);
 	Rect r = { px - tw / 2 - 2, py - th / 2, px + tw / 2 + 2, py + th / 2 };
+	if (shadow && (r.x0 < 0 || r.y0 < 0 || r.x1 > w || r.y1 > h)) return false;   // realms: whole
 	for (int i = 0; i < nplaced; i++)
-		if (r.x0 < placed[i].x1 && r.x1 > placed[i].x0 && r.y0 < placed[i].y1 && r.y1 > placed[i].y0) return;
+		if (r.x0 < placed[i].x1 && r.x1 > placed[i].x0 && r.y0 < placed[i].y1 && r.y1 > placed[i].y0) return false;
 	placed[nplaced++] = r;
+	if (shadow) {
+		float o = s * 2.5f;
+		C2D_DrawText(t, C2D_AlignCenter | C2D_WithColor, px + o, py - th / 2 + o, 0.5f, s, s,
+			C2D_Color32(40, 25, 15, alpha * 150));
+	}
 	u32 col = rgb | (u32)(alpha * 255) << 24;
 	C2D_DrawText(t, C2D_AlignCenter | C2D_WithColor, px, py - th / 2, 0.5f, s, s, col);
+	return true;
 }
 
 // names by zoom: realms far away, provinces in between, counties near; the selected
@@ -696,21 +782,28 @@ static void drawLabels(const Camera* c, float w, float h)
 	float aRealm = ramp(zoom, 40, 60), aProv = 1 - ramp(zoom, 75, 100), aCounty = 1 - ramp(zoom, 14, 20);
 	nplaced = 0;
 	const u32 dark = C2D_Color32(20, 12, 4, 0) & 0xFFFFFF, county = C2D_Color32(70, 50, 30, 0) & 0xFFFFFF;
+	const u32 white = C2D_Color32(255, 255, 255, 0) & 0xFFFFFF;
+	if (selectedCounty >= 0 && counties[selectedCounty].vcount)
+		label(c, w, h, &countyNames[selectedCounty], counties[selectedCounty].cx, counties[selectedCounty].cz,
+			8, 0, 0.45f, white, 1, false);
 	if (selected >= 0)
-		label(c, w, h, &names[selected], regions[selected].cx, regions[selected].cz, 22, 0, 0.62f,
-			C2D_Color32(255, 255, 255, 0) & 0xFFFFFF, 1);
-	for (int f = 0; f < hdr.nfactions; f++)
-		if (realmSize[f])
-			label(c, w, h, &realmNames[f], realmX[f], realmZ[f], 70, 0.3f, 1.1f,
-				C2D_Color32(60, 20, 10, 0) & 0xFFFFFF, aRealm * 0.85f);
+		label(c, w, h, &names[selected], regions[selected].cx, regions[selected].cz, 22, 0, 0.62f, white, 1, false);
+	// realms: a pastel of their colour over a soft shadow
+	for (int f = 0; f < hdr.nfactions; f++) {
+		const Faction* fc = &factions[f];
+		u32 pastel = C2D_Color32(0.5f * fc->r + 128, 0.5f * fc->g + 128, 0.5f * fc->b + 128, 0) & 0xFFFFFF;
+		for (int k = 0; k < realmSpots[f]; k++) {
+			const Region* g = &regions[realmSpot[f][k]];
+			if (label(c, w, h, &realmNames[f], g->cx, g->cz, 70, 0.3f, 1.1f, pastel, aRealm * 0.95f, true)) break;
+		}
+	}
 	for (int i = 0; i < hdr.nregions; i++)
 		if (i != selected && regions[i].kind == KIND_LAND)
-			label(c, w, h, &names[i], regions[i].cx, regions[i].cz, 22, 0.24f, 0.62f, dark, aProv);
+			label(c, w, h, &names[i], regions[i].cx, regions[i].cz, 22, 0.24f, 0.62f, dark, aProv, false);
 	for (int i = 0; i < hdr.ncounties; i++) {
 		const County* k = &counties[i];
-		const Region* g = &regions[k->region];
-		if (g->kind == KIND_LAND && strcmp(k->name, g->name))
-			label(c, w, h, &countyNames[i], k->cx, k->cz, 8, 0.24f, 0.45f, county, aCounty);
+		if (i != selectedCounty && k->vcount && regions[k->region].kind == KIND_LAND)
+			label(c, w, h, &countyNames[i], k->cx, k->cz, 8, 0.24f, 0.45f, county, aCounty, false);
 	}
 }
 
@@ -724,7 +817,7 @@ static void drawInfo(void)
 		hdr.nregions, hdr.ncounties, hdr.tiles, hdr.tiles, ready, loadedCount, lastLoadMs,
 		(unsigned long)(linearSpaceFree() / 1024));
 	if (selected < 0) {
-		snprintf(text, sizeof text, "Tap a province or a sea zone.\nDrag: pan  L/R: tilt  Up/Down: zoom\n%s", stats);
+		snprintf(text, sizeof text, "Tap a province or a sea zone.\nDrag: pan  L/R: tilt  Up/Down: zoom (near: counties)\n%s", stats);
 	} else {
 		const Region* g = &regions[selected];
 		const char* owner = g->kind == KIND_SEA ? "sea zone" : g->owner >= 0 ? factions[g->owner].name : "-";
@@ -758,7 +851,7 @@ int main(void)
 	C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
 	C2D_Init(4096);
 
-	if (!loadMap() || !texturesInit()) {
+	if (!loadMap() || !texturesInit() || !shapesInit()) {
 		consoleInit(GFX_BOTTOM, NULL);
 		printf("Cannot read the map from romfs:/\nRun tools/make_m3.py, then rebuild.\nSTART: exit\n");
 		while (aptMainLoop()) {
@@ -826,10 +919,13 @@ int main(void)
 		} else if (touching && (up & KEY_TOUCH)) {
 			touching = false;
 			if (!dragged) {
+				// near enough to see counties, a tap picks a county; further, a province
 				int c = pickCounty(&cam, t0.px, t0.py);
 				int r = c >= 0 ? counties[c].region : -1;
-				selected = r == selected && c == selectedCounty ? -1 : r;
-				selectedCounty = selected >= 0 ? c : -1;
+				if (c >= 0 && !(cam.dist < COUNTY_ZOOM && counties[c].vcount)) c = -1;
+				if (r == selected && c == selectedCounty) r = c = -1;   // the same again: off
+				selected = r;
+				selectedCounty = c;
 			}
 		}
 		if (cam.tx < -lim) cam.tx = -lim;
@@ -845,7 +941,10 @@ int main(void)
 		top.pitch = cam.pitch - C3D_AngleFromDegrees(20);
 		if (top.pitch < C3D_AngleFromDegrees(20)) top.pitch = C3D_AngleFromDegrees(20);
 		top.aspect = C3D_AspectRatioTop;
-		if (selected >= 0) {
+		if (selectedCounty >= 0) {
+			top.tx = counties[selectedCounty].cx;
+			top.tz = counties[selectedCounty].cz;
+		} else if (selected >= 0) {
 			top.tx = regions[selected].cx;
 			top.tz = regions[selected].cz;
 		}
@@ -858,6 +957,14 @@ int main(void)
 
 		C3D_Mtx proj, view;
 		C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+		if (selected >= 0) {
+			const Region* g = &regions[selected];
+			shapeSet(&shapeProv, g->vstart, g->vcount, g->istart, g->icount, g->itop);
+		}
+		if (selectedCounty >= 0 && counties[selectedCounty].vcount) {
+			const County* k = &counties[selectedCounty];
+			shapeSet(&shapeCounty, k->vstart, k->vcount, k->istart, k->icount, k->itop);
+		}
 
 		viewMatrix(&top, &view);
 		for (int eye = 0; eye < (iod > 0 ? 2 : 1); eye++) {
@@ -890,8 +997,12 @@ int main(void)
 	shaderFree(&overlay);
 	shaderFree(&textured);
 	shaderFree(&lines);
-	linearFree(verts);
-	linearFree(indices);
+	free(verts);
+	free(indices);
+	linearFree(shapeProv.v);
+	linearFree(shapeProv.i);
+	linearFree(shapeCounty.v);
+	linearFree(shapeCounty.i);
 	linearFree(lineVerts);
 	linearFree(quad);
 	free(names);

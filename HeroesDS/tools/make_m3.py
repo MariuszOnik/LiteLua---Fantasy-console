@@ -465,20 +465,7 @@ def build(m):
     regions = []
     for a in sorted(rings):
         kind = KIND_NEUTRAL if a == NEUTRAL else KIND_LAND if a < land else KIND_SEA
-        pts2, tris = triangulate(rings[a])
-        pts2 = pts2 - off
-        verts = [(x, 0.0, z, 1.0) for x, z in pts2]
-        idx = [int(i) for t in tris for i in t]   # drawn without culling
-        top = len(idx)
-        for ring in rings[a]:
-            inner = ring_inset(ring - off, OUTLINE)
-            v0, n = len(verts), len(ring)
-            for (x, z), (x2, z2) in zip(ring - off, inner):
-                verts += [(x, 0.0, z, 1.0), (x2, 0.0, z2, 1.0)]
-            for i in range(n):
-                a1, b1, a2, b2 = v0 + 2 * i, v0 + 2 * i + 1, v0 + 2 * ((i + 1) % n), v0 + 2 * ((i + 1) % n) + 1
-                idx += [a1, b1, b2, a1, b2, a2]
-        assert len(verts) < 65536, (a, len(verts))
+        pts2, verts, idx, top = shape_mesh(rings[a], off, OUTLINE)
         xs, zs = pts2[:, 0], pts2[:, 1]
         if a >= 0:
             r, c = m["capitals"][a]
@@ -500,9 +487,12 @@ def build(m):
         r, col = cells[((cells - mid) ** 2).sum(1).argmin()]
         reg = regions[index[p]]
         own = 0 <= p < land and (cprov.count(p) > 1)
+        # a county of its own (one of several in a province) can be selected: its shape
+        # to light it up, like a region's
+        _, verts, idx, top = shape_mesh(crings[c], off, OUTLINE * 0.6) if own else (None, [], [], 0)
         county_list.append(dict(region=index[p], name=m2.name(rng) if own else reg["name"],
                                 cx=col + 0.5 - off[0], cz=r + 0.5 - off[1],
-                                pts=pts2 - off, tris=tris))
+                                pts=pts2 - off, tris=tris, verts=verts, idx=idx, top=top))
 
     borders = []
     for key, (pts, _) in chains.cache.items():
@@ -511,6 +501,26 @@ def build(m):
         pa, pb = chains.provinces(key)
         borders.append(dict(a=index[pa], b=index[pb], pts=pts - off, closed=key[1]))
     return regions, county_list, borders, chains
+
+
+def shape_mesh(rings, off, outline):
+    """The exact top of a shape (triangles) and a strip `outline` wide inside its
+    border, at y = 0: (top points, vertices (x, y, z, 1), indices, top index count)."""
+    pts2, tris = triangulate(rings)
+    pts2 = pts2 - off
+    verts = [(x, 0.0, z, 1.0) for x, z in pts2]
+    idx = [int(i) for t in tris for i in t]   # drawn without culling
+    top = len(idx)
+    for ring in rings:
+        inner = ring_inset(ring - off, outline)
+        v0, n = len(verts), len(ring)
+        for (x, z), (x2, z2) in zip(ring - off, inner):
+            verts += [(x, 0.0, z, 1.0), (x2, 0.0, z2, 1.0)]
+        for i in range(n):
+            a1, b1, a2, b2 = v0 + 2 * i, v0 + 2 * i + 1, v0 + 2 * ((i + 1) % n), v0 + 2 * ((i + 1) % n) + 1
+            idx += [a1, b1, b2, a1, b2, a2]
+    assert len(verts) < 65536, len(verts)
+    return pts2, verts, idx, top
 
 
 def line_normals(p, closed):
@@ -768,9 +778,10 @@ def tint_colors(m, regions):
 def write(path, m, regions, county_list, borders, tiles=1):
     """map3d.bin, see docs/FORMATS.md."""
     rows, cols = m["province"].shape
-    nv = sum(len(r["verts"]) for r in regions)
-    ni = sum(len(r["idx"]) for r in regions)
-    head = struct.pack("<4sHHHHIIIfHH", b"HM3D", 5, len(regions), m["land"], len(m2.FACTIONS),
+    shapes = regions + county_list        # their meshes, one after another
+    nv = sum(len(r["verts"]) for r in shapes)
+    ni = sum(len(r["idx"]) for r in shapes)
+    head = struct.pack("<4sHHHHIIIfHH", b"HM3D", 6, len(regions), m["land"], len(m2.FACTIONS),
                        nv, ni, TEX, float(cols), tiles, len(county_list))
     for fname, col in m2.FACTIONS:
         head += struct.pack("<BBBx16s", *col, fname.encode())
@@ -783,11 +794,14 @@ def write(path, m, regions, county_list, borders, tiles=1):
         v0 += len(r["verts"])
         i0 += len(r["idx"])
     for c in county_list:
-        head += struct.pack("<H2x20sff", c["region"], c["name"].encode()[:19], c["cx"], c["cz"])
+        head += struct.pack("<H2x20sff5I", c["region"], c["name"].encode()[:19], c["cx"], c["cz"],
+                            v0, len(c["verts"]), i0, len(c["idx"]), c["top"])
+        v0 += len(c["verts"])
+        i0 += len(c["idx"])
     if len(nlist) % 4:
         nlist += b"\0\0"
-    verts = b"".join(struct.pack("<4f", *v) for r in regions for v in r["verts"])
-    idx = b"".join(struct.pack("<%dH" % len(r["idx"]), *r["idx"]) for r in regions)
+    verts = b"".join(struct.pack("<4f", *v) for r in shapes for v in r["verts"])
+    idx = b"".join(struct.pack("<%dH" % len(r["idx"]), *r["idx"]) for r in shapes)
     if len(idx) % 4:
         idx += b"\0\0"
     # borders between provinces as triangle strips: per point (x, z, nx, nz) on both sides

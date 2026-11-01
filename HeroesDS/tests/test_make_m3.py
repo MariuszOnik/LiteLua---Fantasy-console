@@ -68,6 +68,20 @@ class MeshTest(unittest.TestCase):
         total = sum(tri_area(r["verts"], r["idx"][:r["top"]]) for r in self.regions)
         self.assertAlmostEqual(total, rows * cols, delta=rows * cols * 0.01)
 
+    def test_selectable_counties_tile_their_province(self):
+        # counties that can be selected (several in a province) have shapes; together
+        # they cover the province's top
+        by_region = {}
+        for c in self.counties:
+            if c["verts"]:
+                by_region.setdefault(c["region"], []).append(tri_area(c["verts"], c["idx"][:c["top"]]))
+        self.assertTrue(by_region)
+        for reg, areas in by_region.items():
+            self.assertGreater(len(areas), 1)
+            r = self.regions[reg]
+            whole = tri_area(r["verts"], r["idx"][:r["top"]])
+            self.assertAlmostEqual(sum(areas), whole, delta=whole * 0.01, msg=r["name"])
+
     def test_each_region_keeps_its_size(self):
         prov = self.m["province"]
         for r in self.regions:
@@ -166,10 +180,10 @@ class MeshTest(unittest.TestCase):
             with open(path, "rb") as f:
                 data = f.read()
         magic, ver, nreg, nland, nfac = struct.unpack_from("<4sHHHH", data)
-        self.assertEqual((magic, ver, nreg, nland), (b"HM3D", 5, len(self.regions), self.m["land"]))
+        self.assertEqual((magic, ver, nreg, nland), (b"HM3D", 6, len(self.regions), self.m["land"]))
         tiles, ncty = struct.unpack_from("<HH", data, 28)
         self.assertEqual((tiles, ncty), (2, len(self.counties)))
-        off = 32 + 20 * nfac + 80 * nreg + 32 * ncty
+        off = 32 + 20 * nfac + 80 * nreg + 52 * ncty
         nn = sum(len(r["neigh"]) for r in self.regions)
         off += ((2 * nn + 3) & ~3) + 16 * nv + ((2 * ni + 3) & ~3)
         nb, nlv = struct.unpack_from("<II", data, off)

@@ -213,10 +213,10 @@ służą tylko do podświetlenia wybranego. Little-endian, sekcje bez przerw, ka
 do 4 bajtów. Współrzędne: komórka siatki M2 = 1×1, środek mapy w (0, 0), x = kolumna,
 z = wiersz (północ = −z).
 
-`map3d.bin` (wersja 5):
+`map3d.bin` (wersja 6):
 ```
 nagłówek (32 B)
-  char[4] "HM3D"; u16 wersja = 5; u16 nregions; u16 nland; u16 nfactions
+  char[4] "HM3D"; u16 wersja = 6; u16 nregions; u16 nland; u16 nfactions
   u32 nverts; u32 nidx; u32 tex (bok tekstury, 1024); f32 world (szerokość mapy = kolumny)
   u16 tiles (kafli na bok); u16 ncounties
 nfactions × 20 B:  u8 r, g, b, 0; char[16] nazwa
@@ -228,12 +228,14 @@ nregions × 80 B (region = prowincja, strefa morska albo ląd bez prowincji):
   u32 vstart, vcount (wierzchołki regionu); u32 istart, icount (indeksy);
   u32 itop (pierwsze itop indeksów: dokładny wierzch; reszta: pas obrysu wewnątrz
   granicy, szeroki 0,3); u32 0
-ncounties × 32 B (powiat; morze i ląd bez prowincji = jeden powiat):
+ncounties × 52 B (powiat; morze i ląd bez prowincji = jeden powiat):
   u16 region (indeks w tabeli regionów); 2 × 0; char[20] nazwa (powiat jedyny w
-  prowincji ma jej nazwę); f32 cx, cz (napis)
+  prowincji ma jej nazwę); f32 cx, cz (napis); u32 vstart, vcount, istart, icount, itop
+  (dokładny kształt jak u regionu, obrys 0,18; vcount = 0: powiat jedyny w prowincji,
+  nie do zaznaczenia)
 i16 × Σ sąsiadów     listy sąsiadów regionów po kolei (id), dopełnione do 4 B
-nverts × 16 B        f32 x, y (= 0), z, 1
-nidx × u16           trójkąty, indeksy względem vstart regionu (< 65536), dopełnione do 4 B
+nverts × 16 B        f32 x, y (= 0), z, 1 — kształty regionów, potem powiatów
+nidx × u16           trójkąty, indeksy względem vstart kształtu (< 65536), dopełnione do 4 B
 u32 nborders; u32 nlineverts
 nborders × 12 B      granica między dwiema prowincjami lądu (odcinek między węzłami):
                      u16 a, b (regiony po bokach); u32 start, count (wierzchołki paska)

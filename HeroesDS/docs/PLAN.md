@@ -17,8 +17,13 @@ ręcznie, bez przecięć). Każde podejście ma build w `3ds/builds/` (poza gite
 `m3a-smooth` (wygładzone granice, płyty lądu ze ściankami), `m3b-noisy` (fraktalne
 granice w meshu, ~52 tys. trójkątów, ~12–16 ms na klatkę w Azaharze), `m3c-flat` (płaska
 mapa = jeden prostokąt z teksturą 1024² z mipmapami, ~2,3 ms), `m3d` (kafle 1024²,
-doczytywane w tle; `m3d-tiles2x2`, `m3d-big4x4`), **`m3e` (obecny): szczegóły wg
-oddalenia** — `m3e-lod-2x2` (`-gen "--tiles 2"`; 80 regionów, 279 powiatów) i
+doczytywane w tle; `m3d-tiles2x2`, `m3d-big4x4`), `m3e` (szczegóły wg
+oddalenia), **`m3f` (obecny): klikanie powiatów** — `m3f-counties-2x2` i
+`m3f-counties-big4x4` (z bliska, gdy widać linie powiatów — `COUNTY_ZOOM` — stuknięcie
+zaznacza powiat: jasne światło i obrys, prowincja słabiej; dalej cała prowincja; nazwy
+państw pastelowe z cieniem, na najbliższej środka prowincji państwa, która mieści napis
+na ekranie i nie zasłania innego państwa; kształty do podświetlenia w zwykłej pamięci,
+do pamięci karty kopiowany tylko zaznaczony). Wcześniej `m3e-lod-2x2` (`-gen "--tiles 2"`; 80 regionów, 279 powiatów) i
 `m3e-lod-big4x4` (`-gen "--size 144 --provinces 180 --tiles 4"`; 284 regiony, 1059
 powiatów, 16 kafli). Prowincje lądu dzielone na powiaty (~12 komórek); linie powiatów
 tylko na najdokładniejszych poziomach mipmap, prowincji na średnich, daleko samo
