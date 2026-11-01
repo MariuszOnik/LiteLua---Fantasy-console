@@ -1,0 +1,40 @@
+; Border strip vertex shader: v0 = (x, z, nx, nz) -- a point of a line and its side
+; normal; the strip is as wide as the uniform `width` (x = half width), so it keeps
+; its width on screen however far the camera is.
+
+; Uniforms
+.fvec projection[4], modelView[4]
+.fvec tint, width
+
+; Constants
+.constf myconst(0.0, 1.0, -1.0, 0.1)
+.alias  zeros myconst.xxxx
+.alias  ones  myconst.yyyy
+
+; Outputs
+.out outpos position
+.out outclr color
+
+; Inputs
+.alias inline v0
+
+.proc main
+	mul r2.xy, width.xx, inline.zw
+	add r0.x, inline.x, r2.x
+	mov r0.y, zeros
+	add r0.z, inline.y, r2.y
+	mov r0.w, ones
+
+	dp4 r1.x, modelView[0], r0
+	dp4 r1.y, modelView[1], r0
+	dp4 r1.z, modelView[2], r0
+	dp4 r1.w, modelView[3], r0
+
+	dp4 outpos.x, projection[0], r1
+	dp4 outpos.y, projection[1], r1
+	dp4 outpos.z, projection[2], r1
+	dp4 outpos.w, projection[3], r1
+
+	mov outclr, tint
+	end
+.end

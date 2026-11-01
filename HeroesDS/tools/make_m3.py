@@ -21,13 +21,20 @@ Steps:
      pushed sideways at random by up to ROUGH x its length, then both halves the same way
      down to MIN_SEG (detail at every scale, like a hand-drawn map; Red Blob Games'
      "noisy edges"); a line crossing another one (or itself) is redone calmer
-  5. exact shapes: the top of each region by ear cutting (mapbox_earcut, holes included)
-     and a strip inside its border (the selection outline)
-  6. the pictures (each TEX x TEX, drawn twice as big and scaled down; one per tile and
+  5. counties: every land province is split into about cells / COUNTY_CELLS counties
+     (seeds spread over it, cells to the nearest seed inside the province, Lloyd steps);
+     the chains are made on the county grid, so a province's border is its counties'
+  6. exact shapes: the top of each region by ear cutting (mapbox_earcut, holes included)
+     and a strip inside its border (the selection outline); the counties' shapes for
+     the county index of every pixel; the borders between provinces as lines (the 3DS
+     draws those between realms -- they change in the game)
+  7. the pictures (each TEX x TEX, drawn twice as big and scaled down; one per tile and
      one of the whole map): sea lighter near the shore, the land's shadow on it, waves;
-     land as pale paper, darker along its borders; lines (land/land, coast, sea/sea);
-     and the region index of every pixel (taps on the 3DS) -- both with all mipmap
-     levels, in the 3DS texture order (tile_order), zlib-packed. Noise and waves are
+     land as pale paper, darker along its borders; and the county index of every pixel
+     (taps on the 3DS) -- both with all mipmap levels, in the 3DS texture order
+     (tile_order), zlib-packed. Every level gets its own lines (LINES): the coast always,
+     province and sea-zone lines from K_PROVINCE pixels per cell, county lines from
+     K_COUNTY -- so the GPU, picking the level by distance, shows less detail far away. Noise and waves are
      laid over the whole map and every tile is drawn with a margin, so tiles meet
      without seams
 The file formats are in docs/FORMATS.md ("map3d.bin", "map tiles").
@@ -45,7 +52,7 @@ import make_m2 as m2  # noqa: E402
 
 CHAIKIN = 1           # smoothing steps of the base line (takes the grid's stairs off)
 BASE = 0.3            # Douglas-Peucker tolerance of the base line, in cells
-ROUGH = {"land": 0.3, "coast": 0.36, "sea": 0.2}   # noisy edges: sideways shift / length
+ROUGH = {"land": 0.3, "coast": 0.36, "sea": 0.2, "county": 0.25}   # noisy edges: shift / length
 MIN_SEG = 0.2         # noisy edges stop at segments this long, in cells
 OUTSIDE = -2          # region number of the space outside the grid
 NEUTRAL = -1          # land without a province (tiny islets)
@@ -57,7 +64,11 @@ PAPER_RGB = (252, 248, 238)
 SEA_LINE = (200, 222, 228)
 LAND_LINE = (70, 48, 30)
 COAST_LINE = (40, 28, 18)
+COUNTY_LINE = (120, 95, 70)
 NEUTRAL_RGB = (190, 180, 160)
+COUNTY_CELLS = 12     # cells per county (a province is split into about cells / this)
+K_PROVINCE = 3.0      # province lines from this many texture pixels per cell on
+K_COUNTY = 14.0       # county lines from this many
 TINT = 0.62           # how strong the owners' colours are (1 = the faction colour)
 KIND_LAND, KIND_SEA, KIND_NEUTRAL = 0, 1, 2
 
@@ -226,35 +237,53 @@ def crossings(lines):
 
 
 class Chains:
-    """Border chains, each made once and shared by the regions on both sides."""
+    """Border chains between the cells of a grid of counties, each made once and shared by
+    the counties on both sides. prov_of maps a county to its province (region) number."""
 
-    def __init__(self, prov, land):
-        self.prov = prov
+    def __init__(self, grid, prov_of, land):
+        self.grid = grid
+        self.prov_of = prov_of
         self.land = land
-        self.info = {}    # key -> (corners, closed, sides: (region walking it this way, other))
+        self.info = {}    # key -> (corners, closed, sides: (county walking it this way, other))
         self.cache = {}   # key -> (points, sides)
 
-    def get(self, corners, closed, region):
-        """Registers the chain; returns its key and whether the region walks it backwards."""
+    @staticmethod
+    def key_of(corners, closed):
         if closed:
             i = corners.index(min(corners))
             fwd = corners[i:] + corners[:i]
             rev = fwd[:1] + fwd[1:][::-1]
-            key, back = (tuple(min(fwd, rev)), True), fwd > rev
-        else:
-            fwd, rev = corners, corners[::-1]
-            key, back = (tuple(min(fwd, rev)), False), fwd > rev
+            return (tuple(min(fwd, rev)), True), fwd > rev
+        fwd, rev = corners, corners[::-1]
+        return (tuple(min(fwd, rev)), False), fwd > rev
+
+    def get(self, corners, closed, county):
+        """Registers the chain; returns its key and whether the county walks it backwards."""
+        key, back = self.key_of(corners, closed)
         if key not in self.info:
             seq = list(key[0])
-            other = self.across(seq, closed, region, back)
-            self.info[key] = (seq, closed, (region, other) if not back else (other, region))
+            other = self.across(seq, county)
+            self.info[key] = (seq, closed, (county, other) if not back else (other, county))
+        return key, back
+
+    def find(self, corners, closed):
+        """A chain already registered (a province's border is made of its counties')."""
+        key, back = self.key_of(corners, closed)
+        assert key in self.info, "province border not on county borders"
         return key, back
 
     def kind(self, sides):
+        """county (inside a province), land (between provinces), coast, sea, edge."""
         if OUTSIDE in sides:
             return "edge"
-        land = [s == NEUTRAL or 0 <= s < self.land for s in sides]
+        pa, pb = (self.prov_of(s) for s in sides)
+        if pa == pb:
+            return "county"
+        land = [p == NEUTRAL or 0 <= p < self.land for p in (pa, pb)]
         return "land" if all(land) else "coast" if any(land) else "sea"
+
+    def provinces(self, key):
+        return tuple(self.prov_of(s) for s in self.info[key][2])
 
     def make(self):
         """Base lines, roughened; a line that crosses another gets calmer until none do."""
@@ -275,57 +304,105 @@ class Chains:
                 scale[key] = scale[key] * 0.5 if attempt < 4 else 0.0
         self.cache = {key: (lines[key][0], self.info[key][2]) for key in self.info}
 
-    def outer(self, key):
-        """Whether the chain is a shore (sea or the map edge on one side): its walls show."""
-        return self.kind(self.info[key][2]) in ("coast", "edge")
-
     def points(self, key, back):
         pts = self.cache[key][0]
         return pts[::-1] if back else pts
 
-    def across(self, seq, closed, region, back):
-        """The region on the other side of the chain's first side."""
+    def across(self, seq, county):
+        """The county on the other side of the chain's first side."""
         (r1, c1), (r2, c2) = seq[0], seq[1]
         cells = [(min(r1, r2) - (r1 == r2), min(c1, c2) - (c1 == c2)), (min(r1, r2), min(c1, c2))]
-        regs = [region_at(self.prov, r, c) for r, c in cells]
-        return regs[0] if regs[1] == region else regs[1]
+        regs = [region_at(self.grid, r, c) for r, c in cells]
+        return regs[0] if regs[1] == county else regs[1]
 
 
-def region_rings(prov, land):
-    """{region: [ring points (N, 2) x, z]} with rough shared borders, per ring whether
-    the side from point i to i + 1 is a shore (its wall shows), and the chains."""
-    rings = outlines(prov)
-    junc = junctions(prov)
-    chains = Chains(prov, land)
-    plan = []   # (region, [(key, back, closed)])
-    for a, rs in rings.items():
+def plan_rings(grid, junc, look):
+    """Every region's rings of a grid cut into chains at the junctions:
+    [(region, [(key, back, closed)])]; look(corners, closed, region) -> (key, back)."""
+    plan = []
+    for a, rs in outlines(grid).items():
         if a == OUTSIDE:
             continue
         for ring in rs:
             cut = [i for i, v in enumerate(ring) if v in junc]
             if not cut:
-                plan.append((a, [chains.get(ring, True, a) + (True,)]))
+                plan.append((a, [look(ring, True, a) + (True,)]))
                 continue
             ring = ring[cut[0]:] + ring[:cut[0]]
             cut = [i - cut[0] for i in cut] + [len(ring)]
             parts = []
             for i, j in zip(cut, cut[1:]):
                 seg = ring[i:j + 1] if j < len(ring) else ring[i:] + ring[:1]
-                parts.append(chains.get(seg, False, a) + (False,))
+                parts.append(look(seg, False, a) + (False,))
             plan.append((a, parts))
-    chains.make()
-    out, walls = {}, {}
+    return plan
+
+
+def assemble(plan, chains):
+    """{region: [ring points (N, 2) x, z]} from the made chains."""
+    out = {}
     for a, parts in plan:
         if parts[0][2]:
             pts = chains.points(*parts[0][:2])
-            seen = [chains.outer(parts[0][0])] * len(pts)
         else:
-            lines = [chains.points(key, back)[:-1] for key, back, _ in parts]
-            pts = np.vstack(lines)
-            seen = [chains.outer(key) for (key, _, _), q in zip(parts, lines) for _ in q]
+            pts = np.vstack([chains.points(key, back)[:-1] for key, back, _ in parts])
         out.setdefault(a, []).append(pts)
-        walls.setdefault(a, []).append(np.array(seen))
-    return out, walls, chains
+    return out
+
+
+def counties(m, rng):
+    """Every land province split into about cells / COUNTY_CELLS counties (seeds spread
+    over it, cells to the nearest seed by steps inside the province, a few Lloyd steps);
+    a sea zone or land without a province is one county. Returns the county per cell
+    (OUTSIDE where no region) and per county its province number."""
+    prov = m["province"]
+    land = m["land"]
+    rows, cols = prov.shape
+    grid = np.full(prov.shape, OUTSIDE)
+    owner = []
+    for p in sorted(int(v) for v in np.unique(prov)):
+        cells = [tuple(int(v) for v in c) for c in np.argwhere(prov == p)]
+        n = max(1, round(len(cells) / COUNTY_CELLS)) if 0 <= p < land else 1
+        if n == 1:
+            for r, c in cells:
+                grid[r, c] = len(owner)
+            owner.append(p)
+            continue
+        pts = np.array(cells)
+        seeds = [cells[int(rng.integers(len(cells)))]]
+        dist = np.full(len(cells), 1e9)
+        for _ in range(n - 1):
+            dist = np.minimum(dist, ((pts - seeds[-1]) ** 2).sum(1))
+            seeds.append(cells[int(dist.argmax())])
+        inside = set(cells)
+        for step in range(4):
+            near = {}
+            todo = []
+            for i, s in enumerate(seeds):
+                near[s] = i
+                todo.append(s)
+            while todo:          # breadth first from all seeds at once
+                nxt = []
+                for r, c in todo:
+                    for q in m2.neighbours4(r, c, rows, cols):
+                        if q in inside and q not in near:
+                            near[q] = near[(r, c)]
+                            nxt.append(q)
+                todo = nxt
+            if step == 3:
+                break
+            for i in range(len(seeds)):
+                mine = np.array([q for q in cells if near[q] == i])
+                mid = mine.mean(0)
+                seeds[i] = tuple(int(v) for v in mine[((mine - mid) ** 2).sum(1).argmin()])
+            seeds = list(dict.fromkeys(seeds))
+        first = len(owner)
+        used = sorted(set(near.values()))
+        renum = {i: first + k for k, i in enumerate(used)}
+        for q in cells:
+            grid[q] = renum[near[q]]
+        owner += [p] * len(used)
+    return grid, owner
 
 
 def area(p):
@@ -368,12 +445,22 @@ def triangulate(rings):
 
 
 def build(m):
-    """Regions: name, owner, label point, the exact top (triangles) and an outline strip
-    inside its border -- both only drawn for the selected region; the map itself is
-    one flat quad with the texture (render_texture)."""
+    """Regions (provinces, sea zones, land without a province): name, owner, label point,
+    the exact top (triangles) and an outline strip inside its border -- both only drawn
+    for the selected region. Counties: region, name, label point, exact shape (for the
+    pictures). Borders between provinces as lines (the 3DS draws the ones between
+    realms). The map itself is textures (Painter)."""
     prov = m["province"].copy()
     land = m["land"]
-    rings, _, chains = region_rings(prov, land)
+    rng = np.random.default_rng(m["seed"] + 77)
+    cgrid, cprov = counties(m, rng)
+    chains = Chains(cgrid, lambda c: OUTSIDE if c == OUTSIDE else cprov[c], land)
+    junc = junctions(cgrid)
+    cplan = plan_rings(cgrid, junc, chains.get)
+    pplan = plan_rings(prov, junc, lambda corners, closed, a: chains.find(corners, closed))
+    chains.make()
+    crings = assemble(cplan, chains)
+    rings = assemble(pplan, chains)
     off = np.array([prov.shape[1] / 2, prov.shape[0] / 2])
     regions = []
     for a in sorted(rings):
@@ -402,19 +489,51 @@ def build(m):
         neigh = sorted(int(b) for b in m["neighbours"].get(a, ()) if b >= 0) if a >= 0 else []
         regions.append(dict(id=a, kind=kind, owner=owner, name=name, cx=cx, cz=cz,
                             box=(float(xs.min()), float(zs.min()), float(xs.max()), float(zs.max())),
-                            rings=rings[a], verts=verts, idx=idx, top=top, neigh=neigh))
-    return regions, chains
+                            verts=verts, idx=idx, top=top, neigh=neigh))
+    index = {r["id"]: i for i, r in enumerate(regions)}
+
+    county_list = []
+    for c, p in enumerate(cprov):
+        pts2, tris = triangulate(crings[c])
+        cells = np.argwhere(cgrid == c)
+        mid = cells.mean(0)
+        r, col = cells[((cells - mid) ** 2).sum(1).argmin()]
+        reg = regions[index[p]]
+        own = 0 <= p < land and (cprov.count(p) > 1)
+        county_list.append(dict(region=index[p], name=m2.name(rng) if own else reg["name"],
+                                cx=col + 0.5 - off[0], cz=r + 0.5 - off[1],
+                                pts=pts2 - off, tris=tris))
+
+    borders = []
+    for key, (pts, _) in chains.cache.items():
+        if chains.kind(chains.info[key][2]) != "land":
+            continue
+        pa, pb = chains.provinces(key)
+        borders.append(dict(a=index[pa], b=index[pb], pts=pts - off, closed=key[1]))
+    return regions, county_list, borders, chains
+
+
+def line_normals(p, closed):
+    """Per point: the unit side normal, mitred (limited) where the line bends."""
+    q = np.vstack([p, p[:1]]) if closed else p
+    d = np.diff(q, axis=0)
+    d /= np.maximum(np.hypot(d[:, 0], d[:, 1]), 1e-9)[:, None]
+    seg_n = np.stack([-d[:, 1], d[:, 0]], 1)
+    vn = np.zeros((len(p), 2))
+    if closed:
+        vn += seg_n + np.roll(seg_n, 1, 0)
+    else:
+        vn[:-1] += seg_n
+        vn[1:] += seg_n
+    vn /= np.maximum(np.hypot(vn[:, 0], vn[:, 1]), 1e-9)[:, None]
+    near = np.vstack([seg_n, seg_n[-1:]])[:len(p)]
+    cos = np.abs((vn * near).sum(1))
+    return vn / np.maximum(cos, 0.5)[:, None]
 
 
 def ring_inset(p, w):
     """The ring's points moved w inward (into the region the ring belongs to)."""
-    d = np.roll(p, -1, 0) - p
-    d /= np.maximum(np.hypot(d[:, 0], d[:, 1]), 1e-9)[:, None]
-    seg_n = np.stack([-d[:, 1], d[:, 0]], 1)
-    vn = seg_n + np.roll(seg_n, 1, 0)
-    vn /= np.maximum(np.hypot(vn[:, 0], vn[:, 1]), 1e-9)[:, None]
-    cos = np.abs((vn * seg_n).sum(1))
-    return p + vn * (w / np.maximum(cos, 0.5))[:, None]   # miter, limited
+    return p + line_normals(p, True) * w
 
 
 def blur(a, radius):
@@ -443,12 +562,24 @@ class Noise:
                 + (g[j + 1, i] * (1 - fu) + g[j + 1, i + 1] * fu) * fv)
 
 
+# lines: width in cells, least width in pixels of the level, colour, from how many pixels
+# per cell of a mipmap level on they are drawn (coarser levels -- far views -- leave
+# county and then province lines out; realms' borders are drawn by the 3DS)
+LINES = {
+    "sea":    (0.07, 0.7, SEA_LINE, K_PROVINCE),
+    "county": (0.06, 0.8, COUNTY_LINE, K_COUNTY),
+    "land":   (0.11, 1.0, LAND_LINE, K_PROVINCE),
+    "coast":  (0.15, 1.2, COAST_LINE, 0.0),
+}
+
+
 class Painter:
     """Draws any square window of the map (a tile, or the whole map small): the picture
-    without owners' colours and the region index per pixel."""
+    without owners' colours and the county index per pixel, every mipmap level with the
+    lines that suit its scale."""
 
-    def __init__(self, m, regions, chains):
-        self.m, self.regions, self.chains = m, regions, chains
+    def __init__(self, m, county_list, chains):
+        self.m, self.counties, self.chains = m, county_list, chains
         rows, cols = m["province"].shape
         self.world = cols
         self.off = np.array([cols / 2, rows / 2])
@@ -459,16 +590,15 @@ class Painter:
         n = int(cols * rows / 9)
         self.waves = np.column_stack([rng.uniform(0, cols, n), rng.uniform(0, rows, n),
                                       rng.uniform(0.7, 1.2, n)])
-        self.land = {i for i, r in enumerate(regions) if r["kind"] != KIND_SEA}
-        self.boxes = [(r["box"][0] + self.off[0], r["box"][1] + self.off[1],
-                       r["box"][2] + self.off[0], r["box"][3] + self.off[1]) for r in regions]
+        self.lines = [(chains.kind(sides), pts, key[1]) for key, (pts, sides) in chains.cache.items()]
+        self.lines = [ln for ln in self.lines if ln[0] != "edge"]
 
-    def paint(self, x0, z0, span, size, ss=2):
+    def paint(self, x0, z0, span, size, land_counties, ss=2):
         """Window [x0, x0 + span] x [z0, z0 + span] (cells, from the grid's corner) at
-        size x size pixels. Returns (rgb uint8 (size, size, 3), index uint16 (size, size);
-        NO_REGION = none)."""
+        size x size pixels. Returns (rgb levels [(s, s, 3) uint8, s = size .. 8], county
+        index levels [(s, s) uint16]; NO_REGION = none)."""
         from PIL import Image, ImageDraw
-        k = size * ss / span                  # pixels per cell, while drawing
+        k = size * ss / span                  # pixels per cell, while drawing level 0
         pad = int(np.ceil(3.0 * k))           # blurs and shadows reach over the edge
         big = size * ss + 2 * pad
         ox, oz = x0 - pad / k, z0 - pad / k   # cell at pixel (0, 0)
@@ -479,31 +609,23 @@ class Painter:
 
         ids = Image.new("I", (big, big), NO_REGION)
         d = ImageDraw.Draw(ids)
-        for i, r in enumerate(self.regions):
-            bx0, bz0, bx1, bz1 = self.boxes[i]
-            if bx1 < ox or bx0 > x1 or bz1 < oz or bz0 > z1:
+        for i, c in enumerate(self.counties):
+            p = c["pts"] + self.off
+            if p[:, 0].max() < ox or p[:, 0].min() > x1 or p[:, 1].max() < oz or p[:, 1].min() > z1:
                 continue
-            v = r["verts"]
-            t = r["idx"][:r["top"]]
-            for j in range(0, len(t), 3):
-                d.polygon([px(v[q][0] + self.off[0], v[q][2] + self.off[1]) for q in t[j:j + 3]], fill=i)
+            for t in c["tris"]:
+                d.polygon([px(*p[q]) for q in t], fill=i)
         ids_big = np.asarray(ids, np.int64)
-        land = np.isin(ids_big, list(self.land)).astype(float)
+        land = np.isin(ids_big, land_counties).astype(float)
 
-        masks = {c: Image.new("L", (big, big), 0) for c in ("land", "coast", "sea")}
-        width = {"land": 0.11, "coast": 0.15, "sea": 0.07}
-        for (seq, closed), (pts, sides) in self.chains.cache.items():
-            kind = self.chains.kind(sides)
-            if kind == "edge":
-                continue
-            if (pts[:, 0].max() < ox or pts[:, 0].min() > x1
-                    or pts[:, 1].max() < oz or pts[:, 1].min() > z1):
-                continue
-            xy = [px(float(x), float(z)) for x, z in pts]
-            if closed:
-                xy.append(xy[0])
-            ImageDraw.Draw(masks[kind]).line(xy, fill=255, width=max(1, round(width[kind] * k)), joint="curve")
-        line = {c: np.asarray(mk, float) / 255 for c, mk in masks.items()}
+        # borders of land (coast and between provinces), for the paper's darker edges
+        edge = Image.new("L", (big, big), 0)
+        ed = ImageDraw.Draw(edge)
+        for kind, pts, closed in self.lines:
+            if kind in ("land", "coast"):
+                xy = [px(float(x), float(z)) for x, z in pts]
+                ed.line(xy + xy[:1] if closed else xy, fill=255, width=max(1, round(0.12 * k)), joint="curve")
+        edges = blur(np.asarray(edge, float) / 255, 0.35 * k)
 
         cx = ox + (np.arange(big) + 0.5) / k
         cz = oz + (np.arange(big) + 0.5) / k
@@ -537,17 +659,42 @@ class Painter:
         paper = np.empty((big, big, 3))
         paper[:] = PAPER_RGB
         paper *= (1 + 0.05 * grain + 0.04 * noise)[..., None]
-        edges = blur(np.clip(line["land"] + line["coast"], 0, 1), 0.35 * k)
         paper *= (1 - 0.22 * np.clip(edges * 2, 0, 1))[..., None]
 
-        img = sea * (1 - land[..., None]) + paper * land[..., None]
-        for c, col in (("sea", SEA_LINE), ("land", LAND_LINE), ("coast", COAST_LINE)):
-            a = line[c][..., None]
-            img = img * (1 - a) + np.array(col, float) * a
-        img = img[pad:pad + size * ss, pad:pad + size * ss]
+        base = sea * (1 - land[..., None]) + paper * land[..., None]
+        base = base[pad:pad + size * ss, pad:pad + size * ss]
+        base = Image.fromarray(np.clip(base, 0, 255).astype(np.uint8))
         ids_big = ids_big[pad:pad + size * ss, pad:pad + size * ss]
-        img = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8)).resize((size, size), Image.LANCZOS)
-        return np.asarray(img), ids_big[ss // 2::ss, ss // 2::ss].astype(np.uint16)
+        ids0 = ids_big[ss // 2::ss, ss // 2::ss].astype(np.uint16)
+
+        # every level: the background scaled, then its own lines on top
+        levels, s = [], size
+        while True:
+            kl = s * ss / span                  # drawing pixels per cell at this level
+            img = np.asarray(base.resize((s * ss, s * ss), Image.LANCZOS), float)
+            for kind in ("sea", "county", "land", "coast"):
+                width, least, col, k_from = LINES[kind]
+                if s / span < k_from:
+                    continue
+                mask = Image.new("L", (s * ss, s * ss), 0)
+                md = ImageDraw.Draw(mask)
+                w = max(least * ss, width * kl)
+                for kd, pts, closed in self.lines:
+                    if kd != kind:
+                        continue
+                    if (pts[:, 0].max() < x0 - 1 or pts[:, 0].min() > x0 + span + 1
+                            or pts[:, 1].max() < z0 - 1 or pts[:, 1].min() > z0 + span + 1):
+                        continue
+                    xy = [((x - x0) * kl, (z - z0) * kl) for x, z in pts]
+                    md.line(xy + xy[:1] if closed else xy, fill=255, width=max(1, round(w)), joint="curve")
+                a = np.asarray(mask, float)[..., None] / 255
+                img = img * (1 - a) + np.array(col, float) * a
+            img = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8)).resize((s, s), Image.LANCZOS)
+            levels.append(np.asarray(img))
+            if s <= 8:
+                break
+            s //= 2
+        return levels, mip_levels(ids0, nearest=True)
 
 
 def tile_order(size):
@@ -563,8 +710,8 @@ def tile_order(size):
 
 
 def mip_levels(img, nearest=False):
-    """The picture at its size, half, ... down to 8 (the 3DS mipmap levels); region
-    indices are picked, not mixed."""
+    """The picture at its size, half, ... down to 8 (the 3DS mipmap levels); indices
+    are picked, not mixed."""
     from PIL import Image
     out, size = [img], img.shape[0]
     while size > 8:
@@ -591,11 +738,11 @@ def rgb565(img):
     return ((r >> 3) << 11 | (g >> 2) << 5 | (b >> 3)).astype("<u2")
 
 
-def write_tile(path, rgb, ids):
-    """One texture with all mipmap levels: zlib(paper RGB565) and zlib(region index u16),
+def write_tile(path, rgb_levels, id_levels):
+    """One texture with all mipmap levels: zlib(paper RGB565) and zlib(county index u16),
     see docs/FORMATS.md ("map tiles")."""
-    paper = b"".join(tiled(rgb565(level)) for level in mip_levels(rgb))
-    index = b"".join(tiled(level.astype("<u2")) for level in mip_levels(ids, nearest=True))
+    paper = b"".join(tiled(rgb565(level)) for level in rgb_levels)
+    index = b"".join(tiled(level.astype("<u2")) for level in id_levels)
     with open(path, "wb") as f:
         f.write(b"HT01")
         for raw in (paper, index):
@@ -618,13 +765,13 @@ def tint_colors(m, regions):
     return out
 
 
-def write(path, m, regions, tiles=1):
+def write(path, m, regions, county_list, borders, tiles=1):
     """map3d.bin, see docs/FORMATS.md."""
     rows, cols = m["province"].shape
     nv = sum(len(r["verts"]) for r in regions)
     ni = sum(len(r["idx"]) for r in regions)
-    head = struct.pack("<4sHHHHIIIfHH", b"HM3D", 4, len(regions), m["land"], len(m2.FACTIONS),
-                       nv, ni, TEX, float(cols), tiles, 0)
+    head = struct.pack("<4sHHHHIIIfHH", b"HM3D", 5, len(regions), m["land"], len(m2.FACTIONS),
+                       nv, ni, TEX, float(cols), tiles, len(county_list))
     for fname, col in m2.FACTIONS:
         head += struct.pack("<BBBx16s", *col, fname.encode())
     nlist, v0, i0 = b"", 0, 0
@@ -635,27 +782,43 @@ def write(path, m, regions, tiles=1):
         nlist += struct.pack("<%dh" % len(r["neigh"]), *r["neigh"])
         v0 += len(r["verts"])
         i0 += len(r["idx"])
+    for c in county_list:
+        head += struct.pack("<H2x20sff", c["region"], c["name"].encode()[:19], c["cx"], c["cz"])
     if len(nlist) % 4:
         nlist += b"\0\0"
     verts = b"".join(struct.pack("<4f", *v) for r in regions for v in r["verts"])
     idx = b"".join(struct.pack("<%dH" % len(r["idx"]), *r["idx"]) for r in regions)
     if len(idx) % 4:
         idx += b"\0\0"
+    # borders between provinces as triangle strips: per point (x, z, nx, nz) on both sides
+    table, strips, start = b"", [], 0
+    for b in borders:
+        p = b["pts"]
+        if b["closed"]:
+            p = np.vstack([p, p[:1]])
+        n = line_normals(p, False)
+        for (x, z), (nx, nz) in zip(p, n):
+            strips.append(struct.pack("<4f", x, z, nx, nz))
+            strips.append(struct.pack("<4f", x, z, -nx, -nz))
+        table += struct.pack("<HHII", b["a"], b["b"], start, 2 * len(p))
+        start += 2 * len(p)
+    lines = struct.pack("<II", len(borders), start) + table + b"".join(strips)
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "wb") as f:
-        f.write(head + nlist + verts + idx)
+        f.write(head + nlist + verts + idx + lines)
     return nv, ni
 
 
-def write_textures(folder, m, regions, chains, tiles, png=None):
+def write_textures(folder, m, regions, county_list, chains, tiles, png=None):
     """overview.bin (the whole map in one texture) and tiles/<col>_<row>.bin."""
-    painter = Painter(m, regions, chains)
+    painter = Painter(m, county_list, chains)
+    land = [i for i, c in enumerate(county_list) if regions[c["region"]]["kind"] != KIND_SEA]
     world = painter.world
     tdir = os.path.join(folder, "tiles")
     os.makedirs(tdir, exist_ok=True)
-    for name in os.listdir(tdir):
-        os.remove(os.path.join(tdir, name))
-    over = painter.paint(0, 0, world, TEX)
+    for fname in os.listdir(tdir):
+        os.remove(os.path.join(tdir, fname))
+    over = painter.paint(0, 0, world, TEX, land)
     write_tile(os.path.join(folder, "overview.bin"), *over)
     span = world / tiles
     full = None
@@ -664,14 +827,17 @@ def write_textures(folder, m, regions, chains, tiles, png=None):
                 np.zeros((TEX * tiles, TEX * tiles), np.uint16))
     for ty in range(tiles):
         for tx in range(tiles):
-            rgb, ids = painter.paint(tx * span, ty * span, span, TEX)
+            rgb, ids = painter.paint(tx * span, ty * span, span, TEX, land)
             write_tile(os.path.join(tdir, "%d_%d.bin" % (tx, ty)), rgb, ids)
             if full:
-                full[0][ty * TEX:(ty + 1) * TEX, tx * TEX:(tx + 1) * TEX] = rgb
-                full[1][ty * TEX:(ty + 1) * TEX, tx * TEX:(tx + 1) * TEX] = ids
+                full[0][ty * TEX:(ty + 1) * TEX, tx * TEX:(tx + 1) * TEX] = rgb[0]
+                full[1][ty * TEX:(ty + 1) * TEX, tx * TEX:(tx + 1) * TEX] = ids[0]
             print("  tile %d,%d" % (tx, ty), flush=True)
     if png:
-        preview(png, m, regions, full)
+        preview(png, m, regions, county_list, full)
+        base, ext = os.path.splitext(png)
+        for lv in (0, 1, 2):   # the overview's levels: what far views show
+            preview(base + "_over%d" % lv + ext, m, regions, county_list, (over[0][lv], over[1][lv]))
 
 
 def write_obj(path, regions):
@@ -688,12 +854,13 @@ def write_obj(path, regions):
             base += len(r["verts"])
 
 
-def preview(path, m, regions, tex):
+def preview(path, m, regions, county_list, tex):
     """The picture with the owners' colours, as the 3DS shows it from above."""
     from PIL import Image
     rgb, ids = tex
+    region_tint = tint_colors(m, regions)
     tint = np.full((NO_REGION + 1, 3), 255.0)
-    tint[:len(regions)] = tint_colors(m, regions)
+    tint[:len(county_list)] = [region_tint[c["region"]] for c in county_list]
     out = rgb.astype(float) * tint[ids] / 255
     Image.fromarray(out.astype(np.uint8)).save(path)
 
@@ -711,15 +878,16 @@ def main(argv):
     p.add_argument("--obj", help="also write a Wavefront .obj (one object per region) for Blender")
     a = p.parse_args(argv)
     m = m2.generate(a.seed, a.size, a.provinces, a.coast)
-    regions, chains = build(m)
-    assert len(regions) < NO_REGION
+    regions, county_list, borders, chains = build(m)
+    assert len(county_list) < NO_REGION
     for old in ("map_tex.bin",):
         if os.path.exists(os.path.join(a.out, old)):
             os.remove(os.path.join(a.out, old))
-    nv, ni = write(os.path.join(a.out, "map3d.bin"), m, regions, a.tiles)
-    print("%s: %d regions (%d land), %d vertices, %d triangles (selection only), %dx%d tiles of %d^2"
-          % (a.out, len(regions), m["land"], nv, ni // 3, a.tiles, a.tiles, TEX), flush=True)
-    write_textures(a.out, m, regions, chains, a.tiles, a.png)
+    nv, ni = write(os.path.join(a.out, "map3d.bin"), m, regions, county_list, borders, a.tiles)
+    print("%s: %d regions (%d land), %d counties, %d province borders, %d vertices, "
+          "%dx%d tiles of %d^2" % (a.out, len(regions), m["land"], len(county_list), len(borders),
+                                   nv, a.tiles, a.tiles, TEX), flush=True)
+    write_textures(a.out, m, regions, county_list, chains, a.tiles, a.png)
     if a.obj:
         write_obj(a.obj, regions)
 

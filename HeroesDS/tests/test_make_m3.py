@@ -1,4 +1,5 @@
-"""Tests for tools/make_m3.py (the flat textured 3D map for the 3DS, in tiles).
+"""Tests for tools/make_m3.py (the flat textured 3D map for the 3DS, in tiles, with
+counties and detail by distance).
 
 Run from the repo root:  python -m unittest discover -s HeroesDS/tests
 """
@@ -32,7 +33,12 @@ class MeshTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.m = make_m3.m2.generate(5, 40, 14, 1.0)
-        cls.regions, cls.chains = make_m3.build(cls.m)
+        cls.regions, cls.counties, cls.borders, cls.chains = make_m3.build(cls.m)
+        cls.land = [i for i, c in enumerate(cls.counties) if cls.regions[c["region"]]["kind"] != make_m3.KIND_SEA]
+
+    def paint(self, x0, z0, span, size):
+        painter = make_m3.Painter(self.m, self.counties, self.chains)
+        return painter.paint(x0, z0, span, size, self.land)
 
     def test_outlines_close(self):
         # a province touching itself diagonally: rings are still simple loops
@@ -41,6 +47,20 @@ class MeshTest(unittest.TestCase):
         for a, rs in rings.items():
             for ring in rs:
                 self.assertEqual(len(ring), len(set(ring)), (a, ring))
+
+    def test_counties_split_provinces(self):
+        rng = np.random.default_rng(1)
+        grid, prov_of = make_m3.counties(self.m, rng)
+        prov = self.m["province"]
+        for c, p in enumerate(prov_of):
+            self.assertTrue((prov[grid == c] == p).all())
+        # big land provinces get several counties, sea zones one
+        for p in range(self.m["land"]):
+            cells = int((prov == p).sum())
+            if cells >= 3 * make_m3.COUNTY_CELLS:
+                self.assertGreater(prov_of.count(p), 1)
+        for p in range(self.m["land"], len(self.m["names"])):
+            self.assertLessEqual(prov_of.count(p), 1)
 
     def test_tops_cover_the_map(self):
         # the borders move, but the tops still tile the whole grid
@@ -59,6 +79,13 @@ class MeshTest(unittest.TestCase):
         lines = {k: (p, k[1]) for k, (p, _) in self.chains.cache.items()}
         self.assertEqual(make_m3.crossings(lines), set())
 
+    def test_province_borders_join_provinces(self):
+        self.assertTrue(self.borders)
+        for b in self.borders:
+            self.assertNotEqual(b["a"], b["b"])
+            for side in (b["a"], b["b"]):
+                self.assertNotEqual(self.regions[side]["kind"], make_m3.KIND_SEA)
+
     def test_vertex_limit_and_flat(self):
         for r in self.regions:
             self.assertLess(len(r["verts"]), 65536)
@@ -74,27 +101,36 @@ class MeshTest(unittest.TestCase):
         levels = make_m3.mip_levels(img)
         self.assertEqual([lv.shape[0] for lv in levels], [64, 32, 16, 8])
 
-    def paint(self, x0, z0, span, size):
-        painter = make_m3.Painter(self.m, self.regions, self.chains)
-        return painter.paint(x0, z0, span, size)
-
-    def test_texture_ids_match_regions(self):
+    def test_texture_ids_match_counties(self):
         rows, cols = self.m["province"].shape
         rgb, ids = self.paint(0, 0, cols, 256)
-        self.assertEqual(rgb.shape, (256, 256, 3))
-        self.assertEqual(ids.dtype, np.uint16)
-        prov = self.m["province"]
-        # a cell whose whole neighbourhood is one region: its middle pixel says that region
-        index = {r["id"]: i for i, r in enumerate(self.regions)}
+        self.assertEqual([lv.shape[0] for lv in rgb], [256, 128, 64, 32, 16, 8])
+        self.assertEqual(ids[0].dtype, np.uint16)
+        grid, _ = make_m3.counties(self.m, np.random.default_rng(self.m["seed"] + 77))
+        # a cell whose whole neighbourhood is one county: its middle pixel says that county
         hits = 0
         for r in range(2, rows - 2):
             for c in range(2, cols - 2):
-                block = prov[r - 2:r + 3, c - 2:c + 3]
-                if (block == prov[r, c]).all():
+                block = grid[r - 2:r + 3, c - 2:c + 3]
+                if (block == grid[r, c]).all():
                     y, x = int((r + 0.5) * 256 / rows), int((c + 0.5) * 256 / cols)
-                    self.assertEqual(ids[y, x], index[int(prov[r, c])])
+                    self.assertEqual(ids[0][y, x], grid[r, c])
                     hits += 1
-        self.assertGreater(hits, 50)
+        self.assertGreater(hits, 30)
+
+    def test_far_levels_drop_inner_lines(self):
+        # at 2 pixels per cell (under K_PROVINCE) the land shows no province lines:
+        # its pixels stay paper-coloured, only the coast is dark
+        cols = self.m["province"].shape[1]
+        rgb, ids = self.paint(0, 0, cols, 2 * cols // 8 * 8)
+        lv = rgb[0].astype(int)
+        land = np.isin(ids[0], self.land)
+        inner = land.copy()
+        for dy in (-2, 0, 2):
+            for dx in (-2, 0, 2):
+                inner &= np.roll(np.roll(land, dy, 0), dx, 1)
+        dark = lv[inner].sum(1) < 300
+        self.assertLess(dark.mean(), 0.02)
 
     def test_tiles_match_the_whole(self):
         # the north-east quarter drawn as a tile equals that quarter of the whole map at
@@ -102,8 +138,8 @@ class MeshTest(unittest.TestCase):
         cols = self.m["province"].shape[1]
         whole_rgb, whole_ids = self.paint(0, 0, cols, 128)
         tile_rgb, tile_ids = self.paint(cols / 2, 0, cols / 2, 64)
-        self.assertGreater((tile_ids == whole_ids[:64, 64:]).mean(), 0.99)
-        diff = np.abs(tile_rgb.astype(int) - whole_rgb[:64, 64:].astype(int))
+        self.assertGreater((tile_ids[0] == whole_ids[0][:64, 64:]).mean(), 0.99)
+        diff = np.abs(tile_rgb[0].astype(int) - whole_rgb[0][:64, 64:].astype(int))
         self.assertLess(diff.mean(), 3)
 
     def test_tile_file(self):
@@ -126,16 +162,21 @@ class MeshTest(unittest.TestCase):
     def test_file_layout(self):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "map3d.bin")
-            nv, ni = make_m3.write(path, self.m, self.regions, 2)
+            nv, ni = make_m3.write(path, self.m, self.regions, self.counties, self.borders, 2)
             with open(path, "rb") as f:
                 data = f.read()
         magic, ver, nreg, nland, nfac = struct.unpack_from("<4sHHHH", data)
-        self.assertEqual((magic, ver, nreg, nland), (b"HM3D", 4, len(self.regions), self.m["land"]))
-        self.assertEqual(struct.unpack_from("<H", data, 28)[0], 2)
-        off = 32 + 20 * nfac + 80 * nreg
+        self.assertEqual((magic, ver, nreg, nland), (b"HM3D", 5, len(self.regions), self.m["land"]))
+        tiles, ncty = struct.unpack_from("<HH", data, 28)
+        self.assertEqual((tiles, ncty), (2, len(self.counties)))
+        off = 32 + 20 * nfac + 80 * nreg + 32 * ncty
         nn = sum(len(r["neigh"]) for r in self.regions)
-        size = off + ((2 * nn + 3) & ~3) + 16 * nv + ((2 * ni + 3) & ~3)
-        self.assertEqual(len(data), size)
+        off += ((2 * nn + 3) & ~3) + 16 * nv + ((2 * ni + 3) & ~3)
+        nb, nlv = struct.unpack_from("<II", data, off)
+        self.assertEqual(nb, len(self.borders))
+        starts = [struct.unpack_from("<HHII", data, off + 8 + 12 * i) for i in range(nb)]
+        self.assertEqual(sum(s[3] for s in starts), nlv)
+        self.assertEqual(len(data), off + 8 + 12 * nb + 16 * nlv)
 
 
 if __name__ == "__main__":

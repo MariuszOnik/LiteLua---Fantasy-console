@@ -147,3 +147,9 @@ jest w pełnym 3D (wzór: obrazki „Risk” — płaskie prowincje jak płytki,
   widziane przez kamery (do 6), doczytywane w wątku w tle. Koszt klatki nie zależy od
   wielkości mapy; ograniczeniem jest pamięć i czas doczytania. Numery regionów 16-bit
   (było 8: do 254 regionów). Rozsądnie dla rozgrywki: 200–400 prowincji.
+- **Uzupełnienie (2026-11-01, decyzja użytkownika):** szczegóły wg oddalenia jak w grach
+  strategicznych: daleko granice i nazwy państw, średnio prowincje, blisko powiaty
+  (prowincje dzielone na powiaty). Granice prowincji i powiatów są w poziomach mipmap
+  tekstury (karta sama wybiera), granice państw rysuje 3DS z właścicieli, bo zmieniają
+  się w grze. Nazwy nie znikają z odległością w jednym widoku — skalowane perspektywą,
+  nachodzące pomijane. Kamera bez obrotu; L/R zmienia kąt patrzenia.

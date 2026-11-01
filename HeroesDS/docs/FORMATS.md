@@ -213,12 +213,12 @@ służą tylko do podświetlenia wybranego. Little-endian, sekcje bez przerw, ka
 do 4 bajtów. Współrzędne: komórka siatki M2 = 1×1, środek mapy w (0, 0), x = kolumna,
 z = wiersz (północ = −z).
 
-`map3d.bin` (wersja 4):
+`map3d.bin` (wersja 5):
 ```
 nagłówek (32 B)
-  char[4] "HM3D"; u16 wersja = 4; u16 nregions; u16 nland; u16 nfactions
+  char[4] "HM3D"; u16 wersja = 5; u16 nregions; u16 nland; u16 nfactions
   u32 nverts; u32 nidx; u32 tex (bok tekstury, 1024); f32 world (szerokość mapy = kolumny)
-  u16 tiles (kafli na bok); u16 0
+  u16 tiles (kafli na bok); u16 ncounties
 nfactions × 20 B:  u8 r, g, b, 0; char[16] nazwa
 nregions × 80 B (region = prowincja, strefa morska albo ląd bez prowincji):
   i16 id (numer z M2; -1 = ląd bez prowincji); i8 rodzaj (0 ląd, 1 morze, 2 ląd bez
@@ -228,9 +228,18 @@ nregions × 80 B (region = prowincja, strefa morska albo ląd bez prowincji):
   u32 vstart, vcount (wierzchołki regionu); u32 istart, icount (indeksy);
   u32 itop (pierwsze itop indeksów: dokładny wierzch; reszta: pas obrysu wewnątrz
   granicy, szeroki 0,3); u32 0
+ncounties × 32 B (powiat; morze i ląd bez prowincji = jeden powiat):
+  u16 region (indeks w tabeli regionów); 2 × 0; char[20] nazwa (powiat jedyny w
+  prowincji ma jej nazwę); f32 cx, cz (napis)
 i16 × Σ sąsiadów     listy sąsiadów regionów po kolei (id), dopełnione do 4 B
 nverts × 16 B        f32 x, y (= 0), z, 1
 nidx × u16           trójkąty, indeksy względem vstart regionu (< 65536), dopełnione do 4 B
+u32 nborders; u32 nlineverts
+nborders × 12 B      granica między dwiema prowincjami lądu (odcinek między węzłami):
+                     u16 a, b (regiony po bokach); u32 start, count (wierzchołki paska)
+nlineverts × 16 B    f32 x, z, nx, nz: punkty granic jako pas trójkątów (triangle strip),
+                     każdy punkt dwa razy — z normalną i z odwróconą; 3DS przesuwa punkt
+                     o normalną × szerokość (rysuje te granice, gdzie właściciele różni)
 ```
 
 Tekstury: `overview.bin` (cała mapa) i `tiles/<kolumna>_<wiersz>.bin` (kafel `i, j`
@@ -239,13 +248,16 @@ od północnego). Każdy plik:
 ```
 char[4] "HT01"
 u32 rozmiar, u32 spakowane; zlib: obraz bez kolorów właścicieli, RGB565 (u16)
-u32 rozmiar, u32 spakowane; zlib: numer regionu na piksel (u16, indeks w tabeli
-                                  regionów; 0xFFFF = brak)
+u32 rozmiar, u32 spakowane; zlib: numer powiatu na piksel (u16, indeks w tabeli
+                                  powiatów; 0xFFFF = brak)
 ```
 (każda spakowana część dopełniona do 4 B). Obie części mają wszystkie poziomy mipmap
 (1024, 512, … 8 px — tak jak układa je `C3D_TexInitMipmap`), każdy w kolejności
 tekstury 3DS (kafle 8×8 od dolnego wiersza, w kaflu porządek Mortona; `tile_order`).
-Numery na mniejszych poziomach są brane z pikseli, nie mieszane. Kafle rysowane są
+Numery na mniejszych poziomach są brane z pikseli, nie mieszane. Każdy poziom ma swoje
+linie: wybrzeże zawsze, granice prowincji i stref morskich od 3 pikseli na komórkę
+(`K_PROVINCE`), granice powiatów od 14 (`K_COUNTY`) — karta, wybierając poziom wg
+odległości, sama pokazuje mniej szczegółów daleko. Kafle rysowane są
 z zakładką, a szum i fale leżą na całej mapie, więc na stykach nie ma szwów. 3DS przy
-wczytaniu mnoży obraz przez kolor właściciela regionu piksela (`0,62 × kolor frakcji
+wczytaniu mnoży obraz przez kolor właściciela regionu powiatu piksela (`0,62 × kolor frakcji
 + 0,38 × biały`; morze bez zmian), a numery poziomu 0 zostawia do stuknięć.
