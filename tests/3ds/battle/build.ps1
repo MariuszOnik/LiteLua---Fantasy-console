@@ -27,7 +27,7 @@ if ($LASTEXITCODE) { exit $LASTEXITCODE }
 # make does not see changes inside romfs/: drop the .3dsx so the models are always packed anew
 Remove-Item -ErrorAction SilentlyContinue (Join-Path $here "battle3d.3dsx"), (Join-Path $here "battle3d.smdh")
 $title = ("Battle 3D $tag " + (Get-Date -Format "MM-dd HH:mm")).Replace("  ", " ")
-& $bash -lc "$env_ && make APP_TITLE='$title'"
+& $bash -lc "$env_ && make APP_TITLE='$title' APP_DESCRIPTION='$title'"   # Azahar on Android lists the description
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 if ($what -eq "run") {
     $azahar = "D:\Programowanie\azahar-windows-mxe-2127.0-alpha3\azahar-windows-mxe-2127.0-alpha3\azahar.exe"

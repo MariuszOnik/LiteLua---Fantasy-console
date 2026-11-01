@@ -24,7 +24,7 @@ if ($LASTEXITCODE) { exit $LASTEXITCODE }
 Remove-Item -ErrorAction SilentlyContinue (Join-Path $here "heroes3d.3dsx"), (Join-Path $here "heroes3d.smdh")
 # the tag and the time in the app's title: builds differ in the emulator's list
 $title = "HeroesDS $tag " + (Get-Date -Format "MM-dd HH:mm")
-& $bash -lc "$env_ && make APP_TITLE='$title'"
+& $bash -lc "$env_ && make APP_TITLE='$title' APP_DESCRIPTION='$title'"   # Azahar on Android lists the description
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 New-Item -ItemType Directory -Force (Join-Path $here "builds") | Out-Null
 $copy = Join-Path $here "builds\heroes3d-$tag.3dsx"
