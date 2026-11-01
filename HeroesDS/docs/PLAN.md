@@ -12,7 +12,8 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
 **Przejście na 3DS (H13, 2026-11-01) — M3: mapa polityczna w pełnym 3D.**
 `tools/make_m3.py` (ląd z `make_m2.generate`, ziarno 77): granice prowincji i stref
 morskich jako wspólne łańcuchy z „noisy edges” (fraktalne ząbki jak na mapie rysowanej
-ręcznie, bez przecięć). Trzy podejścia, każde z buildem w `3ds/builds/` (poza gitem; `3dsuild.ps1 -tag <nazwa>`, `run` = Azahar):
+ręcznie, bez przecięć). Trzy podejścia, każde z buildem w `3ds/builds/` (poza gitem;
+`3ds\build.ps1 -tag <nazwa>`, `run` = Azahar):
 `m3a-smooth` (wygładzone granice, płyty lądu ze ściankami), `m3b-noisy` (fraktalne
 granice w meshu, ~52 tys. trójkątów, ~12–16 ms na klatkę w Azaharze), **`m3c-flat`
 (obecny)**: płaska mapa = jeden prostokąt z teksturą 1024² z mipmapami (pergamin, linie,
