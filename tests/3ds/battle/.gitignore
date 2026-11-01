@@ -1,0 +1,7 @@
+build/
+*.3dsx
+*.smdh
+*.elf
+*.map
+# game models made locally by ../army/make_knight.py (private use only)
+romfs/*.bin

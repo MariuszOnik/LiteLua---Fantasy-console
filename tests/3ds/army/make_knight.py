@@ -9,6 +9,10 @@ shrunk into one atlas, a quarter each; the animation is baked into vertex frames
   python make_knight.py [--unit teutonic|polish] [--m2 E:/AI/M2TW] [--anim run|charge]
                         [--variant 0] [--quarter 256] [--tris 700]
 --tris makes a lighter copy (optimize.py: hidden triangles out, then collapses), *_lo.bin.
+--anim idle,run puts several animations in one file, format "LLM2" (else "LLMS"):
+  "LLM2", u16 verts, tris, frames (all), texsize, animations, 0,
+  animations * (char name[8], u16 first frame, u16 frames, f32 seconds, f32 metres/s),
+  then uv, triangles, frames, texture as in make_army.py.
 """
 import argparse, os, struct, sys
 import numpy as np
@@ -31,13 +35,24 @@ UNITS = {
                U + "mounts/barded_horse/textures/horse_barding_poland.texture", "polish.bin"),
 }
 HORSE = U + "mounts/barded_horse/mount_barded_horse_lod2.mesh"
+# animations: rider (lance) and horse, played together; 20 frames a second
+A = "data/animations/"
+ANIMS = {
+    "idle": (A + "HR_lance/HR_lance_horse_req/HR_lance_fs_horse_stand_a_idle.cas", A + "fs_horse/fs_horse_stand_a_idle.cas"),
+    "fidget": (A + "HR_lance/HR_lance_horse_req/HR_lance_fs_horse_stand_a_hf_idle_2.cas", A + "fs_horse/fs_horse_stand_a_hf_idle_2.cas"),
+    "run": (A + "HR_lance/HR_lance_horse_req/HR_lance_fs_horse_run.cas", A + "fs_horse/fs_horse_run.cas"),
+    "charge": (A + "HR_lance/HR_lance_horse_req/HR_lance_fs_horse_charge.cas", A + "fs_horse/fs_horse_charge.cas"),
+}
+SPEED = {"idle": 0.0, "fidget": 0.0, "charge": 9.0}   # metres per second (run: --speed)
+FPS = 20.0
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--unit", default="teutonic", choices=sorted(UNITS))
     ap.add_argument("--m2", default="E:/AI/M2TW")
-    ap.add_argument("--anim", default="run")
+    ap.add_argument("--anim", default="run")              # several: idle,run -> LLM2 (see below)
+    ap.add_argument("--out", default="")                  # output folder, default romfs/ here
     ap.add_argument("--variant", type=int, default=0)
     ap.add_argument("--quarter", type=int, default=256)   # texels per side of each texture
     ap.add_argument("--speed", type=float, default=7.0)   # metres per second, a gallop
@@ -52,14 +67,17 @@ def main():
     idx = m2anim.index()
     rider, rprims = m2bake.part_mesh(*m2mesh.read(rider_mesh)[:2], a.variant, True)
     horse, hprims = m2bake.part_mesh(*m2mesh.read(os.path.join(teu, HORSE))[:2], a.variant, False)
-    name, rcas, hcas = next(x for x in m2bake.ANIMS if x[0] == a.anim)
     saddle = m2anim.read(m2bake.ANIMS[0][2], idx)[1][0, 0].copy()
     lift = np.array([0, saddle[1], 0])
-    rf = m2bake.frames_of(rider, rcas, m2bake.HUMAN, m2bake.RIDER_FALLBACK, idx, np.zeros(3))
-    hf = m2bake.frames_of(horse, hcas, m2bake.HORSE_PARENTS, np.arange(len(m2bake.HORSE_PARENTS)), idx, saddle)
-    bob = m2anim.read(hcas, idx)[1][:, 0] - saddle
-    frames = [np.concatenate([h + lift, r + lift + m2bake.RIDER_OFFSET + bob[i]])
-              for i, (h, r) in enumerate(zip(hf, rf))]
+    frames, table = [], []      # table: (name, first frame, frames, metres per second)
+    for name in a.anim.split(","):
+        rcas, hcas = ANIMS[name]
+        rf = m2bake.frames_of(rider, rcas, m2bake.HUMAN, m2bake.RIDER_FALLBACK, idx, np.zeros(3))
+        hf = m2bake.frames_of(horse, hcas, m2bake.HORSE_PARENTS, np.arange(len(m2bake.HORSE_PARENTS)), idx, saddle)
+        bob = m2anim.read(hcas, idx)[1][:, 0] - saddle
+        table.append((name, len(frames), len(rf), SPEED[name] if name in SPEED else a.speed))
+        frames += [np.concatenate([h + lift, r + lift + m2bake.RIDER_OFFSET + bob[i]])
+                   for i, (h, r) in enumerate(zip(hf, rf))]
 
     # atlas: horse top left, rider (unit) top right, attachments bottom left
     q = a.quarter
@@ -98,8 +116,14 @@ def main():
     tri = tri.astype("<u2")
     nv, nt = len(uv), len(tri)
 
-    out = bytearray(b"LLMS")
-    out += struct.pack("<4H2f", nv, nt, len(frames), 2 * q, len(frames) / 20.0, a.speed)  # 20 fps
+    if len(table) == 1:   # one animation: the army test's format
+        out = bytearray(b"LLMS")
+        out += struct.pack("<4H2f", nv, nt, len(frames), 2 * q, len(frames) / FPS, table[0][3])
+    else:
+        out = bytearray(b"LLM2")
+        out += struct.pack("<6H", nv, nt, len(frames), 2 * q, len(table), 0)
+        for name, first, count, speed in table:
+            out += struct.pack("<8s2H2f", name.encode(), first, count, count / FPS, speed)
     out += uv.tobytes()
     out += tri.tobytes()
     if nt % 2:
@@ -107,10 +131,10 @@ def main():
     for p in frames:
         out += p.astype("<f4").tobytes()
     out += tile_order(np.asarray(atlas)).astype("<u2").tobytes()
-    dst = os.path.join(HERE, "romfs", out_name)
+    dst = os.path.join(a.out or os.path.join(HERE, "romfs"), out_name)
     open(dst, "wb").write(out)
     atlas.save(os.path.join(a.m2, "out", f"{a.unit}_atlas.png"))
-    print(f"{dst}: {nv} verts, {nt} tris, {len(frames)} frames ({name}), texture {2 * q}, {len(out)} bytes")
+    print(f"{dst}: {nv} verts, {nt} tris, {len(frames)} frames ({a.anim}), texture {2 * q}, {len(out)} bytes")
 
 
 if __name__ == "__main__":

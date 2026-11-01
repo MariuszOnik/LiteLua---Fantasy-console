@@ -54,6 +54,8 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - `tests/carts/` — kartridże testowe (`bench` — benchmark VM, D19; `files` — piaskownica, D20; `sound` — P7; `song` — utwory `.lsong` na żywo, D41; `edit` — edytor kodu; `map` — mapy kafelkowe, D50; `oop` — pomiar klas/middleclass, D54; `army3d` — warstwa 3D i żołnierze, D60); `build.ps1` kopiuje je na kartę emulatora
 - `tests/3ds/army/` — test na 3DS (citro3d): maszerujący żołnierze 3D z Imperial Glory (morph);
   model robi lokalnie `make_army.py` (zasoby gry poza repo), `build.ps1 run` → Azahar
+- `tests/3ds/battle/` — prototyp bitwy na 3DS: mapa heksów na wzgórzach, drzewa, oddziały rycerzy
+  z Medieval II (`../army/make_knight.py`: postój/galop/szarża, odchudzone `optimize.py`)
 - `tests/tools/` — testy narzędzi PC: `python -m unittest discover -s tests/tools`
   (też edytor `@code` i launcher z atrapami API — wymaga pakietu `lupa`, inaczej pominięty)
 - `HeroesDS/` — gra w stylu Heroes IV (własny `docs/PLAN.md`, `docs/DECISIONS.md` — decyzje H<n>,
