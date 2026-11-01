@@ -25,9 +25,11 @@ mgła wojny, Lua na 3DS** — `m3g-scenario-2x2` (`-gen "--tiles 2 --scenario
 `ll_data.c` (format w `FORMATS.md`, wzór do edycji: `HeroesDS/scenarios/six-realms.lua`):
 państwa (do 32, też państwa-miasta), gracz, mgła, właściciele i nazwy prowincji, nazwy
 powiatów. Mgła: widać własne prowincje gracza i ich sąsiadów (ląd i morze), raz widziane
-zostają wyblakłe, nieznane ciemne, bez nazw i granic państw (linie prowincji z tekstury
-widać — do decyzji). X = mgła wł./wył., Y = widok następnego państwa; zmiana kolorów
-przemalowuje kafle w tle (najpierw przegląd). Wcześniej **`m3f`: klikanie powiatów** — `m3f-counties-2x2` i
+zostają szare, nieznane ciemne, bez nazw i granic państw. X = mgła wł./wył., Y = widok
+następnego państwa. **`m3h-fastfog-2x2` / `-big4x4`:** mgła to osobna tekstura 512²
+nad całą mapą (RGBA4, piksel → region liczony raz z przeglądu), więc zmiana trwa
+milisekundy, a kafle mapy się nie zmieniają (wcześniej: przemalowanie wszystkich kafli,
+sekundy); miękkie brzegi z filtrowania. Wcześniej **`m3f`: klikanie powiatów** — `m3f-counties-2x2` i
 `m3f-counties-big4x4` (z bliska, gdy widać linie powiatów — `COUNTY_ZOOM` — stuknięcie
 zaznacza powiat: jasne światło i obrys, prowincja słabiej; dalej cała prowincja; nazwy
 państw pastelowe z cieniem, na najbliższej środka prowincji państwa, która mieści napis

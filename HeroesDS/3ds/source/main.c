@@ -8,7 +8,8 @@
 // are put on while loading. Each region's exact shape (romfs:/map3d.bin) is drawn only
 // to light up the selected one. A scenario (romfs:/scenario.lua, read by LiteLua's data
 // parser with Lua 5.4 -- the same as on the DS) sets the realms (city-states too), the
-// player, owners and names; fog of war shows the player's view. Bottom screen: the map,
+// player, owners and names; fog of war shows the player's view -- a small texture over
+// the map, so turning it or the view changes nothing in the map's own textures. Bottom screen: the map,
 // tap a province to select it, drag to pan, L/R tilt the camera, X fog on/off, Y the
 // next realm's view. Top screen: a closer stereo view and the info.
 #include <3ds.h>
@@ -33,6 +34,7 @@
 #define MAX_LABELS 512           // names placed on one screen
 #define COUNTY_ZOOM 24.0f        // nearer than this, taps pick counties (their lines show)
 #define MAX_REALMS 32            // as in make_m3.py
+#define FOG_TEX 512              // the fog texture's size (over the whole map)
 
 #define DISPLAY_TRANSFER_FLAGS \
 	(GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(0) | GX_TRANSFER_RAW_COPY(0) | \
@@ -117,6 +119,8 @@ static int* neighStart;      // region i's neighbours: neigh[neighStart[i] .. ne
 static int* neigh;           // region indices
 static u8* regionFog;        // per region: 0 never seen, 1 seen before, 2 seen now
 static u8* known;            // per region: seen at some time
+static C3D_Tex fogTex;       // fog over the whole map, soft edges from filtering
+static u16* fogRegion;       // region index per fog texel (texture order)
 static County* counties;
 static Border* borders;
 static u32 nborders;
@@ -202,15 +206,10 @@ static void* linearCopy(const void* src, size_t size)
 	return p;
 }
 
-// the colour the paper of a region is multiplied by: its owner's, faded where the
-// player saw it before, dull where never
+// the colour the paper of a region is multiplied by: its owner's
 static void regionTint(int i, u8* rgb)
 {
 	const Region* g = &regions[i];
-	if (regionFog[i] == 0) {
-		rgb[0] = 128; rgb[1] = 121; rgb[2] = 108;
-		return;
-	}
 	if (g->kind == KIND_SEA) {
 		rgb[0] = rgb[1] = rgb[2] = 255;
 	} else if (g->kind == KIND_NEUTRAL || g->owner < 0) {
@@ -220,10 +219,6 @@ static void regionTint(int i, u8* rgb)
 		rgb[0] = TINT * f->r + (1 - TINT) * 255;
 		rgb[1] = TINT * f->g + (1 - TINT) * 255;
 		rgb[2] = TINT * f->b + (1 - TINT) * 255;
-	}
-	if (regionFog[i] == 1) {
-		int grey = (rgb[0] * 30 + rgb[1] * 59 + rgb[2] * 11) / 100;
-		for (int k = 0; k < 3; k++) rgb[k] = (rgb[k] + grey) * 0.42f;
 	}
 }
 
@@ -575,8 +570,39 @@ static void texturesExit(void)
 	free(paperBuf);
 }
 
-// colours changed (owners, fog): every texture is painted again, the one seen first
-static void repaint(void)
+// the fog texture: which region every texel lies in (from the overview's counties)
+static bool fogInit(void)
+{
+	if (!C3D_TexInit(&fogTex, FOG_TEX, FOG_TEX, GPU_RGBA4)) return false;
+	C3D_TexSetFilter(&fogTex, GPU_LINEAR, GPU_LINEAR);
+	C3D_TexSetWrap(&fogTex, GPU_CLAMP_TO_EDGE, GPU_CLAMP_TO_EDGE);
+	fogRegion = malloc(FOG_TEX * FOG_TEX * sizeof(u16));
+	if (!fogRegion) return false;
+	u32 step = hdr.tex / FOG_TEX;
+	for (u32 y = 0; y < FOG_TEX; y++)
+		for (u32 x = 0; x < FOG_TEX; x++) {
+			u16 c = overview.ids[texIndex(x * step + step / 2, y * step + step / 2, hdr.tex)];
+			fogRegion[texIndex(x, y, FOG_TEX)] = c < hdr.ncounties ? counties[c].region : NO_REGION;
+		}
+	return true;
+}
+
+// the fog as the player sees now: never seen -- dark, seen before -- a grey veil, seen
+// now -- clear (a few milliseconds: the map's textures stay as they are)
+static void fogPaint(void)
+{
+	// RGBA4: r g b a, 4 bits each
+	static const u16 look[3] = { 0x432D, 0x7777, 0x0000 };
+	u16* out = fogTex.data;
+	for (u32 k = 0; k < FOG_TEX * FOG_TEX; k++) {
+		u16 r = fogRegion[k];
+		out[k] = r == NO_REGION ? 0 : look[regionFog[r]];
+	}
+	C3D_TexFlush(&fogTex);
+}
+
+// colours changed (owners): every texture is painted again, the one seen first
+static void __attribute__((unused)) repaint(void)
 {
 	ownersChanged();
 	overview.stale = true;
@@ -931,6 +957,23 @@ static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view, float zoom)
 		if (ownerOf(borders[i].a) != ownerOf(borders[i].b) && regionFog[borders[i].a] && regionFog[borders[i].b])
 			C3D_DrawArrays(GPU_TRIANGLE_STRIP, borders[i].start, borders[i].count);
 
+	// fog of war: one texture over the whole map
+	if (fogOn) {
+		C3D_BindProgram(&textured.program);
+		C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, textured.uProj, proj);
+		C3D_SetAttrInfo(&attrTex);
+		C3D_SetBufInfo(&bufQuad);
+		env = C3D_GetTexEnv(0);
+		C3D_TexEnvInit(env);
+		C3D_TexEnvSrc(env, C3D_Both, GPU_TEXTURE0, 0, 0);
+		C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
+		drawQuad(view, &fogTex, -half, -half, hdr.world);
+		env = C3D_GetTexEnv(0);
+		C3D_TexEnvInit(env);
+		C3D_TexEnvSrc(env, C3D_Both, GPU_PRIMARY_COLOR, 0, 0);
+		C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
+	}
+
 	if (selected < 0) return;
 
 	// the selected region: a pulsing light over its exact shape and an outline inside it;
@@ -1085,7 +1128,8 @@ int main(void)
 	if (ok) {
 		fogUpdate();
 		ownersChanged();
-		ok = texturesInit() && shapesInit();
+		ok = texturesInit() && shapesInit() && fogInit();
+		if (ok) fogPaint();
 	}
 	if (!ok) {
 		consoleInit(GFX_BOTTOM, NULL);
@@ -1134,14 +1178,16 @@ int main(void)
 		if (down & KEY_X) {
 			fogOn = !fogOn;
 			fogUpdate();
-			repaint();
+			ownersChanged();   // realms' names go on known provinces only
+			fogPaint();
 		}
 		if (down & KEY_Y && nrealms > 0) {
 			// the next realm's view: what it has seen starts again
 			player = (player + 1) % nrealms;
 			memset(known, 0, hdr.nregions);
 			fogUpdate();
-			repaint();
+			ownersChanged();
+			fogPaint();
 		}
 		if (held & KEY_DUP) cam.dist *= 0.98f;
 		if (held & KEY_DDOWN) cam.dist *= 1.02f;
@@ -1261,6 +1307,8 @@ int main(void)
 	free(neigh);
 	free(neighStart);
 	free(regionFog);
+	free(fogRegion);
+	C3D_TexDelete(&fogTex);
 	free(known);
 	lua_close(L);
 	C2D_Fini();

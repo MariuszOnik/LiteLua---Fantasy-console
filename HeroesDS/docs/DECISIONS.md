@@ -166,3 +166,6 @@ jest w pełnym 3D (wzór: obrazki „Risk” — płaskie prowincje jak płytki,
   wiele scenariuszy; edycja na PC, później na 3DS. Mgła wojny wg powiatów: nieznane /
   widziane wcześniej / widoczne teraz (własne prowincje i sąsiedzi), kolory nakładane
   przy malowaniu kafli.
+- **Mgła jako nakładka (2026-11-01, prośba użytkownika):** mgła nie przemalowuje mapy —
+  to tekstura 512² nad mapą (stan regionu na piksel), liczona w milisekundy; kolory mapy
+  zależą tylko od właścicieli (przemalowanie kafli tylko przy zmianie właściciela).
