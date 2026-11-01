@@ -156,6 +156,40 @@ class MeshTest(unittest.TestCase):
         diff = np.abs(tile_rgb[0].astype(int) - whole_rgb[0][:64, 64:].astype(int))
         self.assertLess(diff.mean(), 3)
 
+    def test_styles_have_no_seams(self):
+        # every surface (and the burnt edge) is laid over the whole map: a tile still
+        # equals its quarter of the whole map
+        cols = self.m["province"].shape[1]
+        styles = os.path.join(os.path.dirname(__file__), "..", "styles")
+        for name in ("parchment", "leather", "parchment-image"):
+            style, folder = make_m3.load_style(os.path.join(styles, name + ".lua"))
+            painter = make_m3.Painter(self.m, self.counties, self.chains, style, folder)
+            whole, _ = painter.paint(0, 0, cols, 128, self.land)
+            tile, _ = painter.paint(cols / 2, 0, cols / 2, 64, self.land)
+            diff = np.abs(tile[0].astype(int) - whole[0][:64, 64:].astype(int))
+            self.assertLess(diff.mean(), 4, name)
+
+    def test_classic_style_is_the_default(self):
+        styles = os.path.join(os.path.dirname(__file__), "..", "styles")
+        style, _ = make_m3.load_style(os.path.join(styles, "classic.lua"))
+        self.assertEqual(style, make_m3.map_style({}))
+
+    def test_grain_repeats_without_a_seam(self):
+        g = make_m3.grain_texture(1, 64).astype(int)
+        inner = np.abs(np.diff(g, axis=1)).mean()
+        across = np.abs(g[:, 0] - g[:, -1]).mean()   # the right edge meets the left
+        self.assertLess(across, 2 * inner)
+        self.assertLess(abs(g.mean() - 128), 6)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "grain.bin")
+            make_m3.write_grain(path, 1)
+            with open(path, "rb") as f:
+                data = f.read()
+        self.assertEqual(data[:4], b"HG01")
+        size, raw, packed = struct.unpack_from("<III", data, 4)
+        self.assertEqual(raw, sum((size >> k) ** 2 for k in range(6)))   # 256 .. 8
+        self.assertEqual(len(zlib.decompress(data[16:16 + packed])), raw)
+
     def test_tile_file(self):
         rgb, ids = self.paint(0, 0, self.m["province"].shape[1], 64)
         with tempfile.TemporaryDirectory() as d:

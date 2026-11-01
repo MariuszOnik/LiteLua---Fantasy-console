@@ -37,7 +37,11 @@ Steps:
      K_COUNTY -- so the GPU, picking the level by distance, shows less detail far away. Noise and waves are
      laid over the whole map and every tile is drawn with a margin, so tiles meet
      without seams
-The file formats are in docs/FORMATS.md ("map3d.bin", "map tiles").
+  8. the style (--style, styles/*.lua): its `map` part sets the picture's colours and the
+     paper's surface (plain, parchment, leather or a picture), its `view` part is read by
+     the 3DS (romfs:/style.lua); grain.bin is a small repeating paper grain the 3DS can
+     lay over the map
+The file formats are in docs/FORMATS.md ("map3d.bin", "map tiles", "style.lua").
 """
 import argparse
 import os
@@ -71,7 +75,19 @@ K_PROVINCE = 3.0      # province lines from this many texture pixels per cell on
 K_COUNTY = 14.0       # county lines from this many
 MAX_REALMS = 32       # realms (factions and city-states) a scenario can have
 TINT = 0.62           # how strong the owners' colours are (1 = the faction colour)
+GRAIN_TEX = 256       # grain.bin's size (it repeats over the map on the 3DS)
 KIND_LAND, KIND_SEA, KIND_NEUTRAL = 0, 1, 2
+
+# the map part of a style file, when it leaves something out (the classic look)
+MAP_STYLE = {
+    "paper": PAPER_RGB, "sea": SEA_RGB, "shore": (235, 240, 225),
+    "surface": "plain",   # plain, parchment, leather, image
+    "image": None,        # surface "image": a picture file (next to the style file)
+    "image_cells": 24.0,  # cells one copy of the picture covers
+    "stain": 1.0,         # parchment, leather: how strong the stains and wrinkles are
+    "rim": 0.0,           # the map's own edge burnt dark: 0 none .. 1 strong
+    "lines": {"sea": SEA_LINE, "county": COUNTY_LINE, "land": LAND_LINE, "coast": COAST_LINE},
+}
 
 # a cell's sides, walked clockwise on screen (row down, col right): the cell is on the
 # right of every side; (corner from, corner to, neighbour cell offset)
@@ -573,6 +589,185 @@ class Noise:
                 + (g[j + 1, i] * (1 - fu) + g[j + 1, i + 1] * fu) * fv)
 
 
+def fft_noise(rng, n, falloff, low=0.0, stretch=None):
+    """Seamless noise n x n (it repeats without a seam), mean 0, deviation 1: white noise
+    with power falling as 1 / f^falloff, frequencies under `low` (cycles per pixel) left
+    out; stretch=(angle, ratio) draws it out along the angle, into fibres."""
+    fy, fx = np.fft.fftfreq(n)[:, None], np.fft.fftfreq(n)[None, :]
+    if stretch:
+        a, ratio = stretch
+        u, v = np.cos(a) * fx + np.sin(a) * fy, -np.sin(a) * fx + np.cos(a) * fy
+        f = np.sqrt(u * u * ratio * ratio + v * v)
+    else:
+        f = np.sqrt(fx * fx + fy * fy)
+    f[0, 0] = 1
+    spec = np.fft.fft2(rng.standard_normal((n, n))) / f ** falloff
+    spec[f < max(low, 1e-9)] = 0
+    out = np.real(np.fft.ifft2(spec))
+    return (out - out.mean()) / (out.std() + 1e-9)
+
+
+def seamless(img):
+    """A picture made to repeat without a seam: mixed with itself moved by half, the
+    moved copy showing where the picture's own edges would meet."""
+    h, w = img.shape[:2]
+    wy = np.sin(np.pi * (np.arange(h) + 0.5) / h) ** 2
+    wx = np.sin(np.pi * (np.arange(w) + 0.5) / w) ** 2
+    a = np.minimum(wy[:, None], wx[None, :])
+    if img.ndim == 3:
+        a = a[..., None]
+    rolled = np.roll(img, (h // 2, w // 2), (0, 1))
+    return img * a + rolled * (1 - a)
+
+
+class Periodic:
+    """A seamless pattern repeating every `cells` cells, read bilinearly at any place."""
+
+    def __init__(self, img, cells):
+        self.img, self.cells = np.asarray(img, float), cells
+
+    def at(self, xs, zs):
+        h, w = self.img.shape[:2]
+        u = (xs / self.cells % 1) * w - 0.5
+        v = (zs / self.cells % 1) * h - 0.5
+        i, j = np.floor(u).astype(int), np.floor(v).astype(int)
+        fu, fv = u - i, v - j
+        i0, i1, j0, j1 = i % w, (i + 1) % w, j % h, (j + 1) % h
+        g = self.img
+        if g.ndim == 3:
+            fu, fv = fu[..., None], fv[..., None]
+        return ((g[j0, i0] * (1 - fu) + g[j0, i1] * fu) * (1 - fv)
+                + (g[j1, i0] * (1 - fu) + g[j1, i1] * fu) * fv)
+
+
+def smooth(x, a, b):
+    t = np.clip((x - a) / (b - a), 0, 1)
+    return t * t * (3 - 2 * t)
+
+
+class Surface:
+    """What the paper is made of: per pixel, the colour the land's paper and the sea are
+    multiplied by (1 = as the style's colours). Everything is laid over the whole map,
+    so tiles meet without seams."""
+
+    def __init__(self, style, rng, world, folder="."):
+        self.kind, self.world = style["surface"], world
+        self.stain, self.rim = style["stain"], style["rim"]
+        self.blot = Noise(rng, world, 9.0)
+        self.blot2 = Noise(rng, world, 2.3)
+        self.ragged = Noise(rng, world, 1.7)
+        self.speck = Noise(rng, world, 0.8)
+        if self.kind == "parchment":
+            fib = sum(fft_noise(rng, 512, 0.6, 0.02, (a, 7.0)) for a in rng.uniform(0, np.pi, 4))
+            self.fibres = Periodic(fib / fib.std(), 3.0)
+            self.fine = Periodic(fft_noise(rng, 256, 0.3, 0.05), 0.7)
+        elif self.kind == "leather":
+            n = 512
+            pores = np.zeros((n, n))
+            for x, y in rng.integers(0, n, (2600, 2)):
+                pores[y, x] = 1
+            pores = np.real(np.fft.ifft2(np.fft.fft2(pores) * np.fft.fft2(disk_kernel(n, 2.2))))
+            self.pores = Periodic(np.clip(pores, 0, 1), 2.5)
+            self.creases = Periodic(fft_noise(rng, 512, 1.2, 0.006), 7.0)
+            self.creases2 = Periodic(fft_noise(rng, 512, 1.0, 0.01), 2.6)
+        elif self.kind == "image":
+            from PIL import Image
+            img = np.asarray(Image.open(os.path.join(folder, style["image"])).convert("RGB"), float)
+            img = seamless(img)
+            img /= img.reshape(-1, 3).mean(0)
+            self.image = Periodic(img, style["image_cells"])
+            self.luma = Periodic(img.mean(2), style["image_cells"])
+        elif self.kind != "plain":
+            raise ValueError("style: map.surface: plain, parchment, leather or image, not %r" % self.kind)
+
+    def at(self, xs, zs, noise, grain):
+        """(paper's multiplier (h, w, 3), sea's multiplier (h, w, 3) or None)."""
+        if self.kind == "plain":
+            paper = np.repeat((1 + 0.05 * grain + 0.04 * noise)[..., None], 3, 2)
+            sea = None
+        elif self.kind == "parchment":
+            # darker where older: big soft blotches, stains with a darker ring, fibres
+            blot = self.blot.at(xs, zs) + 0.6 * self.blot2.at(xs, zs)
+            spot = blot + 0.25 * self.speck.at(xs, zs)
+            stain = smooth(spot, 0.34, 0.42)
+            ring = np.exp(-((spot - 0.36) / 0.03) ** 2)
+            mottle = 0.2 * (blot + 0.4)
+            fibre = 0.07 * self.fibres.at(xs, zs) + 0.05 * self.fine.at(xs, zs) + 0.05 * noise
+            stains = self.stain * (0.12 * stain + 0.12 * ring)
+            brown = 1 - np.array((0.66, 0.52, 0.34))
+            paper = 1 - np.clip(mottle + fibre + stains, -0.15, 1)[..., None] * brown
+            # the sea is painted over the same parchment: its stains show, softer
+            sea = 1 - np.clip(0.6 * mottle + fibre + 0.4 * stains, -0.15, 1)[..., None] * brown
+        elif self.kind == "leather":
+            blot = self.blot.at(xs, zs) + 0.5 * self.blot2.at(xs, zs)
+            crease = np.exp(-(self.creases.at(xs, zs) / 0.09) ** 2) + 0.6 * np.exp(-(self.creases2.at(xs, zs) / 0.07) ** 2)
+            dark = (0.22 * blot + self.stain * (0.22 * crease + 0.35 * self.pores.at(xs, zs))
+                    + 0.04 * grain + 0.04 * noise)
+            paper = 1 - np.clip(dark, -0.3, 1)[..., None] * (1 - np.array((0.55, 0.42, 0.32)))
+            sea = paper
+        else:
+            paper = self.image.at(xs, zs)
+            sea = np.repeat(self.luma.at(xs, zs)[..., None], 3, 2)
+        return paper, sea
+
+    def edge(self, xs, zs):
+        """The map's own edge burnt dark (ragged): multiplier (h, w, 3) or None."""
+        if self.rim <= 0:
+            return None
+        w = self.world
+        d = np.minimum(np.minimum(xs, w - xs), np.minimum(zs, w - zs)) + 1.6 * self.ragged.at(xs, zs)
+        burn = (1 - smooth(d, 0.0, 3.5)) * self.rim
+        scorch = (1 - smooth(d, -0.2, 0.7)) * self.rim
+        out = 1 - burn[..., None] * (1 - np.array((0.68, 0.5, 0.3)))
+        return out * (1 - 0.55 * scorch)[..., None]
+
+
+def disk_kernel(n, r):
+    """A soft round spot of radius r pixels at (0, 0), wrapping round (for FFT blurs)."""
+    d = np.minimum(np.arange(n), n - np.arange(n))
+    dist = np.sqrt(d[:, None] ** 2 + d[None, :] ** 2)
+    return np.clip(r - dist + 0.5, 0, 1)
+
+
+def grain_texture(seed, size=GRAIN_TEX):
+    """grain.bin's picture: paper fibres and specks, 128 = no change, seamless."""
+    rng = np.random.default_rng(seed + 2000)
+    g = 0.5 * fft_noise(rng, size, 0.4, 0.03)
+    for a in rng.uniform(0, np.pi, 3):
+        g += 0.5 * fft_noise(rng, size, 0.6, 0.02, (a, 8.0))
+    g += 0.4 * fft_noise(rng, size, 1.3, 0.004)
+    g /= g.std()
+    return np.clip(128 + 16 * g, 0, 255).astype(np.uint8)
+
+
+def write_grain(path, seed):
+    """grain.bin: b"HG01", u32 size, zlib(L8 levels in the 3DS texture order)."""
+    raw = b"".join(tiled(level) for level in mip_levels(grain_texture(seed)))
+    with open(path, "wb") as f:
+        f.write(b"HG01" + struct.pack("<I", GRAIN_TEX))
+        packed = zlib.compress(raw, 9)
+        f.write(struct.pack("<II", len(raw), len(packed)) + packed)
+
+
+def load_style(path):
+    """A style file (styles/*.lua): the map part with the defaults filled in, and the
+    folder its pictures are in."""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "tools"))
+    import lsong
+    with open(path, encoding="utf-8") as f:
+        data = lsong.parse_lua(f.read())
+    return map_style(data.get("map", {})), os.path.dirname(os.path.abspath(path))
+
+
+def map_style(given):
+    style = dict(MAP_STYLE, **{k: v for k, v in given.items() if k != "lines"})
+    style["lines"] = dict(MAP_STYLE["lines"], **given.get("lines", {}))
+    for k in ("paper", "sea", "shore"):
+        style[k] = tuple(style[k])
+    style["lines"] = {k: tuple(v) for k, v in style["lines"].items()}
+    return style
+
+
 # lines: width in cells, least width in pixels of the level, colour, from how many pixels
 # per cell of a mipmap level on they are drawn (coarser levels -- far views -- leave
 # county and then province lines out; realms' borders are drawn by the 3DS)
@@ -589,14 +784,16 @@ class Painter:
     without owners' colours and the county index per pixel, every mipmap level with the
     lines that suit its scale."""
 
-    def __init__(self, m, county_list, chains):
+    def __init__(self, m, county_list, chains, style=None, folder="."):
         self.m, self.counties, self.chains = m, county_list, chains
+        self.style = style or map_style({})
         rows, cols = m["province"].shape
         self.world = cols
         self.off = np.array([cols / 2, rows / 2])
         rng = np.random.default_rng(m["seed"] + 1000)
         self.big_noise = Noise(rng, cols, 3.5)
         self.grain = Noise(rng, cols, 0.5)
+        self.surface = Surface(self.style, np.random.default_rng(m["seed"] + 3000), cols, folder)
         # wave marks: (x, z, size) in cells, kept or dropped per window by the shore
         n = int(cols * rows / 9)
         self.waves = np.column_stack([rng.uniform(0, cols, n), rng.uniform(0, rows, n),
@@ -643,13 +840,15 @@ class Painter:
         xs, zs = np.meshgrid(cx, cz)
         noise = self.big_noise.at(xs, zs)
         grain = self.grain.at(xs, zs)
+        st = self.style
+        on_paper, on_sea = self.surface.at(xs, zs, noise, grain)
 
         # sea: blue-green, lighter near the shore, the land's shadow, waves far out
         near = blur(land, 0.9 * k)
         sea = np.empty((big, big, 3))
-        sea[:] = SEA_RGB
+        sea[:] = st["sea"]
         sea += noise[..., None] * 10
-        sea += (np.array((235, 240, 225)) - sea) * np.clip(near * 1.6, 0, 1)[..., None] * 0.55
+        sea += (np.array(st["shore"]) - sea) * np.clip(near * 1.6, 0, 1)[..., None] * 0.55
         shadow = np.roll(blur(land, 0.18 * k), (round(0.22 * k), round(0.22 * k)), (0, 1))
         sea *= (1 - 0.35 * np.clip(shadow, 0, 1))[..., None]
         waves = Image.new("L", (big, big), 0)
@@ -665,11 +864,13 @@ class Painter:
                 wd.arc((x + s * w, y, x + (s + 1) * w, y + w * 0.6), 200 if s == 0 else 20,
                        340 if s == 0 else 160, fill=255, width=max(1, round(0.06 * k)))
         sea *= (1 - 0.18 * np.asarray(waves, float) / 255)[..., None]
+        if on_sea is not None:
+            sea *= on_sea
 
-        # land: pale paper with grain, a little darker along its borders
+        # land: paper (its surface from the style), a little darker along its borders
         paper = np.empty((big, big, 3))
-        paper[:] = PAPER_RGB
-        paper *= (1 + 0.05 * grain + 0.04 * noise)[..., None]
+        paper[:] = st["paper"]
+        paper *= on_paper
         paper *= (1 - 0.22 * np.clip(edges * 2, 0, 1))[..., None]
 
         base = sea * (1 - land[..., None]) + paper * land[..., None]
@@ -677,6 +878,11 @@ class Painter:
         base = Image.fromarray(np.clip(base, 0, 255).astype(np.uint8))
         ids_big = ids_big[pad:pad + size * ss, pad:pad + size * ss]
         ids0 = ids_big[ss // 2::ss, ss // 2::ss].astype(np.uint16)
+        # the map's burnt edge goes over the lines too
+        rim = self.surface.edge(xs[pad:pad + size * ss, pad:pad + size * ss],
+                                zs[pad:pad + size * ss, pad:pad + size * ss])
+        if rim is not None:
+            rim = Image.fromarray(np.clip(rim * 255, 0, 255).astype(np.uint8))
 
         # every level: the background scaled, then its own lines on top
         levels, s = [], size
@@ -684,7 +890,8 @@ class Painter:
             kl = s * ss / span                  # drawing pixels per cell at this level
             img = np.asarray(base.resize((s * ss, s * ss), Image.LANCZOS), float)
             for kind in ("sea", "county", "land", "coast"):
-                width, least, col, k_from = LINES[kind]
+                width, least, _, k_from = LINES[kind]
+                col = st["lines"][kind]
                 if s / span < k_from:
                     continue
                 mask = Image.new("L", (s * ss, s * ss), 0)
@@ -700,6 +907,8 @@ class Painter:
                     md.line(xy + xy[:1] if closed else xy, fill=255, width=max(1, round(w)), joint="curve")
                 a = np.asarray(mask, float)[..., None] / 255
                 img = img * (1 - a) + np.array(col, float) * a
+            if rim is not None:
+                img *= np.asarray(rim.resize((s * ss, s * ss), Image.BILINEAR), float) / 255
             img = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8)).resize((s, s), Image.LANCZOS)
             levels.append(np.asarray(img))
             if s <= 8:
@@ -824,9 +1033,10 @@ def write(path, m, regions, county_list, borders, tiles=1):
     return nv, ni
 
 
-def write_textures(folder, m, regions, county_list, chains, tiles, png=None):
-    """overview.bin (the whole map in one texture) and tiles/<col>_<row>.bin."""
-    painter = Painter(m, county_list, chains)
+def write_textures(folder, m, regions, county_list, chains, tiles, png=None, style=None, style_dir="."):
+    """overview.bin (the whole map in one texture), tiles/<col>_<row>.bin and grain.bin."""
+    painter = Painter(m, county_list, chains, style, style_dir)
+    write_grain(os.path.join(folder, "grain.bin"), m["seed"])
     land = [i for i, c in enumerate(county_list) if regions[c["region"]]["kind"] != KIND_SEA]
     world = painter.world
     tdir = os.path.join(folder, "tiles")
@@ -1021,6 +1231,8 @@ def main(argv):
     p.add_argument("--obj", help="also write a Wavefront .obj (one object per region) for Blender")
     p.add_argument("--scenario", help="scenario file (.lua) put into romfs (default: the map's own)")
     p.add_argument("--dump-scenario", help="write the map's own scenario there, to edit")
+    p.add_argument("--style", default=os.path.join(here, "styles", "classic.lua"),
+                   help="style file (.lua): the picture's colours and paper, the 3DS's colours")
     a = p.parse_args(argv)
     m = m2.generate(a.seed, a.size, a.provinces, a.coast)
     regions, county_list, borders, chains = build(m)
@@ -1044,7 +1256,11 @@ def main(argv):
         with open(os.path.join(a.out, "scenario.lua"), "w", encoding="utf-8") as f:
             f.write(scenario_lua(own, regions, county_list))
     print("scenario: %s, %d realms" % (scen["title"], len(scen["realms"])), flush=True)
-    write_textures(a.out, m, regions, county_list, chains, a.tiles, a.png)
+    style, style_dir = load_style(a.style)
+    import shutil
+    shutil.copyfile(a.style, os.path.join(a.out, "style.lua"))
+    print("style: %s (%s)" % (os.path.basename(a.style), style["surface"]), flush=True)
+    write_textures(a.out, m, regions, county_list, chains, a.tiles, a.png, style, style_dir)
     if a.obj:
         write_obj(a.obj, regions)
 

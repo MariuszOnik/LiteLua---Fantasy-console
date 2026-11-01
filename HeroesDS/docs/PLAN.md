@@ -26,6 +26,11 @@ przejdzie tą drogą). Konsola jeszcze nie dojechała: wszystko sprawdzone tylko
   paski liczone z właścicieli; nazwy wg oddalenia (państwa / prowincje / powiaty,
   nachodzące pomijane); mgła wojny = tekstura 512² nad mapą (milisekundy, grafitowa);
   klikanie: piksel → powiat → prowincja (z bliska zaznacza powiat).
+- **Styl (M3k–M3o)**: `styles/*.lua` (`--style`, format w `docs/FORMATS.md`): `map` wypalane
+  w tekstury (papier gładki / pergamin / skóra / obraz z ComfyUI — `tools/paperart.py`,
+  kolory, linie, spalona krawędź mapy), `view` czyta 3DS (tło, siła kolorów państw, mgła,
+  granice, napisy, ziarno papieru `grain.bin` mnożone na GPU). **`sdmc:/3ds/heroes3d/style.lua`
+  nadpisuje `view` bez budowania** — do strojenia kolorów na konsoli/w Azaharze.
 - Scenariusz (`HeroesDS/scenarios/six-realms.lua`, `--scenario` / `--dump-scenario`):
   państwa (do 32), **państwa-miasta** (`city = true` — osobne państwa z kolorem, granicą
   i nazwą; logiki — relacji, pokojowego przejęcia z H12 — jeszcze nie ma), gracz, mgła,
@@ -36,9 +41,12 @@ w msys2 devkitPro; `run` = Azahar). Każdy pomysł = osobny commit i osobny buil
 `3ds/builds/heroes3d-<tag>.3dsx` (poza gitem; stare zostają do porównań). Obecne:
 `m3j-graphitefog-2x2` (`-gen "--tiles 2 --scenario ../scenarios/six-realms.lua"`) i
 `m3j-graphitefog-big4x4` (`-gen "--size 144 --provinces 180 --tiles 4"`: 284 regiony,
-1059 powiatów, 16 kafli). Historia: m3a gładkie płyty → m3b fraktale w meshu → m3c
+1059 powiatów, 16 kafli). Style (2x2, six-realms, do porównania): `m3k-style-classic`
+(jak m3j), `m3l-parchment` (pergamin z kodu), `m3m-leather` (skóra, złote granice),
+`m3n-parchment-image` (obraz SDXL `styles/parchment.png`), `m3o-parchment-grain` (gładki
+papier + ziarno na GPU). Wszystkie sprawdzone w Azaharze; użytkownik wybiera. Historia: m3a gładkie płyty → m3b fraktale w meshu → m3c
 płaska mapa z teksturą → m3d kafle → m3e szczegóły wg oddalenia → m3f klikanie powiatów
-→ m3g scenariusz/mgła/Lua → m3h szybka mgła → m3i/m3j kolor mgły.
+→ m3g scenariusz/mgła/Lua → m3h szybka mgła → m3i/m3j kolor mgły → m3k–m3o style.
 **Sterowanie:** stuknięcie = prowincja (z bliska powiat), przeciąganie / gałka = przesuw,
 L/R = kąt kamery, krzyżak góra/dół = zoom, X = mgła wł./wył., Y = widok następnego państwa.
 **Testy:** `python -m unittest discover -s HeroesDS/tests` (`pip install mapbox-earcut`;

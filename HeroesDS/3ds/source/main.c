@@ -28,9 +28,7 @@
 #include "maptex_shbin.h"
 #include "border_shbin.h"
 
-#define CLEAR_COLOR 0x96BEC8FF   // RGBA: the sea of the picture
-#define TINT 0.62f               // as in make_m3.py: how strong the owners' colours are
-#define SLOTS 6                  // tiles kept at once
+#define SLOTS 6                 // tiles kept at once
 #define MAX_LABELS 512           // names placed on one screen
 #define COUNTY_ZOOM 24.0f        // nearer than this, taps pick counties (their lines show)
 #define MAX_REALMS 32            // as in make_m3.py
@@ -107,6 +105,29 @@ typedef struct {
 	bool city;
 } Realm;
 
+// the look the 3DS controls (romfs:/style.lua, `view`; sdmc:/3ds/heroes3d/style.lua over
+// it, to try colours without a build): the classic look unless a style says otherwise
+typedef struct {
+	u8 background[3];          // around the map
+	float tint;                // how strong the owners' colours are (1 = the realm's colour)
+	u8 neutral[3];             // land nobody owns
+	u8 fogUnseen[4], fogSeen[4];   // r g b alpha
+	u8 border[3];              // realms' borders
+	float borderAlpha, borderWidth;
+	u8 province[3], county[3], shadow[3], selected[3];   // names
+	float grain, grainCells;   // paper grain over the map (grain.bin): strength, cells per copy
+} Style;
+
+static Style style = {
+	{ 150, 190, 200 }, 0.62f, { 190, 180, 160 },
+	{ 102, 102, 119, 204 }, { 153, 153, 153, 102 },
+	{ 107, 20, 15 }, 0.85f, 1.0f,
+	{ 20, 12, 4 }, { 70, 50, 30 }, { 40, 25, 15 }, { 255, 255, 255 },
+	0.0f, 3.0f,
+};
+static C3D_Tex grainTex;
+static bool grainOk;
+
 static MapHeader hdr;
 static Faction factions[8];
 static Realm realms[MAX_REALMS];
@@ -162,7 +183,7 @@ static volatile int loadedCount;
 typedef struct {
 	shaderProgram_s program;
 	DVLB_s* dvlb;
-	int uProj, uModelView, uTint, uWidth;
+	int uProj, uModelView, uTint, uWidth, uGrain;
 } Shader;
 
 static Shader overlay, textured, lines;
@@ -213,12 +234,13 @@ static void regionTint(int i, u8* rgb)
 	if (g->kind == KIND_SEA) {
 		rgb[0] = rgb[1] = rgb[2] = 255;
 	} else if (g->kind == KIND_NEUTRAL || g->owner < 0) {
-		rgb[0] = 190; rgb[1] = 180; rgb[2] = 160;
+		memcpy(rgb, style.neutral, 3);
 	} else {
 		const Realm* f = &realms[g->owner];
-		rgb[0] = TINT * f->r + (1 - TINT) * 255;
-		rgb[1] = TINT * f->g + (1 - TINT) * 255;
-		rgb[2] = TINT * f->b + (1 - TINT) * 255;
+		float k = style.tint;
+		rgb[0] = k * f->r + (1 - k) * 255;
+		rgb[1] = k * f->g + (1 - k) * 255;
+		rgb[2] = k * f->b + (1 - k) * 255;
 	}
 }
 
@@ -443,6 +465,81 @@ static bool loadScenario(char* err, size_t errSize)
 	return true;
 }
 
+// a colour { r, g, b [, a] } (0..255) of table t, if it is there
+static void styleColor(int t, const char* key, u8* out, int n)
+{
+	lua_getfield(L, t, key);
+	if (lua_istable(L, -1))
+		for (int i = 0; i < n; i++) {
+			lua_rawgeti(L, -1, i + 1);
+			if (lua_isnumber(L, -1)) out[i] = lua_tointeger(L, -1);
+			lua_pop(L, 1);
+		}
+	lua_pop(L, 1);
+}
+
+static void styleNumber(int t, const char* key, float* out)
+{
+	lua_getfield(L, t, key);
+	if (lua_isnumber(L, -1)) *out = lua_tonumber(L, -1);
+	lua_pop(L, 1);
+}
+
+// the table under key pushed (its index), or nothing pushed (0)
+static int styleTable(int t, const char* key)
+{
+	lua_getfield(L, t, key);
+	if (lua_istable(L, -1)) return lua_gettop(L);
+	lua_pop(L, 1);
+	return 0;
+}
+
+// a style file's `view` over the current style (what it leaves out stays); no file: true
+static bool styleRead(const char* path, char* err, size_t errSize)
+{
+	size_t size;
+	char* text = readFile(path, &size);
+	if (!text) return true;
+	static const LLDataLimits limits = { 64 * 1024, 8, 256 };
+	bool ok = ll_data_parse(L, text, size, path, &limits, err, errSize);
+	free(text);
+	if (!ok) return false;
+	int v = styleTable(lua_gettop(L), "view");
+	if (v) {
+		styleColor(v, "background", style.background, 3);
+		styleNumber(v, "tint", &style.tint);
+		styleColor(v, "neutral", style.neutral, 3);
+		int t;
+		if ((t = styleTable(v, "fog"))) {
+			styleColor(t, "unseen", style.fogUnseen, 4);
+			styleColor(t, "seen", style.fogSeen, 4);
+		}
+		if ((t = styleTable(v, "border"))) {
+			styleColor(t, "color", style.border, 3);
+			styleNumber(t, "alpha", &style.borderAlpha);
+			styleNumber(t, "width", &style.borderWidth);
+		}
+		if ((t = styleTable(v, "labels"))) {
+			styleColor(t, "province", style.province, 3);
+			styleColor(t, "county", style.county, 3);
+			styleColor(t, "shadow", style.shadow, 3);
+			styleColor(t, "selected", style.selected, 3);
+		}
+		if ((t = styleTable(v, "grain"))) {
+			styleNumber(t, "strength", &style.grain);
+			styleNumber(t, "cells", &style.grainCells);
+		}
+	}
+	lua_settop(L, 0);
+	if (style.grainCells < 0.1f) style.grainCells = 0.1f;
+	return true;
+}
+
+static bool loadStyle(char* err, size_t errSize)
+{
+	return styleRead("romfs:/style.lua", err, errSize) && styleRead("sdmc:/3ds/heroes3d/style.lua", err, errSize);
+}
+
 // index of pixel (column x, row y from the top) in the texture: 8x8 tiles from the
 // bottom row up, Morton order inside a tile (tile_order in make_m3.py)
 static u32 texIndex(u32 x, u32 y, u32 size)
@@ -570,6 +667,28 @@ static void texturesExit(void)
 	free(paperBuf);
 }
 
+// romfs:/grain.bin: paper grain repeating over the map, multiplied in by the GPU when the
+// style asks for it (none or broken: no grain, the map still shows)
+static void grainInit(void)
+{
+	size_t size;
+	u8* buf = readFile("romfs:/grain.bin", &size);
+	if (!buf) return;
+	u32 n = 0;
+	if (size > 8 && !memcmp(buf, "HG01", 4)) memcpy(&n, buf + 4, 4);
+	if (n >= 8 && n <= 1024 && !(n & (n - 1)) && C3D_TexInitMipmap(&grainTex, n, n, GPU_L8)) {
+		const u8* p = buf + 8;
+		u32 total = C3D_TexCalcTotalSize(n * n, C3D_TexCalcMaxLevel(n, n));
+		grainOk = unpack(&p, buf + size, grainTex.data, total);
+		C3D_TexSetFilter(&grainTex, GPU_LINEAR, GPU_LINEAR);
+		C3D_TexSetFilterMipmap(&grainTex, GPU_LINEAR);
+		C3D_TexSetWrap(&grainTex, GPU_REPEAT, GPU_REPEAT);
+		C3D_TexFlush(&grainTex);
+		if (!grainOk) C3D_TexDelete(&grainTex);
+	}
+	free(buf);
+}
+
 // the fog texture: which region every texel lies in (from the overview's counties)
 static bool fogInit(void)
 {
@@ -591,8 +710,11 @@ static bool fogInit(void)
 // now -- clear (a few milliseconds: the map's textures stay as they are)
 static void fogPaint(void)
 {
-	// RGBA4: r g b a, 4 bits each
-	static const u16 look[3] = { 0x667C, 0x9996, 0x0000 };   // graphite mist, a grey veil, clear
+	// RGBA4: r g b a, 4 bits each; the style's mist (never seen), veil (seen before), clear
+	const u8* c[2] = { style.fogUnseen, style.fogSeen };
+	u16 look[3] = { 0, 0, 0 };
+	for (int i = 0; i < 2; i++)
+		look[i] = (c[i][0] >> 4) << 12 | (c[i][1] >> 4) << 8 | (c[i][2] >> 4) << 4 | c[i][3] >> 4;
 	u16* out = fogTex.data;
 	for (u32 k = 0; k < FOG_TEX * FOG_TEX; k++) {
 		u16 r = fogRegion[k];
@@ -791,6 +913,7 @@ static void shaderInit(Shader* s, u32* bin, u32 size)
 	s->uModelView = shaderInstanceGetUniformLocation(s->program.vertexShader, "modelView");
 	s->uTint = shaderInstanceGetUniformLocation(s->program.vertexShader, "tint");
 	s->uWidth = shaderInstanceGetUniformLocation(s->program.vertexShader, "width");
+	s->uGrain = shaderInstanceGetUniformLocation(s->program.vertexShader, "grain");
 }
 
 static void shaderFree(Shader* s)
@@ -858,6 +981,8 @@ static void drawQuad(const C3D_Mtx* view, C3D_Tex* tex, float x0, float z0, floa
 	Mtx_Translate(&mv, x0, 0, z0, true);
 	Mtx_Scale(&mv, size, 1, size);
 	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, textured.uModelView, &mv);
+	float g = 1 / style.grainCells;   // the grain's texcoords: world position / cells
+	C3D_FVUnifSet(GPU_VERTEX_SHADER, textured.uGrain, size * g, size * g, x0 * g, z0 * g);
 	C3D_TexBind(0, tex);
 	C3D_DrawArrays(GPU_TRIANGLES, 0, 6);
 }
@@ -933,11 +1058,35 @@ static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view, float zoom)
 	C3D_TexEnvInit(env);
 	C3D_TexEnvSrc(env, C3D_Both, GPU_TEXTURE0, 0, 0);
 	C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
+	bool grain = grainOk && style.grain > 0;
+	if (grain) {
+		// stage 0 (above) unused, 1: the grain toned down to the style's strength (128 =
+		// no change), 2: the map times twice that
+		C3D_TexBind(1, &grainTex);
+		env = C3D_GetTexEnv(1);
+		C3D_TexEnvInit(env);
+		C3D_TexEnvSrc(env, C3D_RGB, GPU_TEXTURE1, GPU_CONSTANT, GPU_CONSTANT);
+		C3D_TexEnvOpRgb(env, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_COLOR, GPU_TEVOP_RGB_SRC_ALPHA);
+		C3D_TexEnvFunc(env, C3D_RGB, GPU_INTERPOLATE);
+		u32 a = style.grain >= 1 ? 255 : (u32)(style.grain * 255);
+		C3D_TexEnvColor(env, a << 24 | 0x808080);
+		env = C3D_GetTexEnv(2);
+		C3D_TexEnvInit(env);
+		C3D_TexEnvSrc(env, C3D_RGB, GPU_TEXTURE0, GPU_PREVIOUS, 0);
+		C3D_TexEnvFunc(env, C3D_RGB, GPU_MODULATE);
+		C3D_TexEnvScale(env, C3D_RGB, GPU_TEVSCALE_2);
+		C3D_TexEnvSrc(env, C3D_Alpha, GPU_TEXTURE0, 0, 0);
+		C3D_TexEnvFunc(env, C3D_Alpha, GPU_REPLACE);
+	}
 	float half = hdr.world / 2, span = hdr.world / hdr.tiles;
 	drawQuad(view, &overview.tex, -half, -half, hdr.world);
 	for (int i = 0; i < SLOTS && hdr.tiles > 1; i++)
 		if (slots[i].state == SLOT_READY)
 			drawQuad(view, &slots[i].tex, slots[i].tx * span - half, slots[i].ty * span - half, span);
+	if (grain) {
+		C3D_TexEnvInit(C3D_GetTexEnv(1));
+		C3D_TexEnvInit(C3D_GetTexEnv(2));
+	}
 
 	// realms' borders: strips about as wide on screen at any zoom
 	env = C3D_GetTexEnv(0);
@@ -951,8 +1100,9 @@ static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view, float zoom)
 	C3D_SetBufInfo(&bufLine);
 	float w = zoom * 0.0042f;
 	if (w < 0.07f) w = 0.07f;
-	C3D_FVUnifSet(GPU_VERTEX_SHADER, lines.uWidth, w, 0, 0, 0);
-	C3D_FVUnifSet(GPU_VERTEX_SHADER, lines.uTint, 0.42f, 0.08f, 0.06f, 0.85f);
+	C3D_FVUnifSet(GPU_VERTEX_SHADER, lines.uWidth, w * style.borderWidth, 0, 0, 0);
+	C3D_FVUnifSet(GPU_VERTEX_SHADER, lines.uTint, style.border[0] / 255.0f, style.border[1] / 255.0f,
+		style.border[2] / 255.0f, style.borderAlpha);
 	for (u32 i = 0; i < nborders; i++)
 		if (ownerOf(borders[i].a) != ownerOf(borders[i].b) && regionFog[borders[i].a] && regionFog[borders[i].b])
 			C3D_DrawArrays(GPU_TRIANGLE_STRIP, borders[i].start, borders[i].count);
@@ -1027,7 +1177,7 @@ static bool label(const Camera* c, float w, float h, C2D_Text* t, float x, float
 	if (shadow) {
 		float o = s * 2.5f;
 		C2D_DrawText(t, C2D_AlignCenter | C2D_WithColor, px + o, py - th / 2 + o, 0.5f, s, s,
-			C2D_Color32(40, 25, 15, alpha * 150));
+			C2D_Color32(style.shadow[0], style.shadow[1], style.shadow[2], alpha * 150));
 	}
 	u32 col = rgb | (u32)(alpha * 255) << 24;
 	C2D_DrawText(t, C2D_AlignCenter | C2D_WithColor, px, py - th / 2, 0.5f, s, s, col);
@@ -1041,8 +1191,9 @@ static void drawLabels(const Camera* c, float w, float h)
 	float zoom = c->dist;
 	float aRealm = ramp(zoom, 40, 60), aProv = 1 - ramp(zoom, 75, 100), aCounty = 1 - ramp(zoom, 14, 20);
 	nplaced = 0;
-	const u32 dark = C2D_Color32(20, 12, 4, 0) & 0xFFFFFF, county = C2D_Color32(70, 50, 30, 0) & 0xFFFFFF;
-	const u32 white = C2D_Color32(255, 255, 255, 0) & 0xFFFFFF;
+	const u32 dark = C2D_Color32(style.province[0], style.province[1], style.province[2], 0) & 0xFFFFFF;
+	const u32 county = C2D_Color32(style.county[0], style.county[1], style.county[2], 0) & 0xFFFFFF;
+	const u32 white = C2D_Color32(style.selected[0], style.selected[1], style.selected[2], 0) & 0xFFFFFF;
 	if (selectedCounty >= 0 && counties[selectedCounty].vcount)
 		label(c, w, h, &countyNames[selectedCounty], counties[selectedCounty].cx, counties[selectedCounty].cz,
 			8, 0, 0.45f, white, 1, false);
@@ -1124,12 +1275,13 @@ int main(void)
 
 	char err[160] = "";
 	L = luaL_newstate();
-	bool ok = loadMap() && loadScenario(err, sizeof err);
+	bool ok = loadMap() && loadScenario(err, sizeof err) && loadStyle(err, sizeof err);
 	if (ok) {
 		fogUpdate();
 		ownersChanged();
 		ok = texturesInit() && shapesInit() && fogInit();
 		if (ok) fogPaint();
+		grainInit();
 	}
 	if (!ok) {
 		consoleInit(GFX_BOTTOM, NULL);
@@ -1154,6 +1306,7 @@ int main(void)
 	cam = (Camera){ .tx = 0, .tz = 4, .pitch = C3D_AngleFromDegrees(55), .dist = 60,
 		.fovy = C3D_AngleFromDegrees(50), .aspect = C3D_AspectRatioBot };
 
+	const u32 clear = style.background[0] << 24 | style.background[1] << 16 | style.background[2] << 8 | 0xFF;
 	bool touching = false, dragged = false;
 	touchPosition t0 = { 0 }, tl = { 0 };
 	float lim = hdr.world / 2, farPlane = hdr.world * 3;
@@ -1263,7 +1416,7 @@ int main(void)
 		viewMatrix(&top, &view);
 		for (int eye = 0; eye < (iod > 0 ? 2 : 1); eye++) {
 			C3D_RenderTarget* tgt = eye ? topR : topL;
-			C3D_RenderTargetClear(tgt, C3D_CLEAR_ALL, CLEAR_COLOR, 0);
+			C3D_RenderTargetClear(tgt, C3D_CLEAR_ALL, clear, 0);
 			C3D_FrameDrawOn(tgt);
 			Mtx_PerspStereoTilt(&proj, top.fovy, top.aspect, 0.5f, farPlane, eye ? iod : -iod, top.dist, false);
 			drawMap(&proj, &view, top.dist);
@@ -1273,7 +1426,7 @@ int main(void)
 			C2D_Flush();
 		}
 
-		C3D_RenderTargetClear(bot, C3D_CLEAR_ALL, CLEAR_COLOR, 0);
+		C3D_RenderTargetClear(bot, C3D_CLEAR_ALL, clear, 0);
 		C3D_FrameDrawOn(bot);
 		Mtx_PerspTilt(&proj, cam.fovy, cam.aspect, 0.5f, farPlane, false);
 		viewMatrix(&cam, &view);
@@ -1309,6 +1462,7 @@ int main(void)
 	free(regionFog);
 	free(fogRegion);
 	C3D_TexDelete(&fogTex);
+	if (grainOk) C3D_TexDelete(&grainTex);
 	free(known);
 	lua_close(L);
 	C2D_Fini();

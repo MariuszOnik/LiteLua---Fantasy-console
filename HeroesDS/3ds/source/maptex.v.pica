@@ -1,7 +1,10 @@
-; Textured map vertex shader: position * modelView * projection, texcoord passed on.
+; Textured map vertex shader: position * modelView * projection, texcoord passed on;
+; texcoord1 = the paper grain's, from the position (x, z of the unit quad) * grain.xy + grain.zw,
+; so the grain runs on across tiles without a seam.
 
 ; Uniforms
 .fvec projection[4], modelView[4]
+.fvec grain
 
 ; Constants
 .constf myconst(0.0, 1.0, -1.0, 0.1)
@@ -10,6 +13,7 @@
 ; Outputs
 .out outpos position
 .out outtc0 texcoord0
+.out outtc1 texcoord1
 
 ; Inputs: v0 = position (x, y, z), v1 = texcoord (u, v)
 .alias inpos v0
@@ -30,5 +34,10 @@
 	dp4 outpos.w, projection[3], r1
 
 	mov outtc0, intc
+
+	mul r2.xy, grain.xy, inpos.xz
+	add r2.xy, grain.zw, r2.xy
+	mov r2.zw, myconst.xx
+	mov outtc1, r2
 	end
 .end

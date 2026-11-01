@@ -8,3 +8,5 @@ romfs/map_tex.bin
 romfs/overview.bin
 romfs/tiles/
 romfs/scenario.lua
+romfs/style.lua
+romfs/grain.bin

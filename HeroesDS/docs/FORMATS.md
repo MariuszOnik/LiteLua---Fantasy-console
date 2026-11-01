@@ -294,3 +294,27 @@ return {
 Ograniczenia: nazwy państw i prowincji 1–23 bajty, powiatów 1–19, kolory 0–255; id państw
 różne. `city = true` = państwo-miasto (nazwa mniejsza, nie wersalikami). Na 3DS: X mgła
 wł./wył., Y widok następnego państwa.
+
+## `style.lua` — wygląd mapy politycznej (nasz format)
+
+Plik danych jak `scenario.lua` (D38). Style są w `styles/` (`classic` = wygląd sprzed M3k,
+`parchment`, `leather`, `parchment-image`, `parchment-grain`); `tools/make_m3.py --style
+plik.lua` (domyślnie `styles/classic.lua`). Dwie części:
+- `map` — wypalane w tekstury przez `make_m3.py` (zmiana = generowanie i build od nowa):
+  `surface` (`plain` / `parchment` / `leather` / `image`), `paper`, `sea`, `shore`,
+  `rim` (spalona krawędź całej mapy 0–1), `stain` (plamy/zmarszczki), `image` +
+  `image_cells` (obraz obok pliku stylu, powtarzany bez szwu co tyle komórek), `lines`
+  (`coast`, `land`, `county`, `sea`). Wzory leżą na całej mapie (kafle bez szwów).
+- `view` — czyta 3DS przy starcie z `romfs:/style.lua`, a potem z
+  **`sdmc:/3ds/heroes3d/style.lua`** (jeśli jest — nadpisuje to, co podaje; zmiana kolorów
+  bez budowania): `background`, `tint`, `neutral`, `fog.unseen` / `fog.seen` (r, g, b,
+  alfa), `border` (`color`, `alpha`, `width`), `labels` (`province`, `county`, `shadow`,
+  `selected`), `grain` (`strength` 0–1, `cells`).
+
+Kolory `{ r, g, b }` lub `{ r, g, b, a }`, 0–255. Pełny przykład z opisem pól:
+`styles/classic.lua`.
+
+`grain.bin` (zawsze w romfs): ziarno papieru, które 3DS mnoży z mapą na GPU (drugi stopień
+texenv, 128 = bez zmiany), powtarzane co `grain.cells` komórek — ostre przy każdym
+przybliżeniu. `b"HG01"`, u32 rozmiar (256), u32 raw, u32 packed, zlib(L8, poziomy mipmap
+256…8 w kolejności tekstur 3DS jak kafle).
