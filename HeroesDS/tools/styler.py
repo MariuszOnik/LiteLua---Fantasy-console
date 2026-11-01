@@ -77,10 +77,11 @@ def prepare(a):
     owner = {e["id"]: realm_ix.get(e.get("owner") or "", -1) for e in scen["provinces"]}
     names = {e["id"]: e["name"] for e in scen["provinces"]}
     k = SIZE / painter.world
+    index = {r["id"]: i for i, r in enumerate(regions)}   # neighbours are listed by id
     out = []
     for r in regions:
         out.append(dict(kind=r["kind"], owner=owner.get(r["id"], -1) if r["kind"] == make_m3.KIND_LAND else -1,
-                        name=names.get(r["id"], r["name"]), neigh=list(r["neigh"]),
+                        name=names.get(r["id"], r["name"]), neigh=[index[n] for n in r["neigh"] if n in index],
                         x=(r["cx"] + painter.world / 2) * k, y=(r["cz"] + painter.world / 2) * k))
     return dict(paper=png(rgb[0]), ids=png(idimg),
                 info=dict(regions=out, realms=scen["realms"], player=realm_ix.get(scen.get("player"), 0),
@@ -93,8 +94,8 @@ PAGE = r"""<!doctype html><html><head><meta charset="utf-8"><title>Style editor<
 <style>
 body{margin:0;font:13px sans-serif;display:flex;height:100vh;background:#222;color:#ddd}
 #side{width:340px;overflow-y:auto;padding:8px 12px;background:#2b2b2b}
-#main{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}
-canvas{max-width:100%;max-height:100%;cursor:crosshair}
+#main{flex:1;overflow:hidden}
+canvas{width:100%;height:100%;cursor:crosshair;display:block}
 h3{margin:12px 0 4px;color:#fc6;font-size:13px}
 .row{display:flex;align-items:center;gap:6px;margin:3px 0}
 .row label{width:96px} .row input[type=range]{flex:1} .row span{width:38px;text-align:right}
@@ -102,7 +103,7 @@ button{margin:4px 4px 0 0;padding:5px 8px} small{color:#999}
 textarea{width:100%;height:160px;font:11px monospace;background:#111;color:#cfc}
 </style></head><body>
 <div id="side">
-<b id="title"></b><br><small>Click a province to select it. The map part (paper, lines) comes from make_m3.py.</small>
+<b id="title"></b><br><small>Click a province to select it; the wheel zooms, drag pans, a double click fits. The map part (paper, lines) comes from make_m3.py.</small>
 <div id="ctl"></div>
 <h3>Save</h3>
 <button onclick="save('sd')">Save to SD</button><button onclick="save('style')">Save to styles/</button>
@@ -129,7 +130,7 @@ document.getElementById("title").textContent = "Style: " + info.styleName;
 // controls: [path, label, kind, min, max, step]
 const C = [
  ["h","Map"], ["background","background","rgb"], ["tint","realm colour","num",0,1,0.01], ["neutral","nobody's land","rgb"],
- ["h","Fog"], ["fogOn","fog on","bool"], ["fog.unseen","never seen","rgba"], ["fog.seen","seen before","rgba"],
+ ["h","Fog"], ["fogOn","fog on","bool"], ["fogRing","seen-before ring","bool"], ["fog.unseen","never seen","rgba"], ["fog.seen","seen before","rgba"],
  ["h","Realms' borders"], ["border.show","show","bool"], ["border.color","colour","rgb"], ["border.alpha","alpha","num",0,1,0.01], ["border.width","width","num",0.2,4,0.1],
  ["h","Names"], ["labels.province","province","rgb"], ["labels.shadow","realm shadow","rgb"], ["labels.selected","selected","rgb"],
  ["h","Selection"], ["select.mode","mode","choice",["fill","glow","line","none"]],
@@ -137,7 +138,7 @@ const C = [
  ["select.period","period (s)","num",0.5,10,0.1], ["select.soft","soft (x gap)","num",0,8,0.1],
  ["select.gap","gap (cells)","num",0,1,0.01], ["select.light","light","rgb"],
 ];
-S.fogOn = info.fog;
+S.fogOn = info.fog; S.fogRing = false;
 function get(p){ return p.split(".").reduce((o,k)=>o[k], S); }
 function set(p,v){ const ks=p.split("."); let o=S; for (let i=0;i<ks.length-1;i++) o=o[ks[i]]; o[ks.at(-1)]=v; }
 const hex = c => "#"+c.slice(0,3).map(x=>(+x).toString(16).padStart(2,"0")).join("");
@@ -167,29 +168,55 @@ for (const c of C) {
 }
 
 // --- the map --------------------------------------------------------------------------
-const cv=document.getElementById("cv"), cx=cv.getContext("2d");
-let W, paper, rid, base, dirty=true, selDirty=true, selected=-1, selPix=null, selBand=null;
+const cv=document.getElementById("cv"), cx=cv.getContext("2d"), main=document.getElementById("main");
+let W, paper, rid, base, mapCv, mapCx, dirty=true, selDirty=true, selected=-1, selPix=null, selBand=null, baseFog;
+let zoom=1, ox=0, oy=0;   // screen = map pixel * zoom + (ox, oy)
 const R = info.regions, NONE=0xFFFF;
 function load(src){ return new Promise(ok=>{ const im=new Image(); im.onload=()=>ok(im); im.src=src; }); }
 Promise.all([load("paper.png"), load("ids.png")]).then(([p, ids])=>{
-  W=p.width; cv.width=cv.height=W;
+  W=p.width; mapCv=new OffscreenCanvas(W,W); mapCx=mapCv.getContext("2d");
   const t=new OffscreenCanvas(W,W).getContext("2d");
   t.drawImage(p,0,0); paper=t.getImageData(0,0,W,W).data;
   t.drawImage(ids,0,0); const d=t.getImageData(0,0,W,W).data;
   rid=new Uint16Array(W*W); for (let i=0;i<W*W;i++) rid[i]=d[i*4]|d[i*4+1]<<8;
-  base=cx.createImageData(W,W); writeOut(); requestAnimationFrame(frame);
+  base=new ImageData(W,W); fit(); writeOut(); requestAnimationFrame(frame);
 });
-cv.onclick=e=>{ const r=cv.getBoundingClientRect(), x=Math.floor((e.clientX-r.left)/r.width*W),
-  y=Math.floor((e.clientY-r.top)/r.height*W), g=rid[y*W+x];
-  selected = g===NONE||g===selected ? -1 : g; selDirty=true; };
+
+// zoom: the wheel round the pointer, drag pans, a double click fits the map again
+function fit(){ cv.width=main.clientWidth; cv.height=main.clientHeight;
+  zoom=Math.min(cv.width,cv.height)/W; ox=(cv.width-W*zoom)/2; oy=(cv.height-W*zoom)/2; }
+window.onresize=()=>{ const cxm=(cv.width/2-ox)/zoom, cym=(cv.height/2-oy)/zoom;
+  cv.width=main.clientWidth; cv.height=main.clientHeight; ox=cv.width/2-cxm*zoom; oy=cv.height/2-cym*zoom; };
+cv.onwheel=e=>{ e.preventDefault(); const r=cv.getBoundingClientRect(), x=e.clientX-r.left, y=e.clientY-r.top;
+  const k=Math.min(16,Math.max(0.3,zoom*(e.deltaY<0?1.2:1/1.2)))/zoom;
+  ox=x-(x-ox)*k; oy=y-(y-oy)*k; zoom*=k; };
+let drag=null;
+cv.onmousedown=e=>{ drag={x:e.clientX, y:e.clientY, ox, oy, moved:false}; };
+window.onmousemove=e=>{ if (!drag) return; const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+  if (Math.abs(dx)+Math.abs(dy)>4) drag.moved=true; if (drag.moved){ ox=drag.ox+dx; oy=drag.oy+dy; } };
+window.onmouseup=e=>{ if (drag&&!drag.moved&&e.target===cv){ const r=cv.getBoundingClientRect(),
+    x=Math.floor((e.clientX-r.left-ox)/zoom), y=Math.floor((e.clientY-r.top-oy)/zoom);
+    if (x>=0&&y>=0&&x<W&&y<W){ const g=rid[y*W+x]; selected = g===NONE||g===selected ? -1 : g; selDirty=true; } }
+  drag=null; };
+cv.ondblclick=fit;
 
 function fogState(){
-  // as on the 3DS at the start: own provinces and their neighbours seen now; one ring
-  // further shown as "seen before" so both colours can be judged
+  // as on the 3DS at the start: own provinces and their neighbours (land and sea) seen
+  // now, the rest never; fogRing also shows the land next to that as seen before
   const f=new Uint8Array(R.length).fill(S.fogOn?0:2); if (!S.fogOn) return f;
   R.forEach((g,i)=>{ if (g.kind===0&&g.owner===info.player){ f[i]=2; for (const n of g.neigh) f[n]=2; } });
-  R.forEach((g,i)=>{ if (f[i]===2) for (const n of g.neigh) if (!f[n]) f[n]=1; });
+  if (S.fogRing) R.forEach((g,i)=>{ if (f[i]===2&&g.kind!==1) for (const n of g.neigh) if (!f[n]&&R[n].kind!==1) f[n]=1; });
   return f;
+}
+// a box blur of an RGBA float layer, both ways (the 3DS's fog texture is 512 wide and
+// filtered: soft edges about two of these pixels wide)
+function blur(a, r){ const n=W, tmp=new Float32Array(a.length);
+  for (const [src,dst,step,lineStep] of [[a,tmp,4,n*4],[tmp,a,n*4,4]])
+    for (let l=0;l<n;l++){ const acc=[0,0,0,0], b0=l*lineStep;
+      for (let k=-r;k<=r;k++){ const i=b0+Math.min(n-1,Math.max(0,k))*step; for (let c=0;c<4;c++) acc[c]+=src[i+c]; }
+      for (let k=0;k<n;k++){ for (let c=0;c<4;c++) dst[b0+k*step+c]=acc[c]/(2*r+1);
+        const out=b0+Math.max(0,k-r)*step, inn=b0+Math.min(n-1,k+r+1)*step;
+        for (let c=0;c<4;c++) acc[c]+=src[inn+c]-src[out+c]; } }
 }
 function rebuild(){
   const out=base.data, k=S.tint, fog=fogState(), tint=R.map(g=>{
@@ -210,12 +237,16 @@ function rebuild(){
         const X=x+dx, Y=y+dy; if (X>=0&&Y>=0&&X<W&&Y<W) mark[Y*W+X]=1; } }
     for (let i=0;i<W*W;i++) if (mark[i]) for (let c=0;c<3;c++) out[i*4+c]+= (col[c]-out[i*4+c])*a;
   }
-  const fc=[null,S.fog.seen,S.fog.unseen];
-  for (let i=0;i<W*W;i++){ const g=rid[i]; if (g===NONE) continue; const st=fog[g]; if (st===2) continue;
-    const c=st===1?S.fog.seen:S.fog.unseen, a=c[3]/255; for (let q=0;q<3;q++) out[i*4+q]+=(c[q]-out[i*4+q])*a; }
+  // fog: colours as the 3DS keeps them (4 bits each, RGBA4), premultiplied, blurred
+  const q4 = v => (v>>4)*17, layer=new Float32Array(W*W*4);
+  const look=[S.fog.unseen.map(q4), S.fog.seen.map(q4)];
+  for (let i=0;i<W*W;i++){ const g=rid[i]; if (g===NONE||fog[g]===2) continue; const c=look[fog[g]], a=c[3]/255;
+    layer[i*4]=c[0]*a; layer[i*4+1]=c[1]*a; layer[i*4+2]=c[2]*a; layer[i*4+3]=a; }
+  blur(layer, Math.max(1, Math.round(W/512)));
+  for (let i=0;i<W*W;i++){ const a=layer[i*4+3]; if (a<=0) continue;
+    for (let c=0;c<3;c++) out[i*4+c]=out[i*4+c]*(1-a)+layer[i*4+c]; }
   baseFog=fog;
 }
-let baseFog;
 function selection(){
   // the selected region's pixels and the band each is in (0 far .. 4 by the border),
   // from a distance-to-the-border pass over its pixels
@@ -230,7 +261,6 @@ function selection(){
   selPix=px; selBand=px.map(i=>{ let b=0; for (let k=1;k<=4;k++) if (dist[i]<g*(1+sb*(4-k)/3)) b=k; return b; });
 }
 function frame(t){
-  if (!W) return requestAnimationFrame(frame);
   if (dirty){ rebuild(); dirty=false; selDirty=true; }
   if (selDirty){ selection(); selDirty=false; }
   const img=new ImageData(new Uint8ClampedArray(base.data), W);
@@ -244,20 +274,24 @@ function frame(t){
       selPix.forEach((i,n)=>{ const a=amount*(4-selBand[n])/4; for (let c=0;c<3;c++) o[i*4+c]*=1+a*s.light[c]/255; });
     }
   }
-  document.getElementById("main").style.background="rgb("+S.background+")"; cx.putImageData(img,0,0);
-  labels();
+  mapCx.putImageData(img,0,0);
+  cx.setTransform(1,0,0,1,0,0); cx.fillStyle="rgb("+S.background+")"; cx.fillRect(0,0,cv.width,cv.height);
+  cx.imageSmoothingEnabled=true; cx.setTransform(zoom,0,0,zoom,ox,oy); cx.drawImage(mapCv,0,0);
+  cx.setTransform(1,0,0,1,0,0); labels();
   requestAnimationFrame(frame);
 }
 function labels(){
+  // names as on the 3DS by distance: realms far, provinces nearer
   cx.textAlign="center"; cx.textBaseline="middle";
-  const seen=new Map();
+  const seen=new Map(), z=Math.min(2.5,Math.max(0.6,zoom)), sx=x=>x*zoom+ox, sy=y=>y*zoom+oy;
   R.forEach((g,i)=>{ if (g.kind!==0||!baseFog[i]) return;
-    cx.font=(i===selected?"bold ":"")+"14px sans-serif";
-    cx.fillStyle="rgb("+(i===selected?S.labels.selected:S.labels.province)+")"; cx.fillText(g.name,g.x,g.y);
+    if (zoom>0.45||i===selected){ cx.font=(i===selected?"bold ":"")+Math.round(13*z)+"px sans-serif";
+      cx.fillStyle="rgb("+(i===selected?S.labels.selected:S.labels.province)+")"; cx.fillText(g.name,sx(g.x),sy(g.y)); }
     if (g.owner>=0){ const s=seen.get(g.owner)||[0,0,0]; seen.set(g.owner,[s[0]+g.x,s[1]+g.y,s[2]+1]); } });
-  cx.font="bold 34px sans-serif";
+  if (zoom>2) return;
+  cx.font="bold "+Math.round(30*Math.min(1.4,Math.max(0.5,zoom*1.2)))+"px sans-serif";
   for (const [f,[x,y,n]] of seen){ const r=info.realms[f]; if (n<2) continue;
-    const name=r.city?r.name:r.name.toUpperCase(), X=x/n, Y=y/n-22;
+    const name=r.city?r.name:r.name.toUpperCase(), X=sx(x/n), Y=sy(y/n)-20;
     cx.fillStyle="rgba("+S.labels.shadow+",0.6)"; cx.fillText(name,X+3,Y+3);
     cx.fillStyle="rgb("+r.color.map(v=>v*0.5+128).map(Math.round)+")"; cx.fillText(name,X,Y); }
 }
@@ -268,7 +302,7 @@ function lua(v, ind){ ind=ind||"";
   if (typeof v==="string") return JSON.stringify(v);
   if (Array.isArray(v)) return "{ "+v.map(x=>lua(x)).join(", ")+" }";
   const i2=ind+"  "; return "{\n"+Object.keys(v).map(k=>i2+k+" = "+lua(v[k],i2)+",").join("\n")+"\n"+ind+"}"; }
-function viewOut(){ const v=JSON.parse(JSON.stringify(S)); delete v.fogOn; return v; }
+function viewOut(){ const v=JSON.parse(JSON.stringify(S)); delete v.fogOn; delete v.fogRing; return v; }
 function writeOut(){ document.getElementById("out").value = "  view = "+lua(viewOut(),"  ")+","; }
 async function save(target){
   const r = await fetch("save?target="+target, {method:"POST", body: JSON.stringify(viewOut())});
