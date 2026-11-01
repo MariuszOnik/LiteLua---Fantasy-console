@@ -86,6 +86,7 @@ MAP_STYLE = {
     "image_cells": 24.0,  # cells one copy of the picture covers
     "stain": 1.0,         # parchment, leather: how strong the stains and wrinkles are
     "rim": 0.0,           # the map's own edge burnt dark: 0 none .. 1 strong
+    "gamma": 1.0,         # over 1 lighter half-tones (the whole picture, lines too)
     "lines": {"sea": SEA_LINE, "county": COUNTY_LINE, "land": LAND_LINE, "coast": COAST_LINE},
 }
 
@@ -909,6 +910,8 @@ class Painter:
                 img = img * (1 - a) + np.array(col, float) * a
             if rim is not None:
                 img *= np.asarray(rim.resize((s * ss, s * ss), Image.BILINEAR), float) / 255
+            if st["gamma"] != 1:
+                img = 255 * (np.clip(img, 0, 255) / 255) ** (1 / st["gamma"])
             img = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8)).resize((s, s), Image.LANCZOS)
             levels.append(np.asarray(img))
             if s <= 8:

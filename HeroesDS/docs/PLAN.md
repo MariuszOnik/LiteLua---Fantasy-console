@@ -42,7 +42,7 @@ w msys2 devkitPro; `run` = Azahar). Każdy pomysł = osobny commit i osobny buil
 `m3j-graphitefog-2x2` (`-gen "--tiles 2 --scenario ../scenarios/six-realms.lua"`) i
 `m3j-graphitefog-big4x4` (`-gen "--size 144 --provinces 180 --tiles 4"`: 284 regiony,
 1059 powiatów, 16 kafli). Style (2x2, six-realms, do porównania): `m3k-style-classic`
-(jak m3j), `m3l-parchment` (pergamin z kodu), `m3m-leather` (skóra, złote granice),
+(jak m3j), `m3l-parchment` (pergamin z kodu), `m3m-leather` (skóra, złote granice; jaśniejsza: `m3p-leather-light`, `gamma` 1.35),
 `m3n-parchment-image` (obraz SDXL `styles/parchment.png`), `m3o-parchment-grain` (gładki
 papier + ziarno na GPU). Wszystkie sprawdzone w Azaharze; użytkownik wybiera. Historia: m3a gładkie płyty → m3b fraktale w meshu → m3c
 płaska mapa z teksturą → m3d kafle → m3e szczegóły wg oddalenia → m3f klikanie powiatów

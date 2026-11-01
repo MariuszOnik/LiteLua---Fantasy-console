@@ -302,7 +302,7 @@ Plik danych jak `scenario.lua` (D38). Style są w `styles/` (`classic` = wygląd
 plik.lua` (domyślnie `styles/classic.lua`). Dwie części:
 - `map` — wypalane w tekstury przez `make_m3.py` (zmiana = generowanie i build od nowa):
   `surface` (`plain` / `parchment` / `leather` / `image`), `paper`, `sea`, `shore`,
-  `rim` (spalona krawędź całej mapy 0–1), `stain` (plamy/zmarszczki), `image` +
+  `rim` (spalona krawędź całej mapy 0–1), `gamma` (>1 jaśniejsze półcienie), `stain` (plamy/zmarszczki), `image` +
   `image_cells` (obraz obok pliku stylu, powtarzany bez szwu co tyle komórek), `lines`
   (`coast`, `land`, `county`, `sea`). Wzory leżą na całej mapie (kafle bez szwów).
 - `view` — czyta 3DS przy starcie z `romfs:/style.lua`, a potem z

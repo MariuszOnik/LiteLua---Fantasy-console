@@ -10,6 +10,7 @@ return {
     sea = { 150, 190, 200 },
     shore = { 235, 240, 225 },   -- the sea lighter near the coast
     rim = 0,                     -- the map's own edge burnt dark: 0 .. 1
+    gamma = 1.0,                 -- over 1: lighter half-tones (the whole picture)
     lines = {
       coast = { 40, 28, 18 },
       land = { 70, 48, 30 },     -- between provinces
