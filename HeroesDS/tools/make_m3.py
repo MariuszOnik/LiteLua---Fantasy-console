@@ -3,7 +3,7 @@ every province and sea zone is a flat polygon with smooth, wavy borders, land pr
 are plates raised over the sea with walls down to it, and the borders are thin ribbons.
 
   python HeroesDS/tools/make_m3.py [--seed 77] [--coast 1] [--out 3ds/romfs/map3d.bin]
-                                   [--png preview.png]
+                                   [--png preview.png] [--obj map.obj]
 
 Steps:
   1. make_m2.generate: provinces and sea zones on a grid of cells (region per cell)
@@ -12,12 +12,17 @@ Steps:
      corner where the region touches itself diagonally the ring keeps to one cell
   3. chains: the rings are cut at junctions (corners where 3+ regions meet, or more than
      two border sides) into chains shared by the two regions on their sides; every chain
-     is smoothed once -- control points in the middle of its cell sides (so stairs become
-     slopes), a small wobble (none along the map edge), Chaikin, then simplified -- so
-     both neighbours get exactly the same border
-  4. triangles: the top of each region by ear cutting (mapbox_earcut, holes included);
-     land gets walls down to the sea (shade from a fixed light); borders become ribbons
-     a little over the surface (land/land, coast -- inside the land only, sea/sea)
+     is made once -- control points in the middle of its cell sides (so stairs become
+     slopes), a Chaikin step, simplified -- so both neighbours get exactly the same border
+  4. noisy edges: the smoothed line is cut into long segments, each segment's middle is
+     pushed sideways at random by up to ROUGH x its length, then both halves the same way
+     down to MIN_SEG (detail at every scale, like a hand-drawn map; Red Blob Games'
+     "noisy edges"); a line crossing another one (or itself) is redone calmer
+  5. triangles: the top of each region by ear cutting (mapbox_earcut, holes included);
+     land gets walls down to the sea (shade from a fixed light; walls on the shore first,
+     walls between land regions after -- the 3DS draws those only for a raised
+     province); borders become ribbons a little over the surface (land/land, coast --
+     inside the land only, sea/sea)
 The file format is in docs/FORMATS.md ("map3d.bin").
 """
 import argparse
@@ -32,9 +37,10 @@ sys.path.insert(0, os.path.dirname(__file__))
 import make_m2 as m2  # noqa: E402
 
 LAND_H = 0.8          # top of the land plates (a cell is 1 x 1)
-WOBBLE = 0.18         # random shift of a border's control points, in cells
-CHAIKIN = 2           # smoothing steps
-SIMPLIFY = 0.04       # Douglas-Peucker tolerance, in cells
+CHAIKIN = 1           # smoothing steps of the base line (takes the grid's stairs off)
+BASE = 0.3            # Douglas-Peucker tolerance of the base line, in cells
+ROUGH = {"land": 0.3, "coast": 0.36, "sea": 0.2}   # noisy edges: sideways shift / length
+MIN_SEG = 0.2         # noisy edges stop at segments this long, in cells
 OUTSIDE = -2          # region number of the space outside the grid
 NEUTRAL = -1          # land without a province (tiny islets)
 LIGHT = np.array((-0.5, -0.7))  # light comes from this side (x, z), for the walls
@@ -135,35 +141,91 @@ def simplify(p, tol):
     return p[keep]
 
 
-def smooth(corners, closed, edge):
-    """Smoothed points (x, z) of a chain of grid corners; ends stay put (open chain)."""
+def base_line(corners, closed):
+    """The chain of grid corners without its stairs: control points in the middle of the
+    cell sides, one Chaikin step, simplified to long segments (ends stay put)."""
     pts = np.array([(c, r) for r, c in corners], float)
     if closed:
         ctrl = (pts + np.roll(pts, -1, 0)) / 2
     else:
         ctrl = np.vstack([pts[:1], (pts[:-1] + pts[1:]) / 2, pts[-1:]])
-    if not edge:
-        rng = np.random.default_rng(zlib.crc32(repr(corners[:4]).encode()))
-        jit = rng.uniform(-WOBBLE, WOBBLE, ctrl.shape)
-        if not closed:
-            jit[0] = jit[-1] = 0
-        ctrl = ctrl + jit
     p = chaikin(ctrl, closed, CHAIKIN)
     if closed:
-        p = simplify(np.vstack([p, p[:1]]), SIMPLIFY)[:-1]
-    else:
-        p = simplify(p, SIMPLIFY)
-    return p
+        return simplify(np.vstack([p, p[:1]]), BASE)[:-1]
+    return simplify(p, BASE)
+
+
+def roughen(p, closed, rough, seed):
+    """Noisy edges: every segment's middle moves sideways by up to rough x its length,
+    then both halves the same way, down to MIN_SEG -- detail at every scale."""
+    if rough <= 0:
+        return p
+    rng = np.random.default_rng(seed)
+
+    def split(a, b, out):
+        d = b - a
+        n = float(np.hypot(*d))
+        if n < MIN_SEG:
+            out.append(b)
+            return
+        m = (a + b) / 2 + np.array((-d[1], d[0])) * rng.uniform(-rough, rough)
+        split(a, m, out)
+        split(m, b, out)
+
+    out = [p[0]]
+    q = np.vstack([p, p[:1]]) if closed else p
+    for a, b in zip(q[:-1], q[1:]):
+        split(a, b, out)
+    return np.array(out[:-1] if closed else out)
+
+
+def crossings(lines):
+    """Keys of the lines {key: (points, closed)} whose segments cross any other segment
+    (or their own); touching at a shared end does not count."""
+    segs, grid = [], {}
+    for key, (p, closed) in lines.items():
+        q = np.vstack([p, p[:1]]) if closed else p
+        n = len(q) - 1
+        for i in range(n):
+            a, b = q[i], q[i + 1]
+            s = len(segs)
+            segs.append((key, i, n, closed, a, b))
+            for gx in range(int(np.floor(min(a[0], b[0]))), int(np.floor(max(a[0], b[0]))) + 1):
+                for gz in range(int(np.floor(min(a[1], b[1]))), int(np.floor(max(a[1], b[1]))) + 1):
+                    grid.setdefault((gx, gz), []).append(s)
+
+    def orient(p, q, r):
+        return (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+
+    bad, seen = set(), set()
+    for cell in grid.values():
+        for x in range(len(cell)):
+            for y in range(x + 1, len(cell)):
+                s, t = cell[x], cell[y]
+                if (s, t) in seen:
+                    continue
+                seen.add((s, t))
+                k1, i1, n1, c1, a1, b1 = segs[s]
+                k2, i2, n2, c2, a2, b2 = segs[t]
+                if k1 == k2 and (abs(i1 - i2) <= 1 or (c1 and abs(i1 - i2) == n1 - 1)):
+                    continue
+                if (orient(a1, b1, a2) * orient(a1, b1, b2) < 0
+                        and orient(a2, b2, a1) * orient(a2, b2, b1) < 0):
+                    bad.update((k1, k2))
+    return bad
 
 
 class Chains:
-    """Smoothed chains, each made once and shared by the regions on both sides."""
+    """Border chains, each made once and shared by the regions on both sides."""
 
-    def __init__(self, prov):
+    def __init__(self, prov, land):
         self.prov = prov
-        self.cache = {}   # key -> (points, sides: (left region, right region))
+        self.land = land
+        self.info = {}    # key -> (corners, closed, sides: (region walking it this way, other))
+        self.cache = {}   # key -> (points, sides)
 
     def get(self, corners, closed, region):
+        """Registers the chain; returns its key and whether the region walks it backwards."""
         if closed:
             i = corners.index(min(corners))
             fwd = corners[i:] + corners[:i]
@@ -172,11 +234,42 @@ class Chains:
         else:
             fwd, rev = corners, corners[::-1]
             key, back = (tuple(min(fwd, rev)), False), fwd > rev
-        if key not in self.cache:
+        if key not in self.info:
             seq = list(key[0])
             other = self.across(seq, closed, region, back)
-            edge = OUTSIDE in (region, other)
-            self.cache[key] = (smooth(seq, closed, edge), (region, other) if not back else (other, region))
+            self.info[key] = (seq, closed, (region, other) if not back else (other, region))
+        return key, back
+
+    def kind(self, sides):
+        if OUTSIDE in sides:
+            return "edge"
+        land = [s == NEUTRAL or 0 <= s < self.land for s in sides]
+        return "land" if all(land) else "coast" if any(land) else "sea"
+
+    def make(self):
+        """Base lines, roughened; a line that crosses another gets calmer until none do."""
+        base, scale = {}, {}
+        for key, (seq, closed, sides) in self.info.items():
+            base[key] = base_line(seq, closed)
+            scale[key] = ROUGH.get(self.kind(sides), 0.0)
+        lines = {}
+        for attempt in range(6):
+            todo = scale if attempt == 0 else bad
+            for key in todo:
+                seed = zlib.crc32(repr(key[0][:4]).encode()) + attempt
+                lines[key] = (roughen(base[key], key[1], scale[key], seed), key[1])
+            bad = crossings(lines)
+            if not bad:
+                break
+            for key in bad:
+                scale[key] = scale[key] * 0.5 if attempt < 4 else 0.0
+        self.cache = {key: (lines[key][0], self.info[key][2]) for key in self.info}
+
+    def outer(self, key):
+        """Whether the chain is a shore (sea or the map edge on one side): its walls show."""
+        return self.kind(self.info[key][2]) in ("coast", "edge")
+
+    def points(self, key, back):
         pts = self.cache[key][0]
         return pts[::-1] if back else pts
 
@@ -188,29 +281,41 @@ class Chains:
         return regs[0] if regs[1] == region else regs[1]
 
 
-def region_rings(prov):
-    """{region: [ring points (N, 2) x, z]} with smooth shared borders, and the chains."""
+def region_rings(prov, land):
+    """{region: [ring points (N, 2) x, z]} with rough shared borders, per ring whether
+    the side from point i to i + 1 is a shore (its wall shows), and the chains."""
     rings = outlines(prov)
     junc = junctions(prov)
-    chains = Chains(prov)
-    out = {}
+    chains = Chains(prov, land)
+    plan = []   # (region, [(key, back, closed)])
     for a, rs in rings.items():
         if a == OUTSIDE:
             continue
         for ring in rs:
             cut = [i for i, v in enumerate(ring) if v in junc]
             if not cut:
-                pts = chains.get(ring, True, a)
-            else:
-                ring = ring[cut[0]:] + ring[:cut[0]]
-                cut = [i - cut[0] for i in cut] + [len(ring)]
-                parts = []
-                for i, j in zip(cut, cut[1:]):
-                    seg = ring[i:j + 1] if j < len(ring) else ring[i:] + ring[:1]
-                    parts.append(chains.get(seg, False, a)[:-1])
-                pts = np.vstack(parts)
-            out.setdefault(a, []).append(pts)
-    return out, chains
+                plan.append((a, [chains.get(ring, True, a) + (True,)]))
+                continue
+            ring = ring[cut[0]:] + ring[:cut[0]]
+            cut = [i - cut[0] for i in cut] + [len(ring)]
+            parts = []
+            for i, j in zip(cut, cut[1:]):
+                seg = ring[i:j + 1] if j < len(ring) else ring[i:] + ring[:1]
+                parts.append(chains.get(seg, False, a) + (False,))
+            plan.append((a, parts))
+    chains.make()
+    out, walls = {}, {}
+    for a, parts in plan:
+        if parts[0][2]:
+            pts = chains.points(*parts[0][:2])
+            seen = [chains.outer(parts[0][0])] * len(pts)
+        else:
+            lines = [chains.points(key, back)[:-1] for key, back, _ in parts]
+            pts = np.vstack(lines)
+            seen = [chains.outer(key) for (key, _, _), q in zip(parts, lines) for _ in q]
+        out.setdefault(a, []).append(pts)
+        walls.setdefault(a, []).append(np.array(seen))
+    return out, walls, chains
 
 
 def area(p):
@@ -255,7 +360,7 @@ def triangulate(rings):
 def build(m):
     prov = m["province"].copy()
     land = m["land"]
-    rings, chains = region_rings(prov)
+    rings, walls, chains = region_rings(prov, land)
     off = np.array([prov.shape[1] / 2, prov.shape[0] / 2])
     regions = []
     for a in sorted(rings):
@@ -266,18 +371,26 @@ def build(m):
         verts = [(x, top_y, z, 1.0) for x, z in pts2]
         idx = [int(i) for t in tris for i in t]   # drawn without culling
         top = len(idx)
+        shore, inner = [], []
         if kind != KIND_SEA:
-            for ring in rings[a]:
+            for ring, outer in zip(rings[a], walls[a]):
                 p = ring - off
-                for i in range(len(p)):
-                    (x1, z1), (x2, z2) = p[i], p[(i + 1) % len(p)]
-                    d = np.array((x2 - x1, z2 - z1))
-                    n = np.array((d[1], -d[0])) / (np.hypot(*d) or 1)  # out of the region
-                    shade = 0.45 + 0.45 * max(0.0, float(n @ (LIGHT / np.hypot(*LIGHT))))
-                    v = len(verts)
-                    verts += [(x1, top_y, z1, shade), (x2, top_y, z2, shade),
-                              (x2, 0.0, z2, shade), (x1, 0.0, z1, shade)]
-                    idx += [v, v + 2, v + 1, v, v + 3, v + 2]
+                d = np.roll(p, -1, 0) - p
+                n = np.stack([d[:, 1], -d[:, 0]], 1)            # out of the region
+                n /= np.maximum(np.hypot(n[:, 0], n[:, 1]), 1e-9)[:, None]
+                vn = n + np.roll(n, 1, 0)                        # per point: both sides
+                vn /= np.maximum(np.hypot(vn[:, 0], vn[:, 1]), 1e-9)[:, None]
+                shade = 0.45 + 0.45 * np.maximum(0.0, vn @ (LIGHT / np.hypot(*LIGHT)))
+                v0, k = len(verts), len(p)
+                for (x, z), sh in zip(p, shade):
+                    verts += [(x, top_y, z, float(sh)), (x, 0.0, z, float(sh))]
+                for i in range(k):
+                    t1, b1 = v0 + 2 * i, v0 + 2 * i + 1
+                    t2, b2 = v0 + 2 * ((i + 1) % k), v0 + 2 * ((i + 1) % k) + 1
+                    (shore if outer[i] else inner).extend((t1, b2, t2, t1, b1, b2))
+        idx += shore
+        coast = len(idx)
+        idx += inner
         assert len(verts) < 65536, (a, len(verts))
         xs, zs = pts2[:, 0], pts2[:, 1]
         if a >= 0:
@@ -289,7 +402,7 @@ def build(m):
         neigh = sorted(int(b) for b in m["neighbours"].get(a, ()) if b >= 0) if a >= 0 else []
         regions.append(dict(id=a, kind=kind, owner=owner, name=name, cx=cx, cz=cz,
                             box=(float(xs.min()), float(zs.min()), float(xs.max()), float(zs.max())),
-                            verts=verts, idx=idx, top=top, neigh=neigh))
+                            verts=verts, idx=idx, top=top, coast=coast, neigh=neigh))
     borders = {k: [] for k in BORDER}
     for (seq, closed), (pts, (ra, rb)) in chains.cache.items():
         if OUTSIDE in (ra, rb):
@@ -307,7 +420,7 @@ def build(m):
         w, lift = BORDER[cls]
         y = (LAND_H if cls < 2 else 0.0) + lift
         borders[cls] += ribbon(pts - off, closed, w * lo, w * hi, y)
-    return regions, borders
+    return regions, borders, chains
 
 
 def ribbon(p, closed, lo, hi, y):
@@ -340,7 +453,7 @@ def ribbon(p, closed, lo, hi, y):
 
 def write(path, m, regions, borders):
     """map3d.bin, see docs/FORMATS.md."""
-    head = struct.pack("<4sHHHH", b"HM3D", 1, len(regions), m["land"], len(m2.FACTIONS))
+    head = struct.pack("<4sHHHH", b"HM3D", 2, len(regions), m["land"], len(m2.FACTIONS))
     nv = sum(len(r["verts"]) for r in regions)
     ni = sum(len(r["idx"]) for r in regions)
     nb = sum(len(v) for v in borders.values())
@@ -349,9 +462,9 @@ def write(path, m, regions, borders):
         head += struct.pack("<BBBx16s", *col, fname.encode())
     body, nlist, v0, i0 = b"", b"", 0, 0
     for r in regions:
-        head += struct.pack("<hbbB3x24s6f5I", r["id"], r["kind"], r["owner"], len(r["neigh"]),
+        head += struct.pack("<hbbB3x24s6f6I", r["id"], r["kind"], r["owner"], len(r["neigh"]),
                             r["name"].encode()[:23], r["cx"], r["cz"], *r["box"],
-                            v0, len(r["verts"]), i0, len(r["idx"]), r["top"])
+                            v0, len(r["verts"]), i0, len(r["idx"]), r["top"], r["coast"])
         nlist += struct.pack("<%dh" % len(r["neigh"]), *r["neigh"])
         v0 += len(r["verts"])
         i0 += len(r["idx"])
@@ -368,6 +481,20 @@ def write(path, m, regions, borders):
     with open(path, "wb") as f:
         f.write(head + body)
     return nv, ni, nb
+
+
+def write_obj(path, regions):
+    """Every region as an object (top and all walls), to look at in Blender."""
+    with open(path, "w", encoding="utf-8") as f:
+        base = 1
+        for r in regions:
+            f.write("o %s_%d\n" % (r["name"].replace(" ", "_") or "neutral", r["id"]))
+            for x, y, z, _ in r["verts"]:
+                f.write("v %.4f %.4f %.4f\n" % (x, y, -z))
+            idx = r["idx"]
+            for t in range(0, len(idx), 3):
+                f.write("f %d %d %d\n" % tuple(base + i for i in idx[t:t + 3]))
+            base += len(r["verts"])
 
 
 def preview(path, m, regions, borders, scale=10):
@@ -409,14 +536,17 @@ def main(argv):
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     p.add_argument("--out", default=os.path.join(here, "3ds", "romfs", "map3d.bin"))
     p.add_argument("--png")
+    p.add_argument("--obj", help="also write a Wavefront .obj (one object per region) for Blender")
     a = p.parse_args(argv)
     m = m2.generate(a.seed, a.size, a.provinces, a.coast)
-    regions, borders = build(m)
+    regions, borders, _ = build(m)
     nv, ni, nb = write(a.out, m, regions, borders)
     print("%s: %d regions (%d land), %d vertices, %d triangles, %d border triangles, %d KB"
           % (a.out, len(regions), m["land"], nv, ni // 3, nb // 3, os.path.getsize(a.out) // 1024))
     if a.png:
         preview(a.png, m, regions, borders)
+    if a.obj:
+        write_obj(a.obj, regions)
 
 
 if __name__ == "__main__":

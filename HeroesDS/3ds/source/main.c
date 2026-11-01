@@ -40,6 +40,7 @@ typedef struct {
 	char name[24];
 	float cx, cz, x0, z0, x1, z1;
 	u32 vstart, vcount, istart, icount, itop;
+	u32 ishore;              // top + shore walls; the rest: walls between land regions
 } Region;
 
 typedef struct { float x, y, z, shade; } Vertex;
@@ -47,7 +48,7 @@ typedef struct { float x, y, z; } BVertex;
 
 _Static_assert(sizeof(MapHeader) == 28, "header");
 _Static_assert(sizeof(Faction) == 20, "faction");
-_Static_assert(sizeof(Region) == 76, "region");
+_Static_assert(sizeof(Region) == 80, "region");
 
 static MapHeader hdr;
 static Faction factions[8];
@@ -107,7 +108,7 @@ static bool loadMap(void)
 	if (!buf) return false;
 	u8* p = buf;
 	memcpy(&hdr, p, sizeof hdr); p += sizeof hdr;
-	if (memcmp(hdr.magic, "HM3D", 4) || hdr.version != 1 || hdr.nregions > MAX_REGIONS || hdr.nfactions > 8) {
+	if (memcmp(hdr.magic, "HM3D", 4) || hdr.version != 2 || hdr.nregions > MAX_REGIONS || hdr.nfactions > 8) {
 		free(buf);
 		return false;
 	}
@@ -271,7 +272,9 @@ static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view)
 		BufInfo_Init(&buf);
 		BufInfo_Add(&buf, verts + g->vstart, sizeof(Vertex), 2, 0x10);
 		C3D_SetBufInfo(&buf);
-		C3D_DrawElements(GPU_TRIANGLES, g->icount, C3D_UNSIGNED_SHORT, indices + g->istart);
+		// walls between land regions only show when the province is raised
+		u32 n = i == selected && lift > 0.001f ? g->icount : g->ishore;
+		C3D_DrawElements(GPU_TRIANGLES, n, C3D_UNSIGNED_SHORT, indices + g->istart);
 	}
 
 	static const float bcol[BORDER_CLASSES][3] = {

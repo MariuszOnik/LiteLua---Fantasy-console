@@ -31,7 +31,7 @@ class MeshTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.m = make_m3.m2.generate(5, 40, 14, 1.0)
-        cls.regions, cls.borders = make_m3.build(cls.m)
+        cls.regions, cls.borders, cls.chains = make_m3.build(cls.m)
 
     def test_outlines_close(self):
         # a 2x2 province with a diagonal pinch elsewhere: rings are closed loops
@@ -54,6 +54,9 @@ class MeshTest(unittest.TestCase):
             got = tri_area(r["verts"], r["idx"][:r["top"]])
             self.assertAlmostEqual(got, cells, delta=max(2.0, cells * 0.15), msg=r["name"])
 
+    def test_borders_do_not_cross(self):
+        self.assertEqual(make_m3.crossings({k: (p, k[1]) for k, (p, _) in self.chains.cache.items()}), set())
+
     def test_vertex_limit_and_heights(self):
         for r in self.regions:
             self.assertLess(len(r["verts"]), 65536)
@@ -68,8 +71,8 @@ class MeshTest(unittest.TestCase):
             with open(path, "rb") as f:
                 data = f.read()
         magic, ver, nreg, nland, nfac = struct.unpack_from("<4sHHHH", data)
-        self.assertEqual((magic, ver, nreg, nland), (b"HM3D", 1, len(self.regions), self.m["land"]))
-        off = 28 + 20 * nfac + 76 * nreg
+        self.assertEqual((magic, ver, nreg, nland), (b"HM3D", 2, len(self.regions), self.m["land"]))
+        off = 28 + 20 * nfac + 80 * nreg
         bc = struct.unpack_from("<3I", data, off)
         self.assertEqual(sum(bc), nb)
         nn = sum(len(r["neigh"]) for r in self.regions)

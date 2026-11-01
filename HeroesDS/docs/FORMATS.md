@@ -213,19 +213,21 @@ morze na 0.
 
 ```
 nagłówek (28 B)
-  char[4] "HM3D"; u16 wersja = 1; u16 nregions; u16 nland; u16 nfactions
+  char[4] "HM3D"; u16 wersja = 2; u16 nregions; u16 nland; u16 nfactions
   u32 nverts; u32 nidx; u32 nbverts; f32 land_h
 nfactions × 20 B:  u8 r, g, b, 0; char[16] nazwa
-nregions × 76 B (region = prowincja, strefa morska albo ląd bez prowincji):
+nregions × 80 B (region = prowincja, strefa morska albo ląd bez prowincji):
   i16 id (numer z M2; -1 = ląd bez prowincji); i8 rodzaj (0 ląd, 1 morze, 2 ląd bez
   prowincji); i8 właściciel (frakcja, -1 brak); u8 liczba sąsiadów; 3 × 0
   char[24] nazwa
   f32 cx, cz (stolica / środek strefy: napis); f32 x0, z0, x1, z1 (prostokąt otaczający)
   u32 vstart, vcount (wierzchołki regionu); u32 istart, icount (indeksy);
-  u32 itop (pierwsze itop indeksów to wierzch, reszta to ścianki)
+  u32 itop (pierwsze itop indeksów to wierzch); u32 ishore (do tego miejsca: wierzch +
+  ścianki wybrzeża; dalej ścianki między regionami lądu, widoczne tylko po uniesieniu)
 u32 × 3              liczby wierzchołków wstęg granic: ląd/ląd, wybrzeże, morze/morze
 i16 × Σ sąsiadów     listy sąsiadów regionów po kolei (id), dopełnione do 4 B
-nverts × 16 B        f32 x, y, z, jasność (1 = wierzch, ścianki wg kierunku światła)
+nverts × 16 B        f32 x, y, z, jasność (1 = wierzch; ścianki: 2 wierzchołki na punkt
+                     obwodu, góra i dół, jasność wg kierunku światła)
 nidx × u16           trójkąty, indeksy względem vstart regionu (< 65536), dopełnione do 4 B
 nbverts × 12 B       f32 x, y, z — trójkąty wstęg, klasami po kolei
 ```

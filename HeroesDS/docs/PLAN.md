@@ -16,7 +16,7 @@ ear cutting (`pip install mapbox-earcut`, ISC), ląd jako płyty ze ściankami, 
 wstęgi → `3ds/romfs/map3d.bin` (80 regionów, ~8 tys. trójkątów; `--png` = podgląd z góry;
 format w `FORMATS.md`, testy `tests/test_make_m3.py`). Program `3ds/` (C, citro3d +
 citro2d; `3ds\build.ps1` = generator + make w msys2 devkitPro, `build.ps1 run` = Azahar):
-dolny ekran — mapa 3D z nazwami, stuknięcie wybiera prowincję / strefę (promień z kamery,
+granice „noisy edges” (fraktalne ząbki jak na mapach rysowanych ręcznie, bez przecięć; `--obj` = podgląd w Blenderze; ~52 tys. trójkątów, ścianki między prowincjami lądu rysowane tylko dla uniesionej); dolny ekran — mapa 3D z nazwami, stuknięcie wybiera prowincję / strefę (promień z kamery,
 trójkąty na CPU), przeciąganie i gałka przesuwają, L/R obrót, góra/dół zoom; wybrana
 prowincja unosi się i pulsuje; górny ekran — bliższy widok stereo (suwak 3D) i opis.
 Sprawdzone w Azaharze: 60 FPS, stuknięcia trafiają. **Na 3DS XL do sprawdzenia**
