@@ -25,6 +25,26 @@ nie grafika** (stąd DS — ukochana konsola użytkownika; kocha planszówki). Z
 / Tabletop Simulator, potem czysty Lua z testami; grafika jest tylko widokiem. Następny krok
 przy bitwach: sesja projektowa i `DESIGN.md` (szczegóły: `tests/3ds/battle/NEXT.md`).
 
+**Propozycja (2026-11-01, użytkownik: „super”): mapa w stylu M3 na DS (LiteLua).** Mapa M2 na DS
+jest brzydka przez metodę (`isogrid`, kolory w narożnikach pól — kanciaste granice), nie przez
+moc DS. Wygląd M3 siedzi w teksturze wypalanej na PC (`make_m3.py` + style), więc da się go
+przenieść, nie 1:1, ale podobnie (szacunek: 8/10):
+1. **Ta sama tekstura, kafle dla DS:** nowy eksport w `make_m3.py` — kafle 64×64, 8 bpp; na
+   ekranie 256×192 ~12 kafli (~50 KB VRAM), doczytywane z karty przy przewijaniu (jak kafle 3DS).
+2. **Kolory państw w palecie:** każdy kafel ma własną paletę, każda prowincja w kaflu (zwykle
+   3–6) swój zakres ~40 odcieni papieru → zmiana właściciela, mgła wojny i pulsujące
+   zaznaczenie to tylko przepisanie wpisów palety (bez przemalowywania obrazu).
+3. **Poziomy szczegółów** jak na 3DS: osobne zestawy kafli daleko / średnio / blisko (powiaty).
+4. Nazwy, armie, miasta w 2D na wierzchu (jak w M2). Nachylenie kamery (warstwa 3D LiteLua)
+   dopiero w drugiej fazie; na start płasko, z góry, jak planszówka.
+- Ograniczenia: mniej mapy naraz i mniej szczegółów → styl z grubszymi liniami i większymi
+  napisami dla małej skali.
+- **Do sprawdzenia najpierw (mały test):** czy LiteLua ma zmianę wpisów palety wczytanego
+  obrazka (jeśli nie — małe API w C, nowa decyzja D-n w `docs/DECISIONS.md` LiteLua) i jak
+  szybko DSi doczytuje kafle z karty przy szybkim przewijaniu.
+- Kolejność: (1) jeden kafel stylu `leather` z kolorami państw w palecie, zmiana właściciela
+  przyciskiem; (2) cała mapa z przewijaniem i doczytywaniem; (3) mgła, zaznaczenie, nazwy, armie.
+
 **Jak to działa:**
 - PC: `tools/make_m3.py` (ląd z `make_m2.generate`, ziarno 77) → `3ds/romfs/`:
   `map3d.bin` (regiony, powiaty, kształty do podświetlenia, granice prowincji jako paski),
