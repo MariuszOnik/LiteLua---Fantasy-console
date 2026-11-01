@@ -120,6 +120,8 @@ typedef struct {
 	char selectMode[8];        // glow (a pulsing light), line, fill (a faint light), none
 	u8 select[3];
 	float selectAlpha, selectWidth, selectDash, selectFill;
+	float selectFlicker, selectGap;   // light <-> dark flicker 0..1; cells kept off the border
+	u8 selectLight[3], selectDark[3];
 	u8 province[3], county[3], shadow[3], selected[3];   // names
 	float grain, grainCells;   // paper grain over the map (grain.bin): strength, cells per copy
 } Style;
@@ -128,7 +130,7 @@ static Style style = {
 	{ 150, 190, 200 }, 0.62f, { 190, 180, 160 },
 	{ 102, 102, 119, 204 }, { 153, 153, 153, 102 },
 	{ 107, 20, 15 }, 0.85f, 1.0f, 8.0f, "-", true, "-----  ", "glow",
-	{ 40, 25, 15 }, 0.9f, 1.6f, 5.0f, 0.0f,
+	{ 40, 25, 15 }, 0.9f, 1.6f, 5.0f, 0.0f, 0.0f, 0.12f, { 255, 250, 225 }, { 60, 40, 20 },
 	{ 20, 12, 4 }, { 70, 50, 30 }, { 40, 25, 15 }, { 255, 255, 255 },
 	0.0f, 3.0f,
 };
@@ -554,6 +556,10 @@ static bool styleRead(const char* path, char* err, size_t errSize)
 			styleNumber(t, "width", &style.selectWidth);
 			styleNumber(t, "dash", &style.selectDash);
 			styleNumber(t, "fill", &style.selectFill);
+			styleNumber(t, "flicker", &style.selectFlicker);
+			styleNumber(t, "gap", &style.selectGap);
+			styleColor(t, "light", style.selectLight, 3);
+			styleColor(t, "dark", style.selectDark, 3);
 			getString(t, "pattern", style.selectPattern, sizeof style.selectPattern);
 			getString(t, "mode", style.selectMode, sizeof style.selectMode);
 		}
@@ -1074,6 +1080,17 @@ static void drawShape(const ShapeBuf* b, float fill, float edge)
 	C3D_DrawElements(GPU_TRIANGLES, b->icount - b->itop, C3D_UNSIGNED_SHORT, b->i + b->itop);
 }
 
+// only a shape's top, in one colour
+static void fillShape(const ShapeBuf* b, const float* rgb, float alpha)
+{
+	C3D_BufInfo buf;
+	BufInfo_Init(&buf);
+	BufInfo_Add(&buf, b->v, sizeof(Vertex), 2, 0x10);
+	C3D_SetBufInfo(&buf);
+	C3D_FVUnifSet(GPU_VERTEX_SHADER, overlay.uTint, rgb[0], rgb[1], rgb[2], alpha);
+	C3D_DrawElements(GPU_TRIANGLES, b->itop, C3D_UNSIGNED_SHORT, b->i);
+}
+
 static bool shapesInit(void)
 {
 	u32 vmax = 0, imax = 0, cvmax = 0, cimax = 0;
@@ -1213,22 +1230,49 @@ static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view, float zoom)
 	if (selected < 0) return;
 
 	// the selected region (select.mode): glow -- a pulsing light over its exact shape and
-	// an outline inside it; line -- a patterned line along its border and a faint light;
-	// fill -- only the faint light; none. With a county selected the province is lit
-	// less and the county more
+	// an outline inside it; line -- a patterned line along its border and a light;
+	// fill -- only the light; none. The light (line, fill) keeps off the border: a band
+	// along the region's lines goes into the stencil first, the light only outside it;
+	// it flickers softly between a light and a dark tone. With a county selected the
+	// province is lit less and the county more
 	if (!strcmp(style.selectMode, "none")) return;
 	bool dashed = !strcmp(style.selectMode, "line"), faint = dashed || !strcmp(style.selectMode, "fill");
+	bool county = selectedCounty >= 0 && counties[selectedCounty].vcount;
+	if (faint) {
+		float gap = w * 0.6f;
+		if (gap < style.selectGap) gap = style.selectGap;
+		linesBegin(proj, view, &borderTex, style.select, 1, gap, 1);
+		// depth test "never" with depth writes on: the stencil is written (as depth fails),
+		// colour and depth are not
+		C3D_DepthTest(true, GPU_NEVER, GPU_WRITE_DEPTH);
+		C3D_StencilTest(true, GPU_ALWAYS, 1, 0xFF, 0xFF);
+		C3D_StencilOp(GPU_STENCIL_REPLACE, GPU_STENCIL_REPLACE, GPU_STENCIL_REPLACE);
+		for (u32 i = 0; i < nborders; i++)
+			if (borders[i].a == selected || borders[i].b == selected)
+				C3D_DrawArrays(GPU_TRIANGLE_STRIP, borders[i].start, borders[i].count);
+		C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
+		C3D_StencilTest(true, GPU_NOTEQUAL, 1, 0xFF, 0x00);
+		C3D_StencilOp(GPU_STENCIL_KEEP, GPU_STENCIL_KEEP, GPU_STENCIL_KEEP);
+		C3D_TexEnv* env = C3D_GetTexEnv(0);
+		C3D_TexEnvInit(env);
+		C3D_TexEnvSrc(env, C3D_Both, GPU_PRIMARY_COLOR, 0, 0);
+		C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
+	}
 	C3D_BindProgram(&overlay.program);
 	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, overlay.uProj, proj);
 	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, overlay.uModelView, view);
 	C3D_SetAttrInfo(&attrOverlay);
-	bool county = selectedCounty >= 0 && counties[selectedCounty].vcount;
 	float s = sinf(pulse);
-	if (faint)
-		drawShape(&shapeProv, style.selectFill * (county ? 0.4f : 0.8f + 0.2f * s), 0);
-	else
+	if (faint) {
+		float k = style.selectFlicker * (1 - sinf(pulse * 0.5f)) / 2, rgb[3];
+		for (int c = 0; c < 3; c++) rgb[c] = (style.selectLight[c] * (1 - k) + style.selectDark[c] * k) / 255;
+		fillShape(&shapeProv, rgb, style.selectFill * (county ? 0.5f : 1));
+		if (county) fillShape(&shapeCounty, rgb, style.selectFill);
+		C3D_StencilTest(false, GPU_ALWAYS, 0, 0xFF, 0xFF);
+	} else {
 		drawShape(&shapeProv, county ? 0.08f : 0.18f + 0.1f * s, county ? 0.5f : 0.75f + 0.2f * s);
-	if (county) drawShape(&shapeCounty, faint ? style.selectFill * 1.5f : 0.22f + 0.1f * s, faint ? 0 : 0.8f + 0.2f * s);
+		if (county) drawShape(&shapeCounty, 0.22f + 0.1f * s, 0.8f + 0.2f * s);
+	}
 	if (dashed) {
 		linesBegin(proj, view, &selectTex, style.select, style.selectAlpha, w * style.selectWidth, style.selectDash);
 		for (u32 i = 0; i < nborders; i++)

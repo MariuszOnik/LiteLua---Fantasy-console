@@ -40,7 +40,10 @@ return {
       color = { 40, 25, 15 }, alpha = 0.9,
       width = 1.6,                    -- x the borders' width
       dash = 5,
-      fill = 0,                       -- a faint light over it too: 0 .. 1
+      fill = 0,                       -- modes line, fill: its light, 0 .. 1
+      flicker = 0,                    -- the light flickers light <-> dark: 0 .. 1
+      light = { 255, 250, 225 }, dark = { 60, 40, 20 },
+      gap = 0.12,                     -- cells the light keeps off the border (at least)
     },
     labels = {
       province = { 20, 12, 4 },

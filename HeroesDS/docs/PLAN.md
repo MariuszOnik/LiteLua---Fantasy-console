@@ -52,7 +52,10 @@ prowincja przerywaną linią tuszem po granicy (wzory jako mała tekstura na pas
 **Decyzja użytkownika (M3t):** przynależność pokazują kolory prowincji; granica prowincji
 jest w teksturze (kreska-kropka, `map.patterns`) i jej nie podświetlamy — `border.show =
 false`, `select.mode = "fill"` (lekka poświata; są też `glow`, `line`, `none`). Buildy:
-`m3t-leather-texborders`, `m3u-parchment-texborders`. Historia: m3a gładkie płyty → m3b fraktale w meshu → m3c
+`m3t-leather-texborders`, `m3u-parchment-texborders`. M3v: poświata zaznaczenia mocniejsza
+(`select.fill` 0,38), nie wchodzi na granicę (pas wzdłuż linii prowincji w stencilu, `select.gap`)
+i delikatnie migocze jasno-ciemno (`flicker`, `light`, `dark`): `m3v-leather-softselect`,
+`m3w-parchment-softselect`. Historia: m3a gładkie płyty → m3b fraktale w meshu → m3c
 płaska mapa z teksturą → m3d kafle → m3e szczegóły wg oddalenia → m3f klikanie powiatów
 → m3g scenariusz/mgła/Lua → m3h szybka mgła → m3i/m3j kolor mgły → m3k–m3o style.
 **Sterowanie:** stuknięcie = prowincja (z bliska powiat), przeciąganie / gałka = przesuw,

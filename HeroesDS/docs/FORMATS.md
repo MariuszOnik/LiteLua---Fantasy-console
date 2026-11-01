@@ -317,7 +317,8 @@ plik.lua` (domyślnie `styles/classic.lua`). Dwie części:
   `.` kropka; `dash` = okres w grubościach linii (kreski wyglądają tak samo przy każdym
   przybliżeniu). `select` = zaznaczona prowincja: `pattern` (pusty = dawne świecenie z
   obrysem), `color`, `alpha`, `width` (× grubość granic), `dash`, `fill` (poświata 0–1),
-  `mode` (`glow` / `line` / `fill` / `none`); `border.show = false` — bez pasków granic
+  `mode` (`glow` / `line` / `fill` / `none`), `flicker` (0–1, migotanie między `light` a
+  `dark`), `gap` (komórki, o ile poświata trzyma się z dala od granicy — co najmniej); `border.show = false` — bez pasków granic
   państw (przynależność tylko kolorami).
 
 Kolory `{ r, g, b }` lub `{ r, g, b, a }`, 0–255. Pełny przykład z opisem pól:

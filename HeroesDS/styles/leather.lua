@@ -27,7 +27,7 @@ return {
       seen = { 150, 116, 82, 85 },
     },
     border = { show = false, color = { 222, 182, 92 }, alpha = 0.9, width = 1.0, pattern = "------  .  ", dash = 11 },
-    select = { mode = "fill", pattern = "----   ", color = { 30, 16, 6 }, alpha = 0.9, width = 1.8, dash = 5, fill = 0.2 },
+    select = { mode = "fill", pattern = "----   ", color = { 30, 16, 6 }, alpha = 0.9, width = 1.8, dash = 5, fill = 0.38, flicker = 0.6, gap = 0.12 },
     labels = {
       province = { 246, 228, 186 },
       county = { 225, 200, 156 },
