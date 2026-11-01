@@ -4,7 +4,7 @@
 #   .\build.ps1          map3d.bin (tools/make_m3.py) + make + copy
 #   .\build.ps1 clean
 #   .\build.ps1 run      build, then open in the Azahar emulator
-#   -tag m3x             label of the copy (default: the current idea)
+#   -tag m3x             label of the copy and of the app's title (default: the current idea)
 #   -gen "--tiles 4 ..." arguments for tools/make_m3.py (which map goes into romfs)
 param([string]$what = "", [string]$tag = "m3d", [string]$gen = "")
 $ErrorActionPreference = "Stop"
@@ -21,8 +21,10 @@ if ($gen) { $genArgs = $gen.Split(" ", [StringSplitOptions]::RemoveEmptyEntries)
 python (Join-Path $here "..\tools\make_m3.py") @genArgs
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 # make does not see changes inside romfs/: drop the .3dsx so the map is always packed anew
-Remove-Item -ErrorAction SilentlyContinue (Join-Path $here "heroes3d.3dsx")
-& $bash -lc "$env_ && make"
+Remove-Item -ErrorAction SilentlyContinue (Join-Path $here "heroes3d.3dsx"), (Join-Path $here "heroes3d.smdh")
+# the tag and the time in the app's title: builds differ in the emulator's list
+$title = "HeroesDS $tag " + (Get-Date -Format "MM-dd HH:mm")
+& $bash -lc "$env_ && make APP_TITLE='$title'"
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 New-Item -ItemType Directory -Force (Join-Path $here "builds") | Out-Null
 $copy = Join-Path $here "builds\heroes3d-$tag.3dsx"

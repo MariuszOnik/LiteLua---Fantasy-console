@@ -4,7 +4,9 @@
 #                        idle/fidget/run/charge) into romfs/, then make
 #   .\build.ps1 clean
 #   .\build.ps1 run      build, then open in the Azahar emulator
-param([string]$what = "")
+#   -tag touch           a label: the app's title is "Battle 3D <tag> <date time>", so builds
+#                        differ in the emulator's list
+param([string]$what = "", [string]$tag = "")
 $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
 $bash = "C:\devkitPro\msys2\usr\bin\bash.exe"
@@ -23,8 +25,9 @@ foreach ($unit in "teutonic", "polish") {
 python (Join-Path $here "make_trees.py")   # tree sprites from the local Imperial Glory archive
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 # make does not see changes inside romfs/: drop the .3dsx so the models are always packed anew
-Remove-Item -ErrorAction SilentlyContinue (Join-Path $here "battle3d.3dsx")
-& $bash -lc "$env_ && make"
+Remove-Item -ErrorAction SilentlyContinue (Join-Path $here "battle3d.3dsx"), (Join-Path $here "battle3d.smdh")
+$title = ("Battle 3D $tag " + (Get-Date -Format "MM-dd HH:mm")).Replace("  ", " ")
+& $bash -lc "$env_ && make APP_TITLE='$title'"
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 if ($what -eq "run") {
     $azahar = "D:\Programowanie\azahar-windows-mxe-2127.0-alpha3\azahar-windows-mxe-2127.0-alpha3\azahar.exe"
