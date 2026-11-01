@@ -40,10 +40,12 @@ return {
       color = { 40, 25, 15 }, alpha = 0.9,
       width = 1.6,                    -- x the borders' width
       dash = 5,
-      fill = 0,                       -- modes line, fill: its light, 0 .. 1
-      flicker = 0,                    -- the light flickers light <-> dark: 0 .. 1
-      light = { 255, 250, 225 }, dark = { 60, 40, 20 },
-      gap = 0.12,                     -- cells the light keeps off the border (at least)
+      fill = 0,                       -- modes line, fill: the province x (1 + fill), 0 .. 1
+      flicker = 0,                    -- how much that light swells and fades: 0 .. 1
+      period = 3.5,                   -- seconds per swell
+      light = { 255, 250, 235 },      -- the light's colour (white: the province's own)
+      gap = 0.1,                      -- cells the light keeps off the border (at least)
+      soft = 3,                       -- the light fades in over this x gap
     },
     labels = {
       province = { 20, 12, 4 },

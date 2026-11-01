@@ -120,8 +120,9 @@ typedef struct {
 	char selectMode[8];        // glow (a pulsing light), line, fill (a faint light), none
 	u8 select[3];
 	float selectAlpha, selectWidth, selectDash, selectFill;
-	float selectFlicker, selectGap;   // light <-> dark flicker 0..1; cells kept off the border
-	u8 selectLight[3], selectDark[3];
+	float selectFlicker, selectGap;   // how much the light fades 0..1; cells kept off the border
+	float selectPeriod, selectSoft;   // seconds per swell; the light's soft edge (x gap)
+	u8 selectLight[3];
 	u8 province[3], county[3], shadow[3], selected[3];   // names
 	float grain, grainCells;   // paper grain over the map (grain.bin): strength, cells per copy
 } Style;
@@ -130,7 +131,7 @@ static Style style = {
 	{ 150, 190, 200 }, 0.62f, { 190, 180, 160 },
 	{ 102, 102, 119, 204 }, { 153, 153, 153, 102 },
 	{ 107, 20, 15 }, 0.85f, 1.0f, 8.0f, "-", true, "-----  ", "glow",
-	{ 40, 25, 15 }, 0.9f, 1.6f, 5.0f, 0.0f, 0.0f, 0.12f, { 255, 250, 225 }, { 60, 40, 20 },
+	{ 40, 25, 15 }, 0.9f, 1.6f, 5.0f, 0.0f, 0.0f, 0.1f, 3.5f, 3.0f, { 255, 250, 235 },
 	{ 20, 12, 4 }, { 70, 50, 30 }, { 40, 25, 15 }, { 255, 255, 255 },
 	0.0f, 3.0f,
 };
@@ -558,8 +559,9 @@ static bool styleRead(const char* path, char* err, size_t errSize)
 			styleNumber(t, "fill", &style.selectFill);
 			styleNumber(t, "flicker", &style.selectFlicker);
 			styleNumber(t, "gap", &style.selectGap);
+			styleNumber(t, "period", &style.selectPeriod);
+			styleNumber(t, "soft", &style.selectSoft);
 			styleColor(t, "light", style.selectLight, 3);
-			styleColor(t, "dark", style.selectDark, 3);
 			getString(t, "pattern", style.selectPattern, sizeof style.selectPattern);
 			getString(t, "mode", style.selectMode, sizeof style.selectMode);
 		}
@@ -578,6 +580,7 @@ static bool styleRead(const char* path, char* err, size_t errSize)
 	if (style.grainCells < 0.1f) style.grainCells = 0.1f;
 	if (style.borderDash < 0.5f) style.borderDash = 0.5f;
 	if (style.selectDash < 0.5f) style.selectDash = 0.5f;
+	if (style.selectPeriod < 0.2f) style.selectPeriod = 0.2f;
 	return true;
 }
 
@@ -1239,19 +1242,23 @@ static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view, float zoom)
 	bool dashed = !strcmp(style.selectMode, "line"), faint = dashed || !strcmp(style.selectMode, "fill");
 	bool county = selectedCounty >= 0 && counties[selectedCounty].vcount;
 	if (faint) {
+		// bands along its lines into the stencil, widest first: 1 .. 4 nearer the border
+		// (4: no light at all, `gap` wide; the light grows over `soft` x that)
 		float gap = w * 0.6f;
 		if (gap < style.selectGap) gap = style.selectGap;
 		linesBegin(proj, view, &borderTex, style.select, 1, gap, 1);
 		// depth test "never" with depth writes on: the stencil is written (as depth fails),
 		// colour and depth are not
 		C3D_DepthTest(true, GPU_NEVER, GPU_WRITE_DEPTH);
-		C3D_StencilTest(true, GPU_ALWAYS, 1, 0xFF, 0xFF);
 		C3D_StencilOp(GPU_STENCIL_REPLACE, GPU_STENCIL_REPLACE, GPU_STENCIL_REPLACE);
-		for (u32 i = 0; i < nborders; i++)
-			if (borders[i].a == selected || borders[i].b == selected)
-				C3D_DrawArrays(GPU_TRIANGLE_STRIP, borders[i].start, borders[i].count);
+		for (int band = 1; band <= 4; band++) {
+			C3D_StencilTest(true, GPU_ALWAYS, band, 0xFF, 0xFF);
+			C3D_FVUnifSet(GPU_VERTEX_SHADER, lines.uWidth, gap * (1 + style.selectSoft * (4 - band) / 3), 0, 0, 0);
+			for (u32 i = 0; i < nborders; i++)
+				if (borders[i].a == selected || borders[i].b == selected)
+					C3D_DrawArrays(GPU_TRIANGLE_STRIP, borders[i].start, borders[i].count);
+		}
 		C3D_DepthTest(false, GPU_ALWAYS, GPU_WRITE_COLOR);
-		C3D_StencilTest(true, GPU_NOTEQUAL, 1, 0xFF, 0x00);
 		C3D_StencilOp(GPU_STENCIL_KEEP, GPU_STENCIL_KEEP, GPU_STENCIL_KEEP);
 		C3D_TexEnv* env = C3D_GetTexEnv(0);
 		C3D_TexEnvInit(env);
@@ -1264,11 +1271,26 @@ static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view, float zoom)
 	C3D_SetAttrInfo(&attrOverlay);
 	float s = sinf(pulse);
 	if (faint) {
-		float k = style.selectFlicker * (1 - sinf(pulse * 0.5f)) / 2, rgb[3];
-		for (int c = 0; c < 3; c++) rgb[c] = (style.selectLight[c] * (1 - k) + style.selectDark[c] * k) / 255;
-		fillShape(&shapeProv, rgb, style.selectFill * (county ? 0.5f : 1));
-		if (county) fillShape(&shapeCounty, rgb, style.selectFill);
+		// the light multiplies what is under it (map x (1 + light)): the province keeps
+		// its own colour, only brighter -- less and less in the bands near the border;
+		// it swells and fades slowly (select.period seconds)
+		float t = frame * (2 * 3.14159f / 60) / style.selectPeriod;
+		float amount = style.selectFill * (1 - style.selectFlicker * (1 - sinf(t)) / 2);
+		C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_DST_COLOR, GPU_ONE, GPU_ZERO, GPU_ONE);
+		for (int band = 0; band < 4; band++) {
+			C3D_StencilTest(true, GPU_EQUAL, band, 0xFF, 0x00);
+			float a = amount * (4 - band) / 4, rgb[3];
+			for (int c = 0; c < 3; c++) rgb[c] = a * style.selectLight[c] / 255;
+			if (county) {
+				float half[3] = { rgb[0] / 2, rgb[1] / 2, rgb[2] / 2 };
+				fillShape(&shapeProv, half, 1);
+				fillShape(&shapeCounty, rgb, 1);
+			} else
+				fillShape(&shapeProv, rgb, 1);
+		}
 		C3D_StencilTest(false, GPU_ALWAYS, 0, 0xFF, 0xFF);
+		C3D_AlphaBlend(GPU_BLEND_ADD, GPU_BLEND_ADD, GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA,
+			GPU_SRC_ALPHA, GPU_ONE_MINUS_SRC_ALPHA);
 	} else {
 		drawShape(&shapeProv, county ? 0.08f : 0.18f + 0.1f * s, county ? 0.5f : 0.75f + 0.2f * s);
 		if (county) drawShape(&shapeCounty, 0.22f + 0.1f * s, 0.8f + 0.2f * s);
