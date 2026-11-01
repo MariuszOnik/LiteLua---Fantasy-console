@@ -9,6 +9,8 @@ return {
     shore = { 172, 146, 106 },
     rim = 0.6,
     gamma = 1.6,                 -- lighter half-tones: 1 = as drawn
+    patterns = { land = "------  .  " },   -- province borders: dash, dot
+    dash = 1.5,
     lines = {
       coast = { 36, 20, 10 },
       land = { 58, 34, 18 },
@@ -24,8 +26,8 @@ return {
       unseen = { 132, 98, 68, 215 },
       seen = { 150, 116, 82, 85 },
     },
-    border = { color = { 222, 182, 92 }, alpha = 0.9, width = 1.0, pattern = "------  .  ", dash = 11 },
-    select = { pattern = "----   ", color = { 30, 16, 6 }, alpha = 0.9, width = 1.8, dash = 5, fill = 0.12 },
+    border = { show = false, color = { 222, 182, 92 }, alpha = 0.9, width = 1.0, pattern = "------  .  ", dash = 11 },
+    select = { mode = "fill", pattern = "----   ", color = { 30, 16, 6 }, alpha = 0.9, width = 1.8, dash = 5, fill = 0.2 },
     labels = {
       province = { 246, 228, 186 },
       county = { 225, 200, 156 },

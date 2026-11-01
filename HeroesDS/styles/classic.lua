@@ -10,6 +10,8 @@ return {
     sea = { 150, 190, 200 },
     shore = { 235, 240, 225 },   -- the sea lighter near the coast
     rim = 0,                     -- the map's own edge burnt dark: 0 .. 1
+    patterns = {},               -- e.g. land = "------  .  ": that kind of line as dash, dot
+    dash = 1.5,                  -- cells one period of a pattern takes
     gamma = 1.0,                 -- over 1: lighter half-tones (the whole picture)
     lines = {
       coast = { 40, 28, 18 },
@@ -27,12 +29,14 @@ return {
       seen = { 153, 153, 153, 102 },     -- seen before: a grey veil
     },
     border = {                        -- realms' borders
+      show = true,                    -- false: realms only by their colours
       color = { 107, 20, 15 }, alpha = 0.85, width = 1.0,
       pattern = "-",                  -- per slice: '-' ink, ' ' gap, '.' dot
       dash = 8,                       -- one pattern = this many line widths
     },
     select = {                        -- the selected province
-      pattern = "",                   -- "": a pulsing light; else a line like border's
+      mode = "glow",                  -- glow (pulsing light), line, fill (faint light), none
+      pattern = "-----  ",            -- mode "line": like border's
       color = { 40, 25, 15 }, alpha = 0.9,
       width = 1.6,                    -- x the borders' width
       dash = 5,

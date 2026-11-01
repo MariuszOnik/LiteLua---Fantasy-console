@@ -10,6 +10,8 @@ return {
     sea = { 168, 190, 178 },
     shore = { 228, 224, 198 },
     rim = 0.8,
+    patterns = { land = "------  .  " },   -- province borders: dash, dot
+    dash = 1.5,
     lines = {
       coast = { 62, 38, 20 },
       land = { 96, 62, 34 },
@@ -25,8 +27,8 @@ return {
       unseen = { 222, 206, 168, 240 },
       seen = { 190, 172, 136, 110 },
     },
-    border = { color = { 125, 32, 20 }, alpha = 0.85, width = 1.0, pattern = "------  .  ", dash = 11 },
-    select = { pattern = "----   ", color = { 45, 26, 12 }, alpha = 0.9, width = 1.8, dash = 5, fill = 0.12 },
+    border = { show = false, color = { 125, 32, 20 }, alpha = 0.85, width = 1.0, pattern = "------  .  ", dash = 11 },
+    select = { mode = "fill", pattern = "----   ", color = { 45, 26, 12 }, alpha = 0.9, width = 1.8, dash = 5, fill = 0.2 },
     labels = {
       province = { 52, 30, 12 },
       county = { 98, 70, 40 },

@@ -115,7 +115,9 @@ typedef struct {
 	u8 border[3];              // realms' borders
 	float borderAlpha, borderWidth, borderDash;
 	char borderPattern[33];    // the line's pattern: '-' ink, ' ' gap, '.' dot, per slice
-	char selectPattern[33];    // the selected province's outline ("": a light, as before)
+	bool borderShow;           // false: realms only by their colours (the map's own lines)
+	char selectPattern[33];    // the selected province's outline (mode "line")
+	char selectMode[8];        // glow (a pulsing light), line, fill (a faint light), none
 	u8 select[3];
 	float selectAlpha, selectWidth, selectDash, selectFill;
 	u8 province[3], county[3], shadow[3], selected[3];   // names
@@ -125,7 +127,7 @@ typedef struct {
 static Style style = {
 	{ 150, 190, 200 }, 0.62f, { 190, 180, 160 },
 	{ 102, 102, 119, 204 }, { 153, 153, 153, 102 },
-	{ 107, 20, 15 }, 0.85f, 1.0f, 8.0f, "-", "",
+	{ 107, 20, 15 }, 0.85f, 1.0f, 8.0f, "-", true, "-----  ", "glow",
 	{ 40, 25, 15 }, 0.9f, 1.6f, 5.0f, 0.0f,
 	{ 20, 12, 4 }, { 70, 50, 30 }, { 40, 25, 15 }, { 255, 255, 255 },
 	0.0f, 3.0f,
@@ -542,6 +544,9 @@ static bool styleRead(const char* path, char* err, size_t errSize)
 			styleNumber(t, "width", &style.borderWidth);
 			styleNumber(t, "dash", &style.borderDash);
 			getString(t, "pattern", style.borderPattern, sizeof style.borderPattern);
+			lua_getfield(L, t, "show");
+			if (lua_isboolean(L, -1)) style.borderShow = lua_toboolean(L, -1);
+			lua_pop(L, 1);
 		}
 		if ((t = styleTable(v, "select"))) {
 			styleColor(t, "color", style.select, 3);
@@ -550,6 +555,7 @@ static bool styleRead(const char* path, char* err, size_t errSize)
 			styleNumber(t, "dash", &style.selectDash);
 			styleNumber(t, "fill", &style.selectFill);
 			getString(t, "pattern", style.selectPattern, sizeof style.selectPattern);
+			getString(t, "mode", style.selectMode, sizeof style.selectMode);
 		}
 		if ((t = styleTable(v, "labels"))) {
 			styleColor(t, "province", style.province, 3);
@@ -1180,7 +1186,7 @@ static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view, float zoom)
 	float w = zoom * 0.0042f;
 	if (w < 0.07f) w = 0.07f;
 	linesBegin(proj, view, &borderTex, style.border, style.borderAlpha, w * style.borderWidth, style.borderDash);
-	for (u32 i = 0; i < nborders; i++) {
+	for (u32 i = 0; i < nborders && style.borderShow; i++) {
 		const Border* b = &borders[i];
 		if (regions[b->a].kind != KIND_SEA && regions[b->b].kind != KIND_SEA
 			&& ownerOf(b->a) != ownerOf(b->b) && regionFog[b->a] && regionFog[b->b])
@@ -1206,21 +1212,23 @@ static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view, float zoom)
 
 	if (selected < 0) return;
 
-	// the selected region: a pulsing light over its exact shape and an outline inside it,
-	// or (a style with select.pattern) a patterned line along its border and a faint
-	// light; with a county selected the province is lit less and the county more
-	bool dashed = style.selectPattern[0] != 0;
+	// the selected region (select.mode): glow -- a pulsing light over its exact shape and
+	// an outline inside it; line -- a patterned line along its border and a faint light;
+	// fill -- only the faint light; none. With a county selected the province is lit
+	// less and the county more
+	if (!strcmp(style.selectMode, "none")) return;
+	bool dashed = !strcmp(style.selectMode, "line"), faint = dashed || !strcmp(style.selectMode, "fill");
 	C3D_BindProgram(&overlay.program);
 	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, overlay.uProj, proj);
 	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, overlay.uModelView, view);
 	C3D_SetAttrInfo(&attrOverlay);
 	bool county = selectedCounty >= 0 && counties[selectedCounty].vcount;
 	float s = sinf(pulse);
-	if (dashed)
+	if (faint)
 		drawShape(&shapeProv, style.selectFill * (county ? 0.4f : 0.8f + 0.2f * s), 0);
 	else
 		drawShape(&shapeProv, county ? 0.08f : 0.18f + 0.1f * s, county ? 0.5f : 0.75f + 0.2f * s);
-	if (county) drawShape(&shapeCounty, 0.22f + 0.1f * s, 0.8f + 0.2f * s);
+	if (county) drawShape(&shapeCounty, faint ? style.selectFill * 1.5f : 0.22f + 0.1f * s, faint ? 0 : 0.8f + 0.2f * s);
 	if (dashed) {
 		linesBegin(proj, view, &selectTex, style.select, style.selectAlpha, w * style.selectWidth, style.selectDash);
 		for (u32 i = 0; i < nborders; i++)

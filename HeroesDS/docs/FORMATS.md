@@ -306,7 +306,8 @@ plik.lua` (domyślnie `styles/classic.lua`). Dwie części:
   `surface` (`plain` / `parchment` / `leather` / `image`), `paper`, `sea`, `shore`,
   `rim` (spalona krawędź całej mapy 0–1), `gamma` (>1 jaśniejsze półcienie), `stain` (plamy/zmarszczki), `image` +
   `image_cells` (obraz obok pliku stylu, powtarzany bez szwu co tyle komórek), `lines`
-  (`coast`, `land`, `county`, `sea`). Wzory leżą na całej mapie (kafle bez szwów).
+  (`coast`, `land`, `county`, `sea`), `patterns` (np. `land = "------  .  "` — ten rodzaj
+  linii wzorem, okres `dash` komórek). Wzory leżą na całej mapie (kafle bez szwów).
 - `view` — czyta 3DS przy starcie z `romfs:/style.lua`, a potem z
   **`sdmc:/3ds/heroes3d/style.lua`** (jeśli jest — nadpisuje to, co podaje; zmiana kolorów
   bez budowania): `background`, `tint`, `neutral`, `fog.unseen` / `fog.seen` (r, g, b,
@@ -315,7 +316,9 @@ plik.lua` (domyślnie `styles/classic.lua`). Dwie części:
   `select.pattern` — napis, każdy znak to równy kawałek okresu: `-` tusz, spacja przerwa,
   `.` kropka; `dash` = okres w grubościach linii (kreski wyglądają tak samo przy każdym
   przybliżeniu). `select` = zaznaczona prowincja: `pattern` (pusty = dawne świecenie z
-  obrysem), `color`, `alpha`, `width` (× grubość granic), `dash`, `fill` (poświata 0–1).
+  obrysem), `color`, `alpha`, `width` (× grubość granic), `dash`, `fill` (poświata 0–1),
+  `mode` (`glow` / `line` / `fill` / `none`); `border.show = false` — bez pasków granic
+  państw (przynależność tylko kolorami).
 
 Kolory `{ r, g, b }` lub `{ r, g, b, a }`, 0–255. Pełny przykład z opisem pól:
 `styles/classic.lua`.

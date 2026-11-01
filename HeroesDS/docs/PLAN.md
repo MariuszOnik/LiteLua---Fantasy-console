@@ -48,7 +48,11 @@ papier + ziarno na GPU). Wszystkie sprawdzone w Azaharze; użytkownik wybiera.
 Linie jak w Imperial Glory (M3r): granice państw wzorem kreska-kropka, zaznaczona
 prowincja przerywaną linią tuszem po granicy (wzory jako mała tekstura na pasku, `border.pattern`,
 `select` w stylu; `classic` = dawne świecenie): `m3r-leather-dashed`, `m3s-parchment-dashed`
-— zaznaczanie do sprawdzenia przez użytkownika (zrzut z kliknięciem nie wyszedł). Historia: m3a gładkie płyty → m3b fraktale w meshu → m3c
+— zaznaczanie do sprawdzenia przez użytkownika (zrzut z kliknięciem nie wyszedł).
+**Decyzja użytkownika (M3t):** przynależność pokazują kolory prowincji; granica prowincji
+jest w teksturze (kreska-kropka, `map.patterns`) i jej nie podświetlamy — `border.show =
+false`, `select.mode = "fill"` (lekka poświata; są też `glow`, `line`, `none`). Buildy:
+`m3t-leather-texborders`, `m3u-parchment-texborders`. Historia: m3a gładkie płyty → m3b fraktale w meshu → m3c
 płaska mapa z teksturą → m3d kafle → m3e szczegóły wg oddalenia → m3f klikanie powiatów
 → m3g scenariusz/mgła/Lua → m3h szybka mgła → m3i/m3j kolor mgły → m3k–m3o style.
 **Sterowanie:** stuknięcie = prowincja (z bliska powiat), przeciąganie / gałka = przesuw,

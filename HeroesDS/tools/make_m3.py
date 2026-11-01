@@ -89,6 +89,10 @@ MAP_STYLE = {
     "rim": 0.0,           # the map's own edge burnt dark: 0 none .. 1 strong
     "gamma": 1.0,         # over 1 lighter half-tones (the whole picture, lines too)
     "lines": {"sea": SEA_LINE, "county": COUNTY_LINE, "land": LAND_LINE, "coast": COAST_LINE},
+    # a kind of line drawn with a pattern (like the realms' borders on old maps): per
+    # slice of the period '-' ink, ' ' a gap, '.' a dot; none = a solid line
+    "patterns": {},
+    "dash": 1.5,          # cells one period of a pattern takes
 }
 
 # a cell's sides, walked clockwise on screen (row down, col right): the cell is on the
@@ -726,6 +730,36 @@ class Surface:
         return out * (1 - 0.55 * scorch)[..., None]
 
 
+def dashes(pts, closed, pattern, period):
+    """The pieces of a line (cells) with ink under a pattern: per slice of the period
+    '-' ink, ' ' a gap, '.' a dot (ink in the slice's middle). Measured from the line's
+    start in cells, so every tile and mipmap level cuts it the same way."""
+    p = np.vstack([pts, pts[:1]]) if closed else np.asarray(pts, float)
+    seg = np.hypot(*np.diff(p, axis=0).T)
+    at = np.concatenate([[0], np.cumsum(seg)])
+    n = len(pattern)
+    runs, start = [], None   # ink runs in one period: (from, to), fractions
+    for i, c in enumerate(pattern + " "):
+        a, b = (i + (0.25 if c == "." else 0)) / n, (i + (0.75 if c == "." else 1)) / n
+        if c in "-." and start is None:
+            start = a
+        if c == "." or (c not in "-." and start is not None):
+            if start is not None:
+                runs.append((start, b if c == "." else i / n))
+            start = None
+    out = []
+    for k in range(int(at[-1] / period) + 1):
+        for a, b in runs:
+            d0, d1 = (k + a) * period, min((k + b) * period, at[-1])
+            if d0 >= at[-1]:
+                break
+            inside = (at > d0) & (at < d1)
+            xs = np.concatenate([[np.interp(d0, at, p[:, 0])], p[inside, 0], [np.interp(d1, at, p[:, 0])]])
+            zs = np.concatenate([[np.interp(d0, at, p[:, 1])], p[inside, 1], [np.interp(d1, at, p[:, 1])]])
+            out.append(np.column_stack([xs, zs]))
+    return out
+
+
 def disk_kernel(n, r):
     """A soft round spot of radius r pixels at (0, 0), wrapping round (for FFT blurs)."""
     d = np.minimum(np.arange(n), n - np.arange(n))
@@ -764,8 +798,9 @@ def load_style(path):
 
 
 def map_style(given):
-    style = dict(MAP_STYLE, **{k: v for k, v in given.items() if k != "lines"})
+    style = dict(MAP_STYLE, **{k: v for k, v in given.items() if k not in ("lines", "patterns")})
     style["lines"] = dict(MAP_STYLE["lines"], **given.get("lines", {}))
+    style["patterns"] = dict(given.get("patterns", {}))
     for k in ("paper", "sea", "shore"):
         style[k] = tuple(style[k])
     style["lines"] = {k: tuple(v) for k, v in style["lines"].items()}
@@ -907,8 +942,11 @@ class Painter:
                     if (pts[:, 0].max() < x0 - 1 or pts[:, 0].min() > x0 + span + 1
                             or pts[:, 1].max() < z0 - 1 or pts[:, 1].min() > z0 + span + 1):
                         continue
-                    xy = [((x - x0) * kl, (z - z0) * kl) for x, z in pts]
-                    md.line(xy + xy[:1] if closed else xy, fill=255, width=max(1, round(w)), joint="curve")
+                    pat = st["patterns"].get(kind)
+                    parts = dashes(pts, closed, pat, st["dash"]) if pat else [np.vstack([pts, pts[:1]]) if closed else pts]
+                    for part in parts:
+                        xy = [((x - x0) * kl, (z - z0) * kl) for x, z in part]
+                        md.line(xy, fill=255, width=max(1, round(w)), joint="curve")
                 a = np.asarray(mask, float)[..., None] / 255
                 img = img * (1 - a) + np.array(col, float) * a
             if rim is not None:
