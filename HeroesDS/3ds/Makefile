@@ -36,9 +36,9 @@ APP_TITLE	:=	HeroesDS 3D map
 APP_DESCRIPTION	:=	Political map prototype
 APP_AUTHOR	:=	Mariusz
 BUILD		:=	build
-SOURCES		:=	source
+SOURCES		:=	source ../../vendor/miniz
 DATA		:=	data
-INCLUDES	:=	include
+INCLUDES	:=	include ../../vendor/miniz
 GRAPHICS	:=	gfx
 GFXBUILD	:=	$(BUILD)
 ROMFS		:=	romfs
@@ -53,7 +53,7 @@ CFLAGS	:=	-g -Wall -O2 -mword-relocations \
 			-ffunction-sections \
 			$(ARCH)
 
-CFLAGS	+=	$(INCLUDE) -D__3DS__
+CFLAGS	+=	$(INCLUDE) -D__3DS__ -DMINIZ_NO_ARCHIVE_APIS -DMINIZ_NO_STDIO -DMINIZ_NO_TIME
 
 CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 

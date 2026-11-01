@@ -204,19 +204,21 @@ Ustalenia z 2026-10-26 — do trybu mapy kontynentu i ewentualnie terenu walki.
   darmo). Alternatywa: prerender mapy na PC do płaskich obrazków (dużo pamięci).
   Romby 64×32 trzeba zmniejszyć (np. 32×16). Decyzja przy trybie mapy.
 
-## `map3d.bin` + `map_tex.bin` — mapa polityczna 3D dla 3DS (H13, nasz format)
+## `map3d.bin` + kafle mapy — mapa polityczna 3D dla 3DS (H13, nasz format)
 
 Robi je `tools/make_m3.py`, czyta `3ds/source/main.c` (`romfs:/`). Mapa jest płaska
-(płaszczyzna y = 0): jeden prostokąt z teksturą, w której są wszystkie detale; dokładne
-kształty regionów służą tylko do podświetlenia wybranego. Little-endian, sekcje bez
-przerw, każda wyrównana do 4 bajtów. Współrzędne: komórka siatki M2 = 1×1, środek mapy
-w (0, 0), x = kolumna, z = wiersz (północ = −z).
+(płaszczyzna y = 0): tekstury z wszystkimi detalami — `tiles × tiles` kafli i jedna
+tekstura całej mapy (przegląd, pod spodem i na oddalenie); dokładne kształty regionów
+służą tylko do podświetlenia wybranego. Little-endian, sekcje bez przerw, każda wyrównana
+do 4 bajtów. Współrzędne: komórka siatki M2 = 1×1, środek mapy w (0, 0), x = kolumna,
+z = wiersz (północ = −z).
 
-`map3d.bin` (wersja 3):
+`map3d.bin` (wersja 4):
 ```
-nagłówek (28 B)
-  char[4] "HM3D"; u16 wersja = 3; u16 nregions; u16 nland; u16 nfactions
+nagłówek (32 B)
+  char[4] "HM3D"; u16 wersja = 4; u16 nregions; u16 nland; u16 nfactions
   u32 nverts; u32 nidx; u32 tex (bok tekstury, 1024); f32 world (szerokość mapy = kolumny)
+  u16 tiles (kafli na bok); u16 0
 nfactions × 20 B:  u8 r, g, b, 0; char[16] nazwa
 nregions × 80 B (region = prowincja, strefa morska albo ląd bez prowincji):
   i16 id (numer z M2; -1 = ląd bez prowincji); i8 rodzaj (0 ląd, 1 morze, 2 ląd bez
@@ -231,10 +233,19 @@ nverts × 16 B        f32 x, y (= 0), z, 1
 nidx × u16           trójkąty, indeksy względem vstart regionu (< 65536), dopełnione do 4 B
 ```
 
-`map_tex.bin`: wszystkie poziomy mipmap (1024, 512, … 8 px — tak jak układa je
-`C3D_TexInitMipmap`), każdy w kolejności tekstury 3DS (kafle 8×8 od dolnego wiersza,
-w kaflu porządek Mortona; `tile_order`). Najpierw obraz bez kolorów właścicieli
-(3 B na piksel RGB: morze, papier lądu, linie), potem numer regionu (indeks w tabeli
-regionów, 255 = brak) na piksel — wszystkie poziomy po kolei. 3DS mnoży obraz przez
-kolor właściciela regionu piksela (`0,62 × kolor frakcji + 0,38 × biały`; morze bez
-zmian) do tekstury RGB565 i z numerów czyta region pod stuknięciem.
+Tekstury: `overview.bin` (cała mapa) i `tiles/<kolumna>_<wiersz>.bin` (kafel `i, j`
+obejmuje x od `i·world/tiles` do `(i+1)·world/tiles` od zachodniego brzegu, z tak samo
+od północnego). Każdy plik:
+```
+char[4] "HT01"
+u32 rozmiar, u32 spakowane; zlib: obraz bez kolorów właścicieli, RGB565 (u16)
+u32 rozmiar, u32 spakowane; zlib: numer regionu na piksel (u16, indeks w tabeli
+                                  regionów; 0xFFFF = brak)
+```
+(każda spakowana część dopełniona do 4 B). Obie części mają wszystkie poziomy mipmap
+(1024, 512, … 8 px — tak jak układa je `C3D_TexInitMipmap`), każdy w kolejności
+tekstury 3DS (kafle 8×8 od dolnego wiersza, w kaflu porządek Mortona; `tile_order`).
+Numery na mniejszych poziomach są brane z pikseli, nie mieszane. Kafle rysowane są
+z zakładką, a szum i fale leżą na całej mapie, więc na stykach nie ma szwów. 3DS przy
+wczytaniu mnoży obraz przez kolor właściciela regionu piksela (`0,62 × kolor frakcji
++ 0,38 × biały`; morze bez zmian), a numery poziomu 0 zostawia do stuknięć.

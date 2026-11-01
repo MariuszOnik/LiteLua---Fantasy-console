@@ -12,18 +12,25 @@ zasobach gry (tylko do użytku prywatnego — H1). Dwa tryby:
 **Przejście na 3DS (H13, 2026-11-01) — M3: mapa polityczna w pełnym 3D.**
 `tools/make_m3.py` (ląd z `make_m2.generate`, ziarno 77): granice prowincji i stref
 morskich jako wspólne łańcuchy z „noisy edges” (fraktalne ząbki jak na mapie rysowanej
-ręcznie, bez przecięć). Trzy podejścia, każde z buildem w `3ds/builds/` (poza gitem;
-`3ds\build.ps1 -tag <nazwa>`, `run` = Azahar):
+ręcznie, bez przecięć). Każde podejście ma build w `3ds/builds/` (poza gitem;
+`3ds\build.ps1 -tag <nazwa> -gen "<argumenty make_m3>"`, `run` = Azahar):
 `m3a-smooth` (wygładzone granice, płyty lądu ze ściankami), `m3b-noisy` (fraktalne
-granice w meshu, ~52 tys. trójkątów, ~12–16 ms na klatkę w Azaharze), **`m3c-flat`
-(obecny)**: płaska mapa = jeden prostokąt z teksturą 1024² z mipmapami (pergamin, linie,
-cień wybrzeża, fale; kolory właścicieli nakłada 3DS), wybrana prowincja = pulsujące
-światło i obrys po dokładnym kształcie, stuknięcie = numer regionu z mapy pikseli; ~2,3 ms
-na klatkę. Format w `FORMATS.md`, testy `tests/test_make_m3.py` (`pip install mapbox-earcut`).
+granice w meshu, ~52 tys. trójkątów, ~12–16 ms na klatkę w Azaharze), `m3c-flat` (płaska
+mapa = jeden prostokąt z teksturą 1024² z mipmapami, ~2,3 ms), **`m3d` (obecny): mapa
+w kaflach 1024²** — `m3d-tiles2x2` (ta sama mapa, 2× ostrzejsza; `-gen "--tiles 2"`)
+i `m3d-big4x4` (`-gen "--size 144 --provinces 180 --tiles 4"`: 284 regiony, 172
+prowincje lądowe, 16 kafli). Pod spodem tekstura przeglądowa całej mapy; w pamięci do 6
+kafli najbliżej kamer, doczytywane w wątku w tle (zlib przez `vendor/miniz`, kolory
+właścicieli przy wczytaniu); numery regionów 16-bit; nazwy dalej niż 80 jednostek od oka
+ukryte. Azahar: 60 FPS, kafel ~0,5–0,6 s, przy 4×4 zostaje ~5,3 MB wolnej pamięci
+liniowej (statystyki na górnym ekranie). Wybrana prowincja = pulsujące światło i obrys
+po dokładnym kształcie, stuknięcie = numer regionu z kafla (albo z przeglądu). Format
+w `FORMATS.md`, testy `tests/test_make_m3.py` (`pip install mapbox-earcut`).
 Dolny ekran — mapa z nazwami, stuknięcie wybiera, przeciąganie i gałka przesuwają, L/R
 obrót, góra/dół zoom; górny — bliższy widok stereo i opis. **Na 3DS XL do sprawdzenia**
-(plik z `builds/` do `/3ds/` na karcie SD, Homebrew Launcher). Do ustalenia: Lua na 3DS
-(H13). Dalej: rzeźba terenu w teksturze, pionki armii i miast (modele 3D na płaskiej mapie).
+(pliki z `builds/` do `/3ds/` na karcie SD, Homebrew Launcher): czas wczytania kafla,
+wolna pamięć, płynność przy przewijaniu. Do ustalenia: Lua na 3DS (H13). Dalej: rzeźba
+terenu w teksturze, pionki armii i miast (modele 3D na płaskiej mapie).
 
 **Dziś: mapa przygody (tor M).** Format `.h4c` rozpracowany (teren, przejścia, drogi,
 wysokość, poziomy, obiekty z obszarem i wejściami) — `docs/FORMATS.md`, narzędzia

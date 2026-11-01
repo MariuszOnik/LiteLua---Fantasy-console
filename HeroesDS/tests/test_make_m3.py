@@ -1,4 +1,4 @@
-"""Tests for tools/make_m3.py (the flat textured 3D map for the 3DS).
+"""Tests for tools/make_m3.py (the flat textured 3D map for the 3DS, in tiles).
 
 Run from the repo root:  python -m unittest discover -s HeroesDS/tests
 """
@@ -7,6 +7,7 @@ import struct
 import sys
 import tempfile
 import unittest
+import zlib
 
 import numpy as np
 
@@ -73,15 +74,15 @@ class MeshTest(unittest.TestCase):
         levels = make_m3.mip_levels(img)
         self.assertEqual([lv.shape[0] for lv in levels], [64, 32, 16, 8])
 
+    def paint(self, x0, z0, span, size):
+        painter = make_m3.Painter(self.m, self.regions, self.chains)
+        return painter.paint(x0, z0, span, size)
+
     def test_texture_ids_match_regions(self):
-        old = make_m3.TEX
-        make_m3.TEX = 256
-        try:
-            rgb, ids = make_m3.render_texture(self.m, self.regions, self.chains, size=256)
-        finally:
-            make_m3.TEX = old
-        self.assertEqual(rgb.shape, (256, 256, 3))
         rows, cols = self.m["province"].shape
+        rgb, ids = self.paint(0, 0, cols, 256)
+        self.assertEqual(rgb.shape, (256, 256, 3))
+        self.assertEqual(ids.dtype, np.uint16)
         prov = self.m["province"]
         # a cell whose whole neighbourhood is one region: its middle pixel says that region
         index = {r["id"]: i for i, r in enumerate(self.regions)}
@@ -95,15 +96,43 @@ class MeshTest(unittest.TestCase):
                     hits += 1
         self.assertGreater(hits, 50)
 
+    def test_tiles_match_the_whole(self):
+        # the north-east quarter drawn as a tile equals that quarter of the whole map at
+        # the same scale: no seams between tiles
+        cols = self.m["province"].shape[1]
+        whole_rgb, whole_ids = self.paint(0, 0, cols, 128)
+        tile_rgb, tile_ids = self.paint(cols / 2, 0, cols / 2, 64)
+        self.assertGreater((tile_ids == whole_ids[:64, 64:]).mean(), 0.99)
+        diff = np.abs(tile_rgb.astype(int) - whole_rgb[:64, 64:].astype(int))
+        self.assertLess(diff.mean(), 3)
+
+    def test_tile_file(self):
+        rgb, ids = self.paint(0, 0, self.m["province"].shape[1], 64)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "t.bin")
+            make_m3.write_tile(path, rgb, ids)
+            with open(path, "rb") as f:
+                data = f.read()
+        self.assertEqual(data[:4], b"HT01")
+        pixels = sum((64 >> k) ** 2 for k in range(4))   # 64, 32, 16, 8
+        off = 4
+        for _ in range(2):
+            raw, packed = struct.unpack_from("<II", data, off)
+            self.assertEqual(raw, pixels * 2)
+            self.assertEqual(len(zlib.decompress(data[off + 8:off + 8 + packed])), raw)
+            off += 8 + ((packed + 3) & ~3)
+        self.assertEqual(off, len(data))
+
     def test_file_layout(self):
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "map3d.bin")
-            nv, ni = make_m3.write(path, self.m, self.regions)
+            nv, ni = make_m3.write(path, self.m, self.regions, 2)
             with open(path, "rb") as f:
                 data = f.read()
         magic, ver, nreg, nland, nfac = struct.unpack_from("<4sHHHH", data)
-        self.assertEqual((magic, ver, nreg, nland), (b"HM3D", 3, len(self.regions), self.m["land"]))
-        off = 28 + 20 * nfac + 80 * nreg
+        self.assertEqual((magic, ver, nreg, nland), (b"HM3D", 4, len(self.regions), self.m["land"]))
+        self.assertEqual(struct.unpack_from("<H", data, 28)[0], 2)
+        off = 32 + 20 * nfac + 80 * nreg
         nn = sum(len(r["neigh"]) for r in self.regions)
         size = off + ((2 * nn + 3) & ~3) + 16 * nv + ((2 * ni + 3) & ~3)
         self.assertEqual(len(data), size)

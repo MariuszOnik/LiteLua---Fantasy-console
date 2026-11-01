@@ -1,10 +1,12 @@
 """Makes the political map for the 3DS (the land of make_m2.py, same seed): a flat map
-in 3D -- one quad with a picture where all the detail lives (hand-drawn, fractal borders,
-the coast's shadow, paper, waves) -- plus, per province and sea zone, its exact shape,
-drawn only to light up the selected one. Owners' colours are put on by the 3DS.
+in 3D -- textures where all the detail lives (hand-drawn, fractal borders, the coast's
+shadow, paper, waves), TILES x TILES of them plus one of the whole map for far views --
+plus, per province and sea zone, its exact shape, drawn only to light up the selected
+one. Owners' colours are put on by the 3DS.
 
-  python HeroesDS/tools/make_m3.py [--seed 77] [--coast 1] [--out 3ds/romfs/map3d.bin]
-                                   [--png preview.png] [--obj map.obj]
+  python HeroesDS/tools/make_m3.py [--seed 77] [--size 72] [--provinces 45] [--coast 1]
+                                   [--tiles 2] [--out 3ds/romfs] [--png preview.png]
+                                   [--obj map.obj]
 
 Steps:
   1. make_m2.generate: provinces and sea zones on a grid of cells (region per cell)
@@ -21,12 +23,14 @@ Steps:
      "noisy edges"); a line crossing another one (or itself) is redone calmer
   5. exact shapes: the top of each region by ear cutting (mapbox_earcut, holes included)
      and a strip inside its border (the selection outline)
-  6. the picture (TEX x TEX, drawn twice as big and scaled down): sea lighter near the
-     shore, the land's shadow on it, waves; land as pale paper, darker along its
-     borders; lines (land/land, coast, sea/sea); and the region index of every pixel
-     (taps on the 3DS) -- both with all mipmap levels, in the 3DS texture order
-     (tile_order)
-The file formats are in docs/FORMATS.md ("map3d.bin", "map_tex.bin").
+  6. the pictures (each TEX x TEX, drawn twice as big and scaled down; one per tile and
+     one of the whole map): sea lighter near the shore, the land's shadow on it, waves;
+     land as pale paper, darker along its borders; lines (land/land, coast, sea/sea);
+     and the region index of every pixel (taps on the 3DS) -- both with all mipmap
+     levels, in the 3DS texture order (tile_order), zlib-packed. Noise and waves are
+     laid over the whole map and every tile is drawn with a margin, so tiles meet
+     without seams
+The file formats are in docs/FORMATS.md ("map3d.bin", "map tiles").
 """
 import argparse
 import os
@@ -46,7 +50,8 @@ MIN_SEG = 0.2         # noisy edges stop at segments this long, in cells
 OUTSIDE = -2          # region number of the space outside the grid
 NEUTRAL = -1          # land without a province (tiny islets)
 OUTLINE = 0.3         # width of the selection outline, in cells
-TEX = 1024            # the picture's size (the largest 3DS texture)
+TEX = 1024            # a texture's size (the largest the 3DS has)
+NO_REGION = 0xFFFF    # region index of a pixel outside every region
 SEA_RGB = (150, 190, 200)
 PAPER_RGB = (252, 248, 238)
 SEA_LINE = (200, 222, 228)
@@ -418,84 +423,131 @@ def blur(a, radius):
     return np.asarray(img.filter(ImageFilter.GaussianBlur(radius)), float) / 255
 
 
-def value_noise(rng, h, w, cells):
-    """Smooth noise 0..1 from a coarse random grid, scaled up bilinearly."""
-    from PIL import Image
-    g = (rng.random((cells, cells)) * 255).astype(np.uint8)
-    return np.asarray(Image.fromarray(g).resize((w, h), Image.BILINEAR), float) / 255
+class Noise:
+    """Smooth noise -0.5..0.5 over the whole map: a random grid every `period` cells,
+    read bilinearly at any place, so neighbouring tiles match at their edges."""
+
+    def __init__(self, rng, world, period):
+        self.period = period
+        n = int(world / period) + 3
+        self.grid = rng.random((n, n)) - 0.5
+
+    def at(self, xs, zs):
+        u, v = xs / self.period, zs / self.period
+        i, j = np.floor(u).astype(int), np.floor(v).astype(int)
+        fu, fv = u - i, v - j
+        g = self.grid
+        i = np.clip(i, 0, g.shape[1] - 2)
+        j = np.clip(j, 0, g.shape[0] - 2)
+        return ((g[j, i] * (1 - fu) + g[j, i + 1] * fu) * (1 - fv)
+                + (g[j + 1, i] * (1 - fu) + g[j + 1, i + 1] * fu) * fv)
 
 
-def render_texture(m, regions, chains, size=TEX, ss=2):
-    """The map's picture without the owners' colours (land is pale paper -- the 3DS
-    multiplies it by the owner's colour) and the region index of every pixel.
-    Returns (rgb uint8 (size, size, 3), index uint8 (size, size); 255 = none)."""
-    from PIL import Image, ImageDraw
-    rows, cols = m["province"].shape
-    big = size * ss
-    k = big / cols                       # pixels per cell (the grid is square)
-    rng = np.random.default_rng(m["seed"] + 1000)
-    land_set = {i for i, r in enumerate(regions) if r["kind"] != KIND_SEA}
+class Painter:
+    """Draws any square window of the map (a tile, or the whole map small): the picture
+    without owners' colours and the region index per pixel."""
 
-    # region index per pixel, from the exact triangles
-    ids = Image.new("L", (big, big), 255)
-    d = ImageDraw.Draw(ids)
-    off = np.array([cols / 2, rows / 2])
-    for i, r in enumerate(regions):
-        v = r["verts"]
-        t = r["idx"][:r["top"]]
-        for j in range(0, len(t), 3):
-            d.polygon([((v[q][0] + off[0]) * k, (v[q][2] + off[1]) * k) for q in t[j:j + 3]], fill=i)
-    ids_big = np.asarray(ids)
-    land = np.isin(ids_big, list(land_set)).astype(float)
+    def __init__(self, m, regions, chains):
+        self.m, self.regions, self.chains = m, regions, chains
+        rows, cols = m["province"].shape
+        self.world = cols
+        self.off = np.array([cols / 2, rows / 2])
+        rng = np.random.default_rng(m["seed"] + 1000)
+        self.big_noise = Noise(rng, cols, 3.5)
+        self.grain = Noise(rng, cols, 0.5)
+        # wave marks: (x, z, size) in cells, kept or dropped per window by the shore
+        n = int(cols * rows / 9)
+        self.waves = np.column_stack([rng.uniform(0, cols, n), rng.uniform(0, rows, n),
+                                      rng.uniform(0.7, 1.2, n)])
+        self.land = {i for i, r in enumerate(regions) if r["kind"] != KIND_SEA}
+        self.boxes = [(r["box"][0] + self.off[0], r["box"][1] + self.off[1],
+                       r["box"][2] + self.off[0], r["box"][3] + self.off[1]) for r in regions]
 
-    # lines: land/land, coast, sea/sea -- each a mask
-    masks = {c: Image.new("L", (big, big), 0) for c in ("land", "coast", "sea")}
-    width = {"land": 0.11, "coast": 0.15, "sea": 0.07}
-    for (seq, closed), (pts, sides) in chains.cache.items():
-        kind = chains.kind(sides)
-        if kind == "edge":
-            continue
-        xy = [(float(x) * k, float(z) * k) for x, z in pts]
-        if closed:
-            xy.append(xy[0])
-        ImageDraw.Draw(masks[kind]).line(xy, fill=255, width=max(1, round(width[kind] * k)), joint="curve")
-    line = {c: np.asarray(mk, float) / 255 for c, mk in masks.items()}
+    def paint(self, x0, z0, span, size, ss=2):
+        """Window [x0, x0 + span] x [z0, z0 + span] (cells, from the grid's corner) at
+        size x size pixels. Returns (rgb uint8 (size, size, 3), index uint16 (size, size);
+        NO_REGION = none)."""
+        from PIL import Image, ImageDraw
+        k = size * ss / span                  # pixels per cell, while drawing
+        pad = int(np.ceil(3.0 * k))           # blurs and shadows reach over the edge
+        big = size * ss + 2 * pad
+        ox, oz = x0 - pad / k, z0 - pad / k   # cell at pixel (0, 0)
+        x1, z1 = ox + big / k, oz + big / k
 
-    # sea: blue-green, lighter near the shore, the land's shadow, waves far out
-    noise = value_noise(rng, big, big, 24) - 0.5
-    near = blur(land, 0.9 * k)
-    sea = np.empty((big, big, 3))
-    sea[:] = SEA_RGB
-    sea += noise[..., None] * 10
-    sea += (np.array((235, 240, 225)) - sea) * np.clip(near * 1.6, 0, 1)[..., None] * 0.55
-    shadow = np.roll(blur(land, 0.18 * k), (round(0.22 * k), round(0.22 * k)), (0, 1))
-    sea *= (1 - 0.35 * np.clip(shadow, 0, 1))[..., None]
-    waves = Image.new("L", (big, big), 0)
-    wd = ImageDraw.Draw(waves)
-    for _ in range(int(cols * rows / 9)):
-        x, y = rng.uniform(0, big, 2)
-        if near[int(y), int(x)] > 0.04:
-            continue
-        w = k * rng.uniform(0.7, 1.2)
-        for s in (0, 1):
-            wd.arc((x + s * w, y, x + (s + 1) * w, y + w * 0.6), 200 if s == 0 else 20, 340 if s == 0 else 160,
-                   fill=255, width=max(1, round(0.06 * k)))
-    sea *= (1 - 0.18 * np.asarray(waves, float) / 255)[..., None]
+        def px(x, z):
+            return (x - ox) * k, (z - oz) * k
 
-    # land: pale paper with grain, a little darker along its borders
-    grain = value_noise(rng, big, big, 160) - 0.5
-    paper = np.empty((big, big, 3))
-    paper[:] = PAPER_RGB
-    paper *= (1 + 0.05 * grain + 0.04 * noise)[..., None]
-    edges = blur(np.clip(line["land"] + line["coast"], 0, 1), 0.35 * k)
-    paper *= (1 - 0.22 * np.clip(edges * 2, 0, 1))[..., None]
+        ids = Image.new("I", (big, big), NO_REGION)
+        d = ImageDraw.Draw(ids)
+        for i, r in enumerate(self.regions):
+            bx0, bz0, bx1, bz1 = self.boxes[i]
+            if bx1 < ox or bx0 > x1 or bz1 < oz or bz0 > z1:
+                continue
+            v = r["verts"]
+            t = r["idx"][:r["top"]]
+            for j in range(0, len(t), 3):
+                d.polygon([px(v[q][0] + self.off[0], v[q][2] + self.off[1]) for q in t[j:j + 3]], fill=i)
+        ids_big = np.asarray(ids, np.int64)
+        land = np.isin(ids_big, list(self.land)).astype(float)
 
-    img = sea * (1 - land[..., None]) + paper * land[..., None]
-    for c, col in (("sea", SEA_LINE), ("land", LAND_LINE), ("coast", COAST_LINE)):
-        a = line[c][..., None]
-        img = img * (1 - a) + np.array(col, float) * a
-    img = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8)).resize((size, size), Image.LANCZOS)
-    return np.asarray(img), ids_big[ss // 2::ss, ss // 2::ss].copy()
+        masks = {c: Image.new("L", (big, big), 0) for c in ("land", "coast", "sea")}
+        width = {"land": 0.11, "coast": 0.15, "sea": 0.07}
+        for (seq, closed), (pts, sides) in self.chains.cache.items():
+            kind = self.chains.kind(sides)
+            if kind == "edge":
+                continue
+            if (pts[:, 0].max() < ox or pts[:, 0].min() > x1
+                    or pts[:, 1].max() < oz or pts[:, 1].min() > z1):
+                continue
+            xy = [px(float(x), float(z)) for x, z in pts]
+            if closed:
+                xy.append(xy[0])
+            ImageDraw.Draw(masks[kind]).line(xy, fill=255, width=max(1, round(width[kind] * k)), joint="curve")
+        line = {c: np.asarray(mk, float) / 255 for c, mk in masks.items()}
+
+        cx = ox + (np.arange(big) + 0.5) / k
+        cz = oz + (np.arange(big) + 0.5) / k
+        xs, zs = np.meshgrid(cx, cz)
+        noise = self.big_noise.at(xs, zs)
+        grain = self.grain.at(xs, zs)
+
+        # sea: blue-green, lighter near the shore, the land's shadow, waves far out
+        near = blur(land, 0.9 * k)
+        sea = np.empty((big, big, 3))
+        sea[:] = SEA_RGB
+        sea += noise[..., None] * 10
+        sea += (np.array((235, 240, 225)) - sea) * np.clip(near * 1.6, 0, 1)[..., None] * 0.55
+        shadow = np.roll(blur(land, 0.18 * k), (round(0.22 * k), round(0.22 * k)), (0, 1))
+        sea *= (1 - 0.35 * np.clip(shadow, 0, 1))[..., None]
+        waves = Image.new("L", (big, big), 0)
+        wd = ImageDraw.Draw(waves)
+        inside = ((self.waves[:, 0] > ox - 2) & (self.waves[:, 0] < x1) & (self.waves[:, 1] > oz - 2)
+                  & (self.waves[:, 1] < z1))
+        for wx, wz, ws in self.waves[inside]:
+            x, y = px(wx, wz)
+            if 0 <= x < big and 0 <= y < big and near[int(y), int(x)] > 0.04:
+                continue
+            w = k * ws
+            for s in (0, 1):
+                wd.arc((x + s * w, y, x + (s + 1) * w, y + w * 0.6), 200 if s == 0 else 20,
+                       340 if s == 0 else 160, fill=255, width=max(1, round(0.06 * k)))
+        sea *= (1 - 0.18 * np.asarray(waves, float) / 255)[..., None]
+
+        # land: pale paper with grain, a little darker along its borders
+        paper = np.empty((big, big, 3))
+        paper[:] = PAPER_RGB
+        paper *= (1 + 0.05 * grain + 0.04 * noise)[..., None]
+        edges = blur(np.clip(line["land"] + line["coast"], 0, 1), 0.35 * k)
+        paper *= (1 - 0.22 * np.clip(edges * 2, 0, 1))[..., None]
+
+        img = sea * (1 - land[..., None]) + paper * land[..., None]
+        for c, col in (("sea", SEA_LINE), ("land", LAND_LINE), ("coast", COAST_LINE)):
+            a = line[c][..., None]
+            img = img * (1 - a) + np.array(col, float) * a
+        img = img[pad:pad + size * ss, pad:pad + size * ss]
+        ids_big = ids_big[pad:pad + size * ss, pad:pad + size * ss]
+        img = Image.fromarray(np.clip(img, 0, 255).astype(np.uint8)).resize((size, size), Image.LANCZOS)
+        return np.asarray(img), ids_big[ss // 2::ss, ss // 2::ss].astype(np.uint16)
 
 
 def tile_order(size):
@@ -511,8 +563,8 @@ def tile_order(size):
 
 
 def mip_levels(img, nearest=False):
-    """The picture at TEX, TEX/2, ... down to 8 (the 3DS mipmap levels); region indices
-    are picked, not mixed."""
+    """The picture at its size, half, ... down to 8 (the 3DS mipmap levels); region
+    indices are picked, not mixed."""
     from PIL import Image
     out, size = [img], img.shape[0]
     while size > 8:
@@ -534,6 +586,25 @@ def tiled(img):
     return out.tobytes()
 
 
+def rgb565(img):
+    r, g, b = (img[..., i].astype(np.uint16) for i in range(3))
+    return ((r >> 3) << 11 | (g >> 2) << 5 | (b >> 3)).astype("<u2")
+
+
+def write_tile(path, rgb, ids):
+    """One texture with all mipmap levels: zlib(paper RGB565) and zlib(region index u16),
+    see docs/FORMATS.md ("map tiles")."""
+    paper = b"".join(tiled(rgb565(level)) for level in mip_levels(rgb))
+    index = b"".join(tiled(level.astype("<u2")) for level in mip_levels(ids, nearest=True))
+    with open(path, "wb") as f:
+        f.write(b"HT01")
+        for raw in (paper, index):
+            packed = zlib.compress(raw, 9)
+            f.write(struct.pack("<II", len(raw), len(packed)) + packed)
+            if len(packed) % 4:
+                f.write(b"\0" * (4 - len(packed) % 4))
+
+
 def tint_colors(m, regions):
     """Per region: the colour the 3DS multiplies the paper by (white for the sea)."""
     out = []
@@ -547,13 +618,13 @@ def tint_colors(m, regions):
     return out
 
 
-def write(path, m, regions, tex_path=None, tex=None):
-    """map3d.bin (and map_tex.bin with the picture), see docs/FORMATS.md."""
+def write(path, m, regions, tiles=1):
+    """map3d.bin, see docs/FORMATS.md."""
     rows, cols = m["province"].shape
     nv = sum(len(r["verts"]) for r in regions)
     ni = sum(len(r["idx"]) for r in regions)
-    head = struct.pack("<4sHHHHIIIf", b"HM3D", 3, len(regions), m["land"], len(m2.FACTIONS),
-                       nv, ni, TEX, float(cols))
+    head = struct.pack("<4sHHHHIIIfHH", b"HM3D", 4, len(regions), m["land"], len(m2.FACTIONS),
+                       nv, ni, TEX, float(cols), tiles, 0)
     for fname, col in m2.FACTIONS:
         head += struct.pack("<BBBx16s", *col, fname.encode())
     nlist, v0, i0 = b"", 0, 0
@@ -573,12 +644,34 @@ def write(path, m, regions, tex_path=None, tex=None):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     with open(path, "wb") as f:
         f.write(head + nlist + verts + idx)
-    if tex_path:
-        rgb, ids = tex
-        with open(tex_path, "wb") as f:
-            f.write(b"".join(tiled(level) for level in mip_levels(rgb)))
-            f.write(b"".join(tiled(level) for level in mip_levels(ids, nearest=True)))
     return nv, ni
+
+
+def write_textures(folder, m, regions, chains, tiles, png=None):
+    """overview.bin (the whole map in one texture) and tiles/<col>_<row>.bin."""
+    painter = Painter(m, regions, chains)
+    world = painter.world
+    tdir = os.path.join(folder, "tiles")
+    os.makedirs(tdir, exist_ok=True)
+    for name in os.listdir(tdir):
+        os.remove(os.path.join(tdir, name))
+    over = painter.paint(0, 0, world, TEX)
+    write_tile(os.path.join(folder, "overview.bin"), *over)
+    span = world / tiles
+    full = None
+    if png:
+        full = (np.zeros((TEX * tiles, TEX * tiles, 3), np.uint8),
+                np.zeros((TEX * tiles, TEX * tiles), np.uint16))
+    for ty in range(tiles):
+        for tx in range(tiles):
+            rgb, ids = painter.paint(tx * span, ty * span, span, TEX)
+            write_tile(os.path.join(tdir, "%d_%d.bin" % (tx, ty)), rgb, ids)
+            if full:
+                full[0][ty * TEX:(ty + 1) * TEX, tx * TEX:(tx + 1) * TEX] = rgb
+                full[1][ty * TEX:(ty + 1) * TEX, tx * TEX:(tx + 1) * TEX] = ids
+            print("  tile %d,%d" % (tx, ty), flush=True)
+    if png:
+        preview(png, m, regions, full)
 
 
 def write_obj(path, regions):
@@ -599,7 +692,8 @@ def preview(path, m, regions, tex):
     """The picture with the owners' colours, as the 3DS shows it from above."""
     from PIL import Image
     rgb, ids = tex
-    tint = np.array(tint_colors(m, regions) + [(255, 255, 255)] * (256 - len(regions)), float)
+    tint = np.full((NO_REGION + 1, 3), 255.0)
+    tint[:len(regions)] = tint_colors(m, regions)
     out = rgb.astype(float) * tint[ids] / 255
     Image.fromarray(out.astype(np.uint8)).save(path)
 
@@ -610,20 +704,22 @@ def main(argv):
     p.add_argument("--size", type=int, default=72)
     p.add_argument("--provinces", type=int, default=45)
     p.add_argument("--coast", type=float, default=1.0)
+    p.add_argument("--tiles", type=int, default=2, help="textures per side of the map")
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    p.add_argument("--out", default=os.path.join(here, "3ds", "romfs", "map3d.bin"))
-    p.add_argument("--png")
+    p.add_argument("--out", default=os.path.join(here, "3ds", "romfs"), help="romfs folder")
+    p.add_argument("--png", help="preview of the full-size picture with owners' colours")
     p.add_argument("--obj", help="also write a Wavefront .obj (one object per region) for Blender")
     a = p.parse_args(argv)
     m = m2.generate(a.seed, a.size, a.provinces, a.coast)
     regions, chains = build(m)
-    tex = render_texture(m, regions, chains)
-    tex_path = os.path.join(os.path.dirname(a.out), "map_tex.bin")
-    nv, ni = write(a.out, m, regions, tex_path, tex)
-    print("%s: %d regions (%d land), %d vertices, %d triangles (selection only), texture %d^2"
-          % (a.out, len(regions), m["land"], nv, ni // 3, TEX))
-    if a.png:
-        preview(a.png, m, regions, tex)
+    assert len(regions) < NO_REGION
+    for old in ("map_tex.bin",):
+        if os.path.exists(os.path.join(a.out, old)):
+            os.remove(os.path.join(a.out, old))
+    nv, ni = write(os.path.join(a.out, "map3d.bin"), m, regions, a.tiles)
+    print("%s: %d regions (%d land), %d vertices, %d triangles (selection only), %dx%d tiles of %d^2"
+          % (a.out, len(regions), m["land"], nv, ni // 3, a.tiles, a.tiles, TEX), flush=True)
+    write_textures(a.out, m, regions, chains, a.tiles, a.png)
     if a.obj:
         write_obj(a.obj, regions)
 

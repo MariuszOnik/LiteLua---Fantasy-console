@@ -5,3 +5,5 @@ build/
 *.map
 romfs/map3d.bin
 romfs/map_tex.bin
+romfs/overview.bin
+romfs/tiles/

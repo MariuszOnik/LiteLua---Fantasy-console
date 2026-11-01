@@ -5,7 +5,8 @@
 #   .\build.ps1 clean
 #   .\build.ps1 run      build, then open in the Azahar emulator
 #   -tag m3x             label of the copy (default: the current idea)
-param([string]$what = "", [string]$tag = "m3c")
+#   -gen "--tiles 4 ..." arguments for tools/make_m3.py (which map goes into romfs)
+param([string]$what = "", [string]$tag = "m3d", [string]$gen = "")
 $ErrorActionPreference = "Stop"
 $here = $PSScriptRoot
 $bash = "C:\devkitPro\msys2\usr\bin\bash.exe"
@@ -15,7 +16,9 @@ if ($what -eq "clean") {
     & $bash -lc "$env_ && make clean"
     exit $LASTEXITCODE
 }
-python (Join-Path $here "..\tools\make_m3.py")
+$genArgs = @()
+if ($gen) { $genArgs = $gen.Split(" ", [StringSplitOptions]::RemoveEmptyEntries) }
+python (Join-Path $here "..\tools\make_m3.py") @genArgs
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 & $bash -lc "$env_ && make"
 if ($LASTEXITCODE) { exit $LASTEXITCODE }

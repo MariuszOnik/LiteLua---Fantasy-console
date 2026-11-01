@@ -142,3 +142,8 @@ jest w pełnym 3D (wzór: obrazki „Risk” — płaskie prowincje jak płytki,
   mapę numerów regionów (piksele tekstury) zamiast trójkątów. Każdy pomysł = osobny commit
   i osobny build w `3ds/builds/heroes3d-<tag>.3dsx` (stare zostają do porównań). Głębię
   dadzą później pionki (armie, miasta) na mapie.
+- **Uzupełnienie (2026-11-01):** duża mapa w **kaflach 1024²** (więcej się nie da w jednej
+  teksturze 3DS) z teksturą przeglądową całej mapy pod spodem; w pamięci tylko kafle
+  widziane przez kamery (do 6), doczytywane w wątku w tle. Koszt klatki nie zależy od
+  wielkości mapy; ograniczeniem jest pamięć i czas doczytania. Numery regionów 16-bit
+  (było 8: do 254 regionów). Rozsądnie dla rozgrywki: 200–400 prowincji.
