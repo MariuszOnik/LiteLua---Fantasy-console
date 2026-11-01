@@ -90,7 +90,7 @@ Tak, w stylu DSCraft:
   trójkątów, 60 FPS. Na konsoli do zmierzenia (500–2000 żołnierzy).
 - Dalej: postój/strzał/śmierć, kawaleria i działa, instancing (mniej poleceń GPU na żołnierza).
 - (2026-11-01) Medieval II: `.mesh` i animacje `pack.dat` rozpracowane (narzędzia poza repo:
-  `E:\AI\M2TW	ools`), rycerze wypiekani do klatek morph (`make_knight.py`, kilka animacji w
+  `E:\AI\M2TW\tools`), rycerze wypiekani do klatek morph (`make_knight.py`, kilka animacji w
   formacie `LLM2`), odchudzanie `optimize.py` (3209 → 700 trójkątów, błąd po wszystkich
   klatkach). `tests/3ds/battle`: heksy 14×12 na wzgórzach (24 trójkąty na heks, obramowanie
   drugą teksturą), drzewa i kamienie w jednej siatce, 10 oddziałów × 8 rycerzy — Azahar 74 tys.
