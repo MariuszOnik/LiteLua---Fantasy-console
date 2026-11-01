@@ -20,6 +20,8 @@ $genArgs = @()
 if ($gen) { $genArgs = $gen.Split(" ", [StringSplitOptions]::RemoveEmptyEntries) }
 python (Join-Path $here "..\tools\make_m3.py") @genArgs
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
+# make does not see changes inside romfs/: drop the .3dsx so the map is always packed anew
+Remove-Item -ErrorAction SilentlyContinue (Join-Path $here "heroes3d.3dsx")
 & $bash -lc "$env_ && make"
 if ($LASTEXITCODE) { exit $LASTEXITCODE }
 New-Item -ItemType Directory -Force (Join-Path $here "builds") | Out-Null
