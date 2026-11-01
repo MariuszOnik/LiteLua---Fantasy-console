@@ -93,12 +93,19 @@ class MeshTest(unittest.TestCase):
         lines = {k: (p, k[1]) for k, (p, _) in self.chains.cache.items()}
         self.assertEqual(make_m3.crossings(lines), set())
 
-    def test_province_borders_join_provinces(self):
+    def test_region_borders_go_all_round(self):
+        # every region's lines (land, coast, sea) join two different regions, and every
+        # region but the outermost sea has some: its selection outline
         self.assertTrue(self.borders)
+        kinds = set()
+        sides = set()
         for b in self.borders:
             self.assertNotEqual(b["a"], b["b"])
-            for side in (b["a"], b["b"]):
-                self.assertNotEqual(self.regions[side]["kind"], make_m3.KIND_SEA)
+            kinds.add(tuple(sorted(self.regions[r]["kind"] == make_m3.KIND_SEA for r in (b["a"], b["b"]))))
+            sides.update((b["a"], b["b"]))
+        self.assertEqual(kinds, {(False, False), (False, True), (True, True)})
+        land = [i for i, r in enumerate(self.regions) if r["kind"] == make_m3.KIND_LAND]
+        self.assertTrue(set(land) <= sides)
 
     def test_vertex_limit_and_flat(self):
         for r in self.regions:

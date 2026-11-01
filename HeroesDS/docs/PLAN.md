@@ -44,7 +44,11 @@ w msys2 devkitPro; `run` = Azahar). Każdy pomysł = osobny commit i osobny buil
 1059 powiatów, 16 kafli). Style (2x2, six-realms, do porównania): `m3k-style-classic`
 (jak m3j), `m3l-parchment` (pergamin z kodu), `m3m-leather` (skóra, złote granice; jaśniejsza: `m3p-leather-light` gamma 1.35, `m3q-leather-lighter` gamma 1.6 i jasna mgła),
 `m3n-parchment-image` (obraz SDXL `styles/parchment.png`), `m3o-parchment-grain` (gładki
-papier + ziarno na GPU). Wszystkie sprawdzone w Azaharze; użytkownik wybiera. Historia: m3a gładkie płyty → m3b fraktale w meshu → m3c
+papier + ziarno na GPU). Wszystkie sprawdzone w Azaharze; użytkownik wybiera.
+Linie jak w Imperial Glory (M3r): granice państw wzorem kreska-kropka, zaznaczona
+prowincja przerywaną linią tuszem po granicy (wzory jako mała tekstura na pasku, `border.pattern`,
+`select` w stylu; `classic` = dawne świecenie): `m3r-leather-dashed`, `m3s-parchment-dashed`
+— zaznaczanie do sprawdzenia przez użytkownika (zrzut z kliknięciem nie wyszedł). Historia: m3a gładkie płyty → m3b fraktale w meshu → m3c
 płaska mapa z teksturą → m3d kafle → m3e szczegóły wg oddalenia → m3f klikanie powiatów
 → m3g scenariusz/mgła/Lua → m3h szybka mgła → m3i/m3j kolor mgły → m3k–m3o style.
 **Sterowanie:** stuknięcie = prowincja (z bliska powiat), przeciąganie / gałka = przesuw,

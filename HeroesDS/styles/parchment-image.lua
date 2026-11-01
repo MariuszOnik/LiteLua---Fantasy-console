@@ -25,7 +25,8 @@ return {
       unseen = { 222, 206, 168, 240 },
       seen = { 190, 172, 136, 110 },
     },
-    border = { color = { 125, 32, 20 }, alpha = 0.85, width = 1.0 },
+    border = { color = { 125, 32, 20 }, alpha = 0.85, width = 1.0, pattern = "------  .  ", dash = 11 },
+    select = { pattern = "----   ", color = { 45, 26, 12 }, alpha = 0.9, width = 1.8, dash = 5, fill = 0.12 },
     labels = {
       province = { 52, 30, 12 },
       county = { 98, 70, 40 },

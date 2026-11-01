@@ -113,7 +113,11 @@ typedef struct {
 	u8 neutral[3];             // land nobody owns
 	u8 fogUnseen[4], fogSeen[4];   // r g b alpha
 	u8 border[3];              // realms' borders
-	float borderAlpha, borderWidth;
+	float borderAlpha, borderWidth, borderDash;
+	char borderPattern[33];    // the line's pattern: '-' ink, ' ' gap, '.' dot, per slice
+	char selectPattern[33];    // the selected province's outline ("": a light, as before)
+	u8 select[3];
+	float selectAlpha, selectWidth, selectDash, selectFill;
 	u8 province[3], county[3], shadow[3], selected[3];   // names
 	float grain, grainCells;   // paper grain over the map (grain.bin): strength, cells per copy
 } Style;
@@ -121,12 +125,15 @@ typedef struct {
 static Style style = {
 	{ 150, 190, 200 }, 0.62f, { 190, 180, 160 },
 	{ 102, 102, 119, 204 }, { 153, 153, 153, 102 },
-	{ 107, 20, 15 }, 0.85f, 1.0f,
+	{ 107, 20, 15 }, 0.85f, 1.0f, 8.0f, "-", "",
+	{ 40, 25, 15 }, 0.9f, 1.6f, 5.0f, 0.0f,
 	{ 20, 12, 4 }, { 70, 50, 30 }, { 40, 25, 15 }, { 255, 255, 255 },
 	0.0f, 3.0f,
 };
 static C3D_Tex grainTex;
 static bool grainOk;
+static C3D_Tex borderTex, selectTex;   // the line patterns (64 x 8, alpha)
+static float* lineDist;      // linear memory: per border vertex (distance along, side)
 
 static MapHeader hdr;
 static Faction factions[8];
@@ -183,7 +190,7 @@ static volatile int loadedCount;
 typedef struct {
 	shaderProgram_s program;
 	DVLB_s* dvlb;
-	int uProj, uModelView, uTint, uWidth, uGrain;
+	int uProj, uModelView, uTint, uWidth, uGrain, uDash;
 } Shader;
 
 static Shader overlay, textured, lines;
@@ -347,6 +354,21 @@ static bool loadMap(void)
 	memcpy(borders, p, nborders * sizeof(Border)); p += nborders * sizeof(Border);
 	lineVerts = linearCopy(p, nlv * 16);
 	free(buf);
+	// per vertex: how far along its line (world units), and which side of the strip
+	lineDist = linearAlloc(nlv * 8 + 8);
+	for (u32 i = 0; i < nborders; i++) {
+		float d = 0;
+		for (u32 k = borders[i].start; k + 1 < borders[i].start + borders[i].count; k += 2) {
+			if (k > borders[i].start) {
+				float dx = lineVerts[k * 4] - lineVerts[(k - 2) * 4], dz = lineVerts[k * 4 + 1] - lineVerts[(k - 2) * 4 + 1];
+				d += sqrtf(dx * dx + dz * dz);
+			}
+			lineDist[k * 2] = lineDist[k * 2 + 2] = d;
+			lineDist[k * 2 + 1] = 0;
+			lineDist[k * 2 + 3] = 1;
+		}
+	}
+	GSPGPU_FlushDataCache(lineDist, nlv * 8);
 
 	tint = malloc(hdr.ncounties * sizeof *tint);
 	regionFog = calloc(hdr.nregions, 1);
@@ -518,6 +540,16 @@ static bool styleRead(const char* path, char* err, size_t errSize)
 			styleColor(t, "color", style.border, 3);
 			styleNumber(t, "alpha", &style.borderAlpha);
 			styleNumber(t, "width", &style.borderWidth);
+			styleNumber(t, "dash", &style.borderDash);
+			getString(t, "pattern", style.borderPattern, sizeof style.borderPattern);
+		}
+		if ((t = styleTable(v, "select"))) {
+			styleColor(t, "color", style.select, 3);
+			styleNumber(t, "alpha", &style.selectAlpha);
+			styleNumber(t, "width", &style.selectWidth);
+			styleNumber(t, "dash", &style.selectDash);
+			styleNumber(t, "fill", &style.selectFill);
+			getString(t, "pattern", style.selectPattern, sizeof style.selectPattern);
 		}
 		if ((t = styleTable(v, "labels"))) {
 			styleColor(t, "province", style.province, 3);
@@ -532,6 +564,8 @@ static bool styleRead(const char* path, char* err, size_t errSize)
 	}
 	lua_settop(L, 0);
 	if (style.grainCells < 0.1f) style.grainCells = 0.1f;
+	if (style.borderDash < 0.5f) style.borderDash = 0.5f;
+	if (style.selectDash < 0.5f) style.selectDash = 0.5f;
 	return true;
 }
 
@@ -914,6 +948,7 @@ static void shaderInit(Shader* s, u32* bin, u32 size)
 	s->uTint = shaderInstanceGetUniformLocation(s->program.vertexShader, "tint");
 	s->uWidth = shaderInstanceGetUniformLocation(s->program.vertexShader, "width");
 	s->uGrain = shaderInstanceGetUniformLocation(s->program.vertexShader, "grain");
+	s->uDash = shaderInstanceGetUniformLocation(s->program.vertexShader, "dash");
 }
 
 static void shaderFree(Shader* s)
@@ -927,6 +962,8 @@ static void parseName(C2D_Text* t, const char* s)
 	C2D_TextParse(t, nameBuf, s);
 	C2D_TextOptimize(t);
 }
+
+static void patternInit(C3D_Tex* t, const char* pat);
 
 static void sceneInit(void)
 {
@@ -942,8 +979,12 @@ static void sceneInit(void)
 	AttrInfo_AddLoader(&attrTex, 1, GPU_FLOAT, 2);       // v1 = texcoord
 	AttrInfo_Init(&attrLine);
 	AttrInfo_AddLoader(&attrLine, 0, GPU_FLOAT, 4);      // v0 = (x, z, nx, nz)
+	AttrInfo_AddLoader(&attrLine, 1, GPU_FLOAT, 2);      // v1 = (distance along, side)
 	BufInfo_Init(&bufLine);
 	BufInfo_Add(&bufLine, lineVerts, 16, 1, 0x0);
+	BufInfo_Add(&bufLine, lineDist, 8, 1, 0x1);
+	patternInit(&borderTex, style.borderPattern);
+	patternInit(&selectTex, style.selectPattern);
 
 	// a unit quad (0..1 on x and z): picture row 0 (north, -z) is at t = 0
 	TexVertex q[6] = {
@@ -1041,6 +1082,53 @@ static bool shapesInit(void)
 	return shapeInit(&shapeProv, vmax, imax) && shapeInit(&shapeCounty, cvmax, cimax);
 }
 
+// a line pattern into a 64 x 8 alpha texture: the text is the period, each character
+// an equal slice -- '-' ink, ' ' a gap, '.' a dot (ink in the slice's middle); rows
+// across the line, its edges softer
+static void patternInit(C3D_Tex* t, const char* pat)
+{
+	enum { W = 64, H = 8 };
+	if (!*pat) pat = "-";
+	int n = strlen(pat);
+	C3D_TexInit(t, W, H, GPU_A8);
+	C3D_TexSetFilter(t, GPU_LINEAR, GPU_LINEAR);
+	C3D_TexSetWrap(t, GPU_REPEAT, GPU_CLAMP_TO_EDGE);
+	u8* out = t->data;
+	static const u8 across[H] = { 70, 200, 255, 255, 255, 255, 200, 70 };
+	for (int y = 0; y < H; y++)
+		for (int x = 0; x < W; x++) {
+			int c = x * n / W;
+			float f = (x + 0.5f) * n / W - c;      // where in its slice
+			bool ink = pat[c] == '-' || (pat[c] == '.' && f > 0.25f && f < 0.75f);
+			u32 yf = H - 1 - y, xs = x & 7, ys = yf & 7;
+			u32 m = (xs & 1) | ((ys & 1) << 1) | ((xs & 2) << 1) | ((ys & 2) << 2) | ((xs & 4) << 2) | ((ys & 4) << 3);
+			out[((yf >> 3) * (W >> 3) + (x >> 3)) * 64 + m] = ink ? across[y] : 0;
+		}
+	C3D_TexFlush(t);
+}
+
+// border strips from here on: a colour, the line's pattern along it (one period is
+// `dash` line widths, so it looks the same at any zoom)
+static void linesBegin(const C3D_Mtx* proj, const C3D_Mtx* view, C3D_Tex* pattern, const u8* rgb,
+	float alpha, float width, float dash)
+{
+	C3D_TexEnv* env = C3D_GetTexEnv(0);
+	C3D_TexEnvInit(env);
+	C3D_TexEnvSrc(env, C3D_RGB, GPU_PRIMARY_COLOR, 0, 0);
+	C3D_TexEnvFunc(env, C3D_RGB, GPU_REPLACE);
+	C3D_TexEnvSrc(env, C3D_Alpha, GPU_PRIMARY_COLOR, GPU_TEXTURE0, 0);
+	C3D_TexEnvFunc(env, C3D_Alpha, GPU_MODULATE);
+	C3D_TexBind(0, pattern);
+	C3D_BindProgram(&lines.program);
+	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, lines.uProj, proj);
+	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, lines.uModelView, view);
+	C3D_SetAttrInfo(&attrLine);
+	C3D_SetBufInfo(&bufLine);
+	C3D_FVUnifSet(GPU_VERTEX_SHADER, lines.uWidth, width, 0, 0, 0);
+	C3D_FVUnifSet(GPU_VERTEX_SHADER, lines.uDash, 1 / (2 * width * dash), 0, 0, 0);
+	C3D_FVUnifSet(GPU_VERTEX_SHADER, lines.uTint, rgb[0] / 255.0f, rgb[1] / 255.0f, rgb[2] / 255.0f, alpha);
+}
+
 static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view, float zoom)
 {
 	// the map is flat: no depth test, later layers simply cover earlier ones
@@ -1088,24 +1176,16 @@ static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view, float zoom)
 		C3D_TexEnvInit(C3D_GetTexEnv(2));
 	}
 
-	// realms' borders: strips about as wide on screen at any zoom
-	env = C3D_GetTexEnv(0);
-	C3D_TexEnvInit(env);
-	C3D_TexEnvSrc(env, C3D_Both, GPU_PRIMARY_COLOR, 0, 0);
-	C3D_TexEnvFunc(env, C3D_Both, GPU_REPLACE);
-	C3D_BindProgram(&lines.program);
-	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, lines.uProj, proj);
-	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, lines.uModelView, view);
-	C3D_SetAttrInfo(&attrLine);
-	C3D_SetBufInfo(&bufLine);
+	// realms' borders (between land only): strips about as wide on screen at any zoom
 	float w = zoom * 0.0042f;
 	if (w < 0.07f) w = 0.07f;
-	C3D_FVUnifSet(GPU_VERTEX_SHADER, lines.uWidth, w * style.borderWidth, 0, 0, 0);
-	C3D_FVUnifSet(GPU_VERTEX_SHADER, lines.uTint, style.border[0] / 255.0f, style.border[1] / 255.0f,
-		style.border[2] / 255.0f, style.borderAlpha);
-	for (u32 i = 0; i < nborders; i++)
-		if (ownerOf(borders[i].a) != ownerOf(borders[i].b) && regionFog[borders[i].a] && regionFog[borders[i].b])
-			C3D_DrawArrays(GPU_TRIANGLE_STRIP, borders[i].start, borders[i].count);
+	linesBegin(proj, view, &borderTex, style.border, style.borderAlpha, w * style.borderWidth, style.borderDash);
+	for (u32 i = 0; i < nborders; i++) {
+		const Border* b = &borders[i];
+		if (regions[b->a].kind != KIND_SEA && regions[b->b].kind != KIND_SEA
+			&& ownerOf(b->a) != ownerOf(b->b) && regionFog[b->a] && regionFog[b->b])
+			C3D_DrawArrays(GPU_TRIANGLE_STRIP, b->start, b->count);
+	}
 
 	// fog of war: one texture over the whole map
 	if (fogOn) {
@@ -1126,16 +1206,28 @@ static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view, float zoom)
 
 	if (selected < 0) return;
 
-	// the selected region: a pulsing light over its exact shape and an outline inside it;
-	// with a county selected the province is lit less and the county more
+	// the selected region: a pulsing light over its exact shape and an outline inside it,
+	// or (a style with select.pattern) a patterned line along its border and a faint
+	// light; with a county selected the province is lit less and the county more
+	bool dashed = style.selectPattern[0] != 0;
 	C3D_BindProgram(&overlay.program);
 	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, overlay.uProj, proj);
 	C3D_FVUnifMtx4x4(GPU_VERTEX_SHADER, overlay.uModelView, view);
 	C3D_SetAttrInfo(&attrOverlay);
 	bool county = selectedCounty >= 0 && counties[selectedCounty].vcount;
 	float s = sinf(pulse);
-	drawShape(&shapeProv, county ? 0.08f : 0.18f + 0.1f * s, county ? 0.5f : 0.75f + 0.2f * s);
+	if (dashed)
+		drawShape(&shapeProv, style.selectFill * (county ? 0.4f : 0.8f + 0.2f * s), 0);
+	else
+		drawShape(&shapeProv, county ? 0.08f : 0.18f + 0.1f * s, county ? 0.5f : 0.75f + 0.2f * s);
 	if (county) drawShape(&shapeCounty, 0.22f + 0.1f * s, 0.8f + 0.2f * s);
+	if (dashed) {
+		linesBegin(proj, view, &selectTex, style.select, style.selectAlpha, w * style.selectWidth, style.selectDash);
+		for (u32 i = 0; i < nborders; i++)
+			if (borders[i].a == selected || borders[i].b == selected)
+				C3D_DrawArrays(GPU_TRIANGLE_STRIP, borders[i].start, borders[i].count);
+		C3D_TexEnvInit(C3D_GetTexEnv(0));
+	}
 }
 
 static void viewMatrix(const Camera* c, C3D_Mtx* view)
@@ -1451,6 +1543,9 @@ int main(void)
 	linearFree(shapeCounty.v);
 	linearFree(shapeCounty.i);
 	linearFree(lineVerts);
+	linearFree(lineDist);
+	C3D_TexDelete(&borderTex);
+	C3D_TexDelete(&selectTex);
 	linearFree(quad);
 	free(names);
 	free(countyNames);

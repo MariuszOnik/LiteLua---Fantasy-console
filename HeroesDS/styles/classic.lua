@@ -26,7 +26,18 @@ return {
       unseen = { 102, 102, 119, 204 },   -- never seen: graphite mist
       seen = { 153, 153, 153, 102 },     -- seen before: a grey veil
     },
-    border = { color = { 107, 20, 15 }, alpha = 0.85, width = 1.0 },   -- realms' borders
+    border = {                        -- realms' borders
+      color = { 107, 20, 15 }, alpha = 0.85, width = 1.0,
+      pattern = "-",                  -- per slice: '-' ink, ' ' gap, '.' dot
+      dash = 8,                       -- one pattern = this many line widths
+    },
+    select = {                        -- the selected province
+      pattern = "",                   -- "": a pulsing light; else a line like border's
+      color = { 40, 25, 15 }, alpha = 0.9,
+      width = 1.6,                    -- x the borders' width
+      dash = 5,
+      fill = 0,                       -- a faint light over it too: 0 .. 1
+    },
     labels = {
       province = { 20, 12, 4 },
       county = { 70, 50, 30 },

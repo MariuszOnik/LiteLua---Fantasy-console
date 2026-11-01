@@ -237,11 +237,13 @@ i16 × Σ sąsiadów     listy sąsiadów regionów po kolei (id), dopełnione d
 nverts × 16 B        f32 x, y (= 0), z, 1 — kształty regionów, potem powiatów
 nidx × u16           trójkąty, indeksy względem vstart kształtu (< 65536), dopełnione do 4 B
 u32 nborders; u32 nlineverts
-nborders × 12 B      granica między dwiema prowincjami lądu (odcinek między węzłami):
+nborders × 12 B      granica między dwoma regionami — ląd, wybrzeże, strefy morskie (od M3r;
+                     wcześniej tylko ląd–ląd) — odcinek między węzłami:
                      u16 a, b (regiony po bokach); u32 start, count (wierzchołki paska)
 nlineverts × 16 B    f32 x, z, nx, nz: punkty granic jako pas trójkątów (triangle strip),
                      każdy punkt dwa razy — z normalną i z odwróconą; 3DS przesuwa punkt
-                     o normalną × szerokość (rysuje te granice, gdzie właściciele różni)
+                     o normalną × szerokość (rysuje granice państw tam, gdzie po obu
+                     stronach ląd o różnych właścicielach, i obrys zaznaczonego regionu)
 ```
 
 Tekstury: `overview.bin` (cała mapa) i `tiles/<kolumna>_<wiersz>.bin` (kafel `i, j`
@@ -309,7 +311,11 @@ plik.lua` (domyślnie `styles/classic.lua`). Dwie części:
   **`sdmc:/3ds/heroes3d/style.lua`** (jeśli jest — nadpisuje to, co podaje; zmiana kolorów
   bez budowania): `background`, `tint`, `neutral`, `fog.unseen` / `fog.seen` (r, g, b,
   alfa), `border` (`color`, `alpha`, `width`), `labels` (`province`, `county`, `shadow`,
-  `selected`), `grain` (`strength` 0–1, `cells`).
+  `selected`), `grain` (`strength` 0–1, `cells`). Wzory linii: `border.pattern` i
+  `select.pattern` — napis, każdy znak to równy kawałek okresu: `-` tusz, spacja przerwa,
+  `.` kropka; `dash` = okres w grubościach linii (kreski wyglądają tak samo przy każdym
+  przybliżeniu). `select` = zaznaczona prowincja: `pattern` (pusty = dawne świecenie z
+  obrysem), `color`, `alpha`, `width` (× grubość granic), `dash`, `fill` (poświata 0–1).
 
 Kolory `{ r, g, b }` lub `{ r, g, b, a }`, 0–255. Pełny przykład z opisem pól:
 `styles/classic.lua`.

@@ -1,10 +1,12 @@
 ; Border strip vertex shader: v0 = (x, z, nx, nz) -- a point of a line and its side
 ; normal; the strip is as wide as the uniform `width` (x = half width), so it keeps
-; its width on screen however far the camera is.
+; its width on screen however far the camera is. v1 = (distance along the line, side
+; 0/1): texcoord0 = (distance * dash.x, side) -- the line's pattern (dashes, dots),
+; as long on screen as the line is wide.
 
 ; Uniforms
 .fvec projection[4], modelView[4]
-.fvec tint, width
+.fvec tint, width, dash
 
 ; Constants
 .constf myconst(0.0, 1.0, -1.0, 0.1)
@@ -14,9 +16,11 @@
 ; Outputs
 .out outpos position
 .out outclr color
+.out outtc0 texcoord0
 
 ; Inputs
 .alias inline v0
+.alias inpat  v1
 
 .proc main
 	mul r2.xy, width.xx, inline.zw
@@ -36,5 +40,10 @@
 	dp4 outpos.w, projection[3], r1
 
 	mov outclr, tint
+
+	mul r3.x, dash.x, inpat.x
+	mov r3.y, inpat.y
+	mov r3.zw, zeros
+	mov outtc0, r3
 	end
 .end

@@ -26,8 +26,9 @@ Steps:
      the chains are made on the county grid, so a province's border is its counties'
   6. exact shapes: the top of each region by ear cutting (mapbox_earcut, holes included)
      and a strip inside its border (the selection outline); the counties' shapes for
-     the county index of every pixel; the borders between provinces as lines (the 3DS
-     draws those between realms -- they change in the game)
+     the county index of every pixel; the borders between regions (land, coast, sea
+     zones) as lines (the 3DS draws those between realms -- they change in the game --
+     and the selected region's outline)
   7. the pictures (each TEX x TEX, drawn twice as big and scaled down; one per tile and
      one of the whole map): sea lighter near the shore, the land's shadow on it, waves;
      land as pale paper, darker along its borders; and the county index of every pixel
@@ -512,9 +513,11 @@ def build(m):
                                 cx=col + 0.5 - off[0], cz=r + 0.5 - off[1],
                                 pts=pts2 - off, tris=tris, verts=verts, idx=idx, top=top))
 
+    # every line between two regions (land, coast, sea zones): the 3DS draws realms'
+    # borders on those between land and the selected region's outline on all of its own
     borders = []
     for key, (pts, _) in chains.cache.items():
-        if chains.kind(chains.info[key][2]) != "land":
+        if chains.kind(chains.info[key][2]) not in ("land", "coast", "sea"):
             continue
         pa, pb = chains.provinces(key)
         borders.append(dict(a=index[pa], b=index[pb], pts=pts - off, closed=key[1]))
