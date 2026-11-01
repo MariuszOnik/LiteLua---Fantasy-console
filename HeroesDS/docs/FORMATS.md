@@ -263,3 +263,34 @@ odległości, sama pokazuje mniej szczegółów daleko. Kafle rysowane są
 z zakładką, a szum i fale leżą na całej mapie, więc na stykach nie ma szwów. 3DS przy
 wczytaniu mnoży obraz przez kolor właściciela regionu powiatu piksela (`0,62 × kolor frakcji
 + 0,38 × biały`; morze bez zmian), a numery poziomu 0 zostawia do stuknięć.
+
+## `scenario.lua` — scenariusz mapy politycznej (nasz format)
+
+Plik danych w podzbiorze składni Lua jak `cart.lua` (D38: nic nie jest wykonywane, tylko
+klucze napisowe). Robi go `tools/make_m3.py` (`--dump-scenario plik.lua` = scenariusz
+samej mapy do edycji; `--scenario plik.lua` = sprawdź i włóż do romfs; bez niego do romfs
+idzie scenariusz mapy). 3DS czyta `romfs:/scenario.lua` parserem LiteLua (`ll_data.c`,
+Lua 5.4 jak na DS) i nakłada na `map3d.bin`. Id prowincji i powiatów należą do jednej
+wygenerowanej mapy (ziarno, rozmiar) — nie zmieniać ich.
+
+```lua
+return {
+  title = "Six realms (seed 77)",
+  player = "order",          -- id państwa gracza (jego widok: mgła wojny)
+  fog = true,                -- mgła wojny na starcie
+  realms = {                 -- do 32; kolejność = numery państw
+    { id = "order", name = "Order", color = { 60, 110, 220 } },
+    { id = "city_belpel", name = "Free City of Belpel", color = { 190, 175, 145 }, city = true },
+  },
+  provinces = {              -- każda prowincja i strefa morska: id z generatora
+    { id = 0, name = "Weneth", owner = "order" },   -- owner = "": niczyja
+    { id = 45, name = "Arnorval Sea" },             -- morze: bez właściciela
+  },
+  counties = {               -- id = numer powiatu w map3d.bin
+    { id = 12, name = "Margor" },
+  },
+}
+```
+Ograniczenia: nazwy państw i prowincji 1–23 bajty, powiatów 1–19, kolory 0–255; id państw
+różne. `city = true` = państwo-miasto (nazwa mniejsza, nie wersalikami). Na 3DS: X mgła
+wł./wył., Y widok następnego państwa.

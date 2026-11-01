@@ -18,7 +18,16 @@ ręcznie, bez przecięć). Każde podejście ma build w `3ds/builds/` (poza gite
 granice w meshu, ~52 tys. trójkątów, ~12–16 ms na klatkę w Azaharze), `m3c-flat` (płaska
 mapa = jeden prostokąt z teksturą 1024² z mipmapami, ~2,3 ms), `m3d` (kafle 1024²,
 doczytywane w tle; `m3d-tiles2x2`, `m3d-big4x4`), `m3e` (szczegóły wg
-oddalenia), **`m3f` (obecny): klikanie powiatów** — `m3f-counties-2x2` i
+oddalenia), `m3f` (klikanie powiatów), **`m3g` (obecny): scenariusz, państwa-miasta,
+mgła wojny, Lua na 3DS** — `m3g-scenario-2x2` (`-gen "--tiles 2 --scenario
+../scenarios/six-realms.lua"`) i `m3g-scenario-big4x4`. Lua 5.4 z `vendor/lua` (jak na DS,
+`LUA_32BITS`) wkompilowane w program 3DS; `romfs:/scenario.lua` czytane parserem LiteLua
+`ll_data.c` (format w `FORMATS.md`, wzór do edycji: `HeroesDS/scenarios/six-realms.lua`):
+państwa (do 32, też państwa-miasta), gracz, mgła, właściciele i nazwy prowincji, nazwy
+powiatów. Mgła: widać własne prowincje gracza i ich sąsiadów (ląd i morze), raz widziane
+zostają wyblakłe, nieznane ciemne, bez nazw i granic państw (linie prowincji z tekstury
+widać — do decyzji). X = mgła wł./wył., Y = widok następnego państwa; zmiana kolorów
+przemalowuje kafle w tle (najpierw przegląd). Wcześniej **`m3f`: klikanie powiatów** — `m3f-counties-2x2` i
 `m3f-counties-big4x4` (z bliska, gdy widać linie powiatów — `COUNTY_ZOOM` — stuknięcie
 zaznacza powiat: jasne światło i obrys, prowincja słabiej; dalej cała prowincja; nazwy
 państw pastelowe z cieniem, na najbliższej środka prowincji państwa, która mieści napis

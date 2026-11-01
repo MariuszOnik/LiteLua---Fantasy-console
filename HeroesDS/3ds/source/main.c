@@ -6,8 +6,11 @@
 // lines in the middle distance. Realms' borders are drawn here as strips (they change in
 // the game), names by distance: realms far, provinces, counties near. Owners' colours
 // are put on while loading. Each region's exact shape (romfs:/map3d.bin) is drawn only
-// to light up the selected one. Bottom screen: the map, tap a province to select it,
-// drag to pan, L/R tilt the camera. Top screen: a closer stereo view and the info.
+// to light up the selected one. A scenario (romfs:/scenario.lua, read by LiteLua's data
+// parser with Lua 5.4 -- the same as on the DS) sets the realms (city-states too), the
+// player, owners and names; fog of war shows the player's view. Bottom screen: the map,
+// tap a province to select it, drag to pan, L/R tilt the camera, X fog on/off, Y the
+// next realm's view. Top screen: a closer stereo view and the info.
 #include <3ds.h>
 #include <citro3d.h>
 #include <citro2d.h>
@@ -17,6 +20,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "miniz.h"
+#include "lua.h"
+#include "lauxlib.h"
+#include "ll_data.h"
 #include "map_shbin.h"
 #include "maptex_shbin.h"
 #include "border_shbin.h"
@@ -26,6 +32,7 @@
 #define SLOTS 6                  // tiles kept at once
 #define MAX_LABELS 512           // names placed on one screen
 #define COUNTY_ZOOM 24.0f        // nearer than this, taps pick counties (their lines show)
+#define MAX_REALMS 32            // as in make_m3.py
 
 #define DISPLAY_TRANSFER_FLAGS \
 	(GX_TRANSFER_FLIP_VERT(0) | GX_TRANSFER_OUT_TILED(0) | GX_TRANSFER_RAW_COPY(0) | \
@@ -87,12 +94,29 @@ typedef struct {
 	u16* ids;                  // county index per pixel, level 0, texture order
 	int tx, ty;
 	volatile int state;
+	volatile bool stale;       // painted with colours that changed since: load again
 	u32 used;                  // frame it was last wanted
 } Slot;
 
+// a realm of the scenario: a faction or a city-state
+typedef struct {
+	char id[32], name[24];
+	u8 r, g, b;
+	bool city;
+} Realm;
+
 static MapHeader hdr;
 static Faction factions[8];
+static Realm realms[MAX_REALMS];
+static int nrealms, player = -1;
+static bool fogOn;
+static char title[48];
+static lua_State* L;         // Lua 5.4 as on the DS: now for the scenario, later the game
 static Region* regions;
+static int* neighStart;      // region i's neighbours: neigh[neighStart[i] .. neighStart[i + 1]]
+static int* neigh;           // region indices
+static u8* regionFog;        // per region: 0 never seen, 1 seen before, 2 seen now
+static u8* known;            // per region: seen at some time
 static County* counties;
 static Border* borders;
 static u32 nborders;
@@ -117,10 +141,11 @@ static u32 texPixels;        // pixels of a texture, all mipmap levels
 static u8* fileBuf;          // a tile file
 static size_t fileBufSize;
 static u16* idsBuf;          // a tile's county indices, all levels
+static u16* paperBuf;        // a tile's picture before the colours, all levels
 enum { REALM_SPOTS = 64 };
-static int realmSize[8];     // provinces per realm (0: none, no name)
-static int realmSpot[8][REALM_SPOTS];   // provinces to put the name on, best first
-static int realmSpots[8];
+static int realmSize[MAX_REALMS];     // provinces per realm (0: none, no name)
+static int realmSpot[MAX_REALMS][REALM_SPOTS];   // provinces to put the name on, best first
+static int realmSpots[MAX_REALMS];
 
 // worker thread: loads one slot at a time
 static Thread worker;
@@ -155,7 +180,7 @@ static u32 frame;
 static C2D_TextBuf nameBuf, infoBuf;
 static C2D_Text* names;      // per region
 static C2D_Text* countyNames;
-static C2D_Text realmNames[8];
+static C2D_Text realmNames[MAX_REALMS];
 
 static void* readFile(const char* path, size_t* size)
 {
@@ -177,18 +202,45 @@ static void* linearCopy(const void* src, size_t size)
 	return p;
 }
 
+// the colour the paper of a region is multiplied by: its owner's, faded where the
+// player saw it before, dull where never
 static void regionTint(int i, u8* rgb)
 {
 	const Region* g = &regions[i];
+	if (regionFog[i] == 0) {
+		rgb[0] = 128; rgb[1] = 121; rgb[2] = 108;
+		return;
+	}
 	if (g->kind == KIND_SEA) {
 		rgb[0] = rgb[1] = rgb[2] = 255;
 	} else if (g->kind == KIND_NEUTRAL || g->owner < 0) {
 		rgb[0] = 190; rgb[1] = 180; rgb[2] = 160;
 	} else {
-		const Faction* f = &factions[g->owner];
+		const Realm* f = &realms[g->owner];
 		rgb[0] = TINT * f->r + (1 - TINT) * 255;
 		rgb[1] = TINT * f->g + (1 - TINT) * 255;
 		rgb[2] = TINT * f->b + (1 - TINT) * 255;
+	}
+	if (regionFog[i] == 1) {
+		int grey = (rgb[0] * 30 + rgb[1] * 59 + rgb[2] * 11) / 100;
+		for (int k = 0; k < 3; k++) rgb[k] = (rgb[k] + grey) * 0.42f;
+	}
+}
+
+// what the player sees: own provinces and their neighbours (land and sea); what was
+// seen once stays known
+static void fogUpdate(void)
+{
+	for (int i = 0; i < hdr.nregions; i++) regionFog[i] = !fogOn || player < 0 ? 2 : 0;
+	if (!fogOn || player < 0) return;
+	for (int i = 0; i < hdr.nregions; i++) {
+		if (regions[i].kind != KIND_LAND || regions[i].owner != player) continue;
+		regionFog[i] = 2;
+		for (int k = neighStart[i]; k < neighStart[i + 1]; k++) regionFog[neigh[k]] = 2;
+	}
+	for (int i = 0; i < hdr.nregions; i++) {
+		if (regionFog[i] == 2) known[i] = 1;
+		else if (known[i]) regionFog[i] = 1;
 	}
 }
 
@@ -199,24 +251,24 @@ static void regionTint(int i, u8* rgb)
 static void ownersChanged(void)
 {
 	for (int c = 0; c < hdr.ncounties; c++) regionTint(counties[c].region, tint[c]);
-	float mx[8] = { 0 }, mz[8] = { 0 };
+	float mx[MAX_REALMS] = { 0 }, mz[MAX_REALMS] = { 0 };
 	memset(realmSize, 0, sizeof realmSize);
 	memset(realmSpots, 0, sizeof realmSpots);
 	for (int i = 0; i < hdr.nregions; i++) {
 		const Region* g = &regions[i];
-		if (g->kind != KIND_LAND || g->owner < 0 || g->owner >= hdr.nfactions) continue;
+		if (g->kind != KIND_LAND || g->owner < 0 || g->owner >= nrealms) continue;
 		mx[g->owner] += g->cx;
 		mz[g->owner] += g->cz;
 		realmSize[g->owner]++;
 	}
-	for (int f = 0; f < hdr.nfactions; f++) {
+	for (int f = 0; f < nrealms; f++) {
 		if (!realmSize[f]) continue;
 		mx[f] /= realmSize[f];
 		mz[f] /= realmSize[f];
 		float best[REALM_SPOTS];
 		for (int i = 0; i < hdr.nregions; i++) {
 			const Region* g = &regions[i];
-			if (g->kind != KIND_LAND || g->owner != f) continue;
+			if (g->kind != KIND_LAND || g->owner != f || !regionFog[i]) continue;
 			float d = (g->cx - mx[f]) * (g->cx - mx[f]) + (g->cz - mz[f]) * (g->cz - mz[f]);
 			int n = realmSpots[f], k = n < REALM_SPOTS ? n++ : REALM_SPOTS;
 			if (k == REALM_SPOTS && d >= best[REALM_SPOTS - 1]) continue;
@@ -251,7 +303,21 @@ static bool loadMap(void)
 	memcpy(counties, p, hdr.ncounties * sizeof(County)); p += hdr.ncounties * sizeof(County);
 	u32 nn = 0;
 	for (int i = 0; i < hdr.nregions; i++) nn += regions[i].nneigh;
-	p += (nn * sizeof(s16) + 3) & ~3;   // neighbour lists: not used yet
+	// neighbours by the generator's ids -> region indices
+	neighStart = malloc((hdr.nregions + 1) * sizeof(int));
+	neigh = malloc(nn * sizeof(int) + 4);
+	u32 k = 0;
+	for (int i = 0; i < hdr.nregions; i++) {
+		neighStart[i] = k;
+		for (int j = 0; j < regions[i].nneigh; j++) {
+			s16 id;
+			memcpy(&id, p + 2 * (neighStart[i] + j), 2);
+			for (int r = 0; r < hdr.nregions; r++)
+				if (regions[r].id == id) { neigh[k++] = r; break; }
+		}
+	}
+	neighStart[hdr.nregions] = k;
+	p += (nn * sizeof(s16) + 3) & ~3;
 	verts = malloc(hdr.nverts * sizeof(Vertex));
 	memcpy(verts, p, hdr.nverts * sizeof(Vertex)); p += hdr.nverts * sizeof(Vertex);
 	indices = malloc(hdr.nidx * sizeof(u16));
@@ -266,7 +332,119 @@ static bool loadMap(void)
 	free(buf);
 
 	tint = malloc(hdr.ncounties * sizeof *tint);
-	ownersChanged();
+	regionFog = calloc(hdr.nregions, 1);
+	known = calloc(hdr.nregions, 1);
+	return true;
+}
+
+static void getString(int t, const char* key, char* out, size_t size)
+{
+	lua_getfield(L, t, key);
+	const char* v = lua_tostring(L, -1);
+	if (v) snprintf(out, size, "%s", v);
+	lua_pop(L, 1);
+}
+
+static int realmIndex(const char* id)
+{
+	for (int f = 0; f < nrealms; f++)
+		if (!strcmp(realms[f].id, id)) return f;
+	return -2;
+}
+
+// romfs:/scenario.lua over the map (none: the map's own factions): realms, player, fog,
+// owners and names of provinces, names of counties
+static bool loadScenario(char* err, size_t errSize)
+{
+	nrealms = hdr.nfactions;
+	for (int f = 0; f < nrealms; f++) {
+		snprintf(realms[f].name, sizeof realms[f].name, "%s", factions[f].name);
+		snprintf(realms[f].id, sizeof realms[f].id, "%s", factions[f].name);
+		realms[f].r = factions[f].r;
+		realms[f].g = factions[f].g;
+		realms[f].b = factions[f].b;
+	}
+	player = nrealms > 1 ? 1 : 0;
+	size_t size;
+	char* text = readFile("romfs:/scenario.lua", &size);
+	if (!text) return true;
+	static const LLDataLimits limits = { 512 * 1024, 8, 256 };
+	bool ok = ll_data_parse(L, text, size, "scenario.lua", &limits, err, errSize);
+	free(text);
+	if (!ok) return false;
+	int t = lua_gettop(L);
+	getString(t, "title", title, sizeof title);
+	lua_getfield(L, t, "fog");
+	fogOn = lua_toboolean(L, -1);
+	lua_pop(L, 1);
+
+	lua_getfield(L, t, "realms");
+	nrealms = 0;
+	for (int i = 1; i <= (int)lua_rawlen(L, -1) && nrealms < MAX_REALMS; i++) {
+		lua_rawgeti(L, -1, i);
+		int e = lua_gettop(L);
+		Realm* f = &realms[nrealms++];
+		memset(f, 0, sizeof *f);
+		getString(e, "id", f->id, sizeof f->id);
+		getString(e, "name", f->name, sizeof f->name);
+		lua_getfield(L, e, "color");
+		lua_rawgeti(L, -1, 1); f->r = lua_tointeger(L, -1); lua_pop(L, 1);
+		lua_rawgeti(L, -1, 2); f->g = lua_tointeger(L, -1); lua_pop(L, 1);
+		lua_rawgeti(L, -1, 3); f->b = lua_tointeger(L, -1); lua_pop(L, 1);
+		lua_pop(L, 1);
+		lua_getfield(L, e, "city");
+		f->city = lua_toboolean(L, -1);
+		lua_pop(L, 2);
+	}
+	lua_pop(L, 1);
+	char id[32] = "";
+	getString(t, "player", id, sizeof id);
+	player = realmIndex(id);
+	if (player < 0) {
+		snprintf(err, errSize, "scenario.lua: player: no realm '%s'", id);
+		return false;
+	}
+
+	lua_getfield(L, t, "provinces");
+	for (int i = 1; i <= (int)lua_rawlen(L, -1); i++) {
+		lua_rawgeti(L, -1, i);
+		int e = lua_gettop(L);
+		lua_getfield(L, e, "id");
+		int pid = lua_tointeger(L, -1);
+		lua_pop(L, 1);
+		Region* g = NULL;
+		for (int r = 0; r < hdr.nregions; r++)
+			if (regions[r].id == pid) g = &regions[r];
+		if (!g) {
+			snprintf(err, errSize, "scenario.lua: no province id %d", pid);
+			return false;
+		}
+		getString(e, "name", g->name, sizeof g->name);
+		lua_getfield(L, e, "owner");
+		const char* own = lua_tostring(L, -1);
+		if (own) {
+			int f = *own ? realmIndex(own) : -1;
+			if (f == -2) {
+				snprintf(err, errSize, "scenario.lua: province %d: no realm '%s'", pid, own);
+				return false;
+			}
+			g->owner = f;
+		}
+		lua_pop(L, 2);
+	}
+	lua_pop(L, 1);
+
+	lua_getfield(L, t, "counties");
+	for (int i = 1; lua_istable(L, -1) && i <= (int)lua_rawlen(L, -1); i++) {
+		lua_rawgeti(L, -1, i);
+		int e = lua_gettop(L);
+		lua_getfield(L, e, "id");
+		int c = lua_tointeger(L, -1);
+		lua_pop(L, 1);
+		if (c >= 0 && c < hdr.ncounties) getString(e, "name", counties[c].name, sizeof counties[c].name);
+		lua_pop(L, 1);
+	}
+	lua_settop(L, 0);
 	return true;
 }
 
@@ -307,15 +485,18 @@ static bool loadSlot(Slot* s)
 	fclose(f);
 	const u8* p = fileBuf + 4;
 	const u8* end = fileBuf + n;
-	if (n < 4 || memcmp(fileBuf, "HT01", 4)
-		|| !unpack(&p, end, s->tex.data, texPixels * 2) || !unpack(&p, end, idsBuf, texPixels * 2))
+	if (n < 4 || n == fileBufSize || memcmp(fileBuf, "HT01", 4)
+		|| !unpack(&p, end, paperBuf, texPixels * 2) || !unpack(&p, end, idsBuf, texPixels * 2))
 		return false;
 	u16* out = s->tex.data;
 	for (u32 k = 0; k < texPixels; k++) {
 		u16 id = idsBuf[k];
-		if (id >= hdr.ncounties) continue;
+		u32 c = paperBuf[k];
+		if (id >= hdr.ncounties) {
+			out[k] = c;
+			continue;
+		}
 		const u8* t = tint[id];
-		u32 c = out[k];
 		u32 r = ((c >> 11) << 3) * t[0] >> 8, g = (((c >> 5) & 63) << 2) * t[1] >> 8, b = ((c & 31) << 3) * t[2] >> 8;
 		out[k] = (r >> 3) << 11 | (g >> 2) << 5 | (b >> 3);
 	}
@@ -331,11 +512,12 @@ static void workerMain(void* arg)
 		if (quitting) break;
 		Slot* s = job;
 		if (!s) continue;
+		s->stale = false;    // colours changing from now on mark it again
 		u64 t0 = svcGetSystemTick();
 		bool ok = loadSlot(s);
 		lastLoadMs = (svcGetSystemTick() - t0) / (float)(SYSCLOCK_ARM11 / 1000);
 		if (ok) loadedCount++;
-		s->state = ok ? SLOT_READY : SLOT_FAILED;
+		if (s->state == SLOT_LOADING || !ok) s->state = ok ? SLOT_READY : SLOT_FAILED;
 		job = NULL;
 	}
 }
@@ -355,17 +537,18 @@ static bool slotInit(Slot* s)
 static bool texturesInit(void)
 {
 	texPixels = C3D_TexCalcTotalSize(hdr.tex * hdr.tex, C3D_TexCalcMaxLevel(hdr.tex, hdr.tex));
-	fileBufSize = texPixels * 4 + 64;   // more than both packed parts can take
+	fileBufSize = texPixels * 2;        // packed tiles are far smaller
 	fileBuf = malloc(fileBufSize);
 	idsBuf = malloc(texPixels * 2);
-	if (!fileBuf || !idsBuf || !slotInit(&overview)) return false;
+	paperBuf = malloc(texPixels * 2);
+	if (!fileBuf || !idsBuf || !paperBuf || !slotInit(&overview)) return false;
 	overview.tx = overview.ty = -1;
 	if (!loadSlot(&overview)) return false;
 	overview.state = SLOT_READY;
 	for (int i = 0; i < SLOTS && hdr.tiles > 1; i++)
 		if (!slotInit(&slots[i])) return false;
 	LightEvent_Init(&wake, RESET_ONESHOT);
-	if (hdr.tiles > 1) {
+	{
 		s32 prio = 0x30;
 		svcGetThreadPriority(&prio, CUR_THREAD_HANDLE);
 		worker = threadCreate(workerMain, NULL, 32 * 1024, prio + 1, -2, false);
@@ -389,6 +572,15 @@ static void texturesExit(void)
 	}
 	free(fileBuf);
 	free(idsBuf);
+	free(paperBuf);
+}
+
+// colours changed (owners, fog): every texture is painted again, the one seen first
+static void repaint(void)
+{
+	ownersChanged();
+	overview.stale = true;
+	for (int i = 0; i < SLOTS; i++) slots[i].stale = true;
 }
 
 static Slot* slotFor(int tx, int ty)
@@ -462,7 +654,13 @@ static void viewBox(const Camera* c, float w, float h, float* box)
 // first missing one (one at a time), free the ones no longer seen when a slot is needed
 static void streamTiles(const Camera* cams[2], const float sizes[2][2])
 {
-	if (hdr.tiles < 2) return;
+	if (hdr.tiles < 2) {
+		if (!job && overview.stale) {
+			job = &overview;
+			LightEvent_Signal(&wake);
+		}
+		return;
+	}
 	float span = hdr.world / hdr.tiles, half = hdr.world / 2;
 	int want[64][2], n = 0;
 	float dist[64];
@@ -500,6 +698,23 @@ static void streamTiles(const Camera* cams[2], const float sizes[2][2])
 		if (s) s->used = frame;
 	}
 	if (job) return;
+	// textures painted with old colours: the overview, then the tiles seen (a tile not
+	// seen is let go)
+	if (overview.stale) {
+		job = &overview;
+		LightEvent_Signal(&wake);
+		return;
+	}
+	for (int k = 0; k < SLOTS; k++)
+		if (slots[k].stale && slots[k].state == SLOT_READY && slots[k].used != frame) slots[k].state = SLOT_FREE;
+	for (int i = 0; i < n; i++) {
+		Slot* s = slotFor(want[i][0], want[i][1]);
+		if (s && s->stale && s->state == SLOT_READY) {
+			job = s;
+			LightEvent_Signal(&wake);
+			return;
+		}
+	}
 	for (int i = 0; i < n; i++) {
 		if (slotFor(want[i][0], want[i][1])) continue;
 		// a free slot, else the one not wanted for longest
@@ -593,17 +808,19 @@ static void sceneInit(void)
 	u32 chars = 64;
 	for (int i = 0; i < hdr.nregions; i++) chars += strlen(regions[i].name) + 1;
 	for (int i = 0; i < hdr.ncounties; i++) chars += strlen(counties[i].name) + 1;
-	for (int f = 0; f < hdr.nfactions; f++) chars += strlen(factions[f].name) + 1;
+	for (int f = 0; f < nrealms; f++) chars += strlen(realms[f].name) + 1;
 	nameBuf = C2D_TextBufNew(chars);
 	infoBuf = C2D_TextBufNew(512);
 	names = calloc(hdr.nregions, sizeof(C2D_Text));
 	countyNames = calloc(hdr.ncounties, sizeof(C2D_Text));
 	for (int i = 0; i < hdr.nregions; i++) parseName(&names[i], regions[i].name);
 	for (int i = 0; i < hdr.ncounties; i++) parseName(&countyNames[i], counties[i].name);
-	for (int f = 0; f < hdr.nfactions; f++) {
-		char up[20];
+	// realms in capitals; city-states as they are written
+	for (int f = 0; f < nrealms; f++) {
+		char up[24];
 		int k = 0;
-		for (; factions[f].name[k] && k < 15; k++) up[k] = toupper((unsigned char)factions[f].name[k]);
+		for (; realms[f].name[k] && k < 23; k++)
+			up[k] = realms[f].city ? realms[f].name[k] : toupper((unsigned char)realms[f].name[k]);
 		up[k] = 0;
 		parseName(&realmNames[f], up);
 	}
@@ -711,7 +928,7 @@ static void drawMap(const C3D_Mtx* proj, const C3D_Mtx* view, float zoom)
 	C3D_FVUnifSet(GPU_VERTEX_SHADER, lines.uWidth, w, 0, 0, 0);
 	C3D_FVUnifSet(GPU_VERTEX_SHADER, lines.uTint, 0.42f, 0.08f, 0.06f, 0.85f);
 	for (u32 i = 0; i < nborders; i++)
-		if (ownerOf(borders[i].a) != ownerOf(borders[i].b))
+		if (ownerOf(borders[i].a) != ownerOf(borders[i].b) && regionFog[borders[i].a] && regionFog[borders[i].b])
 			C3D_DrawArrays(GPU_TRIANGLE_STRIP, borders[i].start, borders[i].count);
 
 	if (selected < 0) return;
@@ -786,23 +1003,28 @@ static void drawLabels(const Camera* c, float w, float h)
 	if (selectedCounty >= 0 && counties[selectedCounty].vcount)
 		label(c, w, h, &countyNames[selectedCounty], counties[selectedCounty].cx, counties[selectedCounty].cz,
 			8, 0, 0.45f, white, 1, false);
-	if (selected >= 0)
+	if (selected >= 0 && regionFog[selected])
 		label(c, w, h, &names[selected], regions[selected].cx, regions[selected].cz, 22, 0, 0.62f, white, 1, false);
 	// realms: a pastel of their colour over a soft shadow
-	for (int f = 0; f < hdr.nfactions; f++) {
-		const Faction* fc = &factions[f];
+	// realms (city-states smaller) on their known provinces
+	for (int f = 0; f < nrealms; f++) {
+		const Realm* fc = &realms[f];
 		u32 pastel = C2D_Color32(0.5f * fc->r + 128, 0.5f * fc->g + 128, 0.5f * fc->b + 128, 0) & 0xFFFFFF;
-		for (int k = 0; k < realmSpots[f]; k++) {
-			const Region* g = &regions[realmSpot[f][k]];
-			if (label(c, w, h, &realmNames[f], g->cx, g->cz, 70, 0.3f, 1.1f, pastel, aRealm * 0.95f, true)) break;
-		}
+		float size = fc->city ? 34 : 70, most = fc->city ? 0.6f : 1.1f;
+		// no room anywhere: once more, smaller
+		bool done = false;
+		for (int pass = 0; pass < 2 && !done; pass++, size *= 0.65f, most *= 0.65f)
+			for (int k = 0; k < realmSpots[f] && !done; k++) {
+				const Region* g = &regions[realmSpot[f][k]];
+				done = label(c, w, h, &realmNames[f], g->cx, g->cz, size, 0.3f, most, pastel, aRealm * 0.95f, true);
+			}
 	}
 	for (int i = 0; i < hdr.nregions; i++)
-		if (i != selected && regions[i].kind == KIND_LAND)
+		if (i != selected && regions[i].kind == KIND_LAND && regionFog[i])
 			label(c, w, h, &names[i], regions[i].cx, regions[i].cz, 22, 0.24f, 0.62f, dark, aProv, false);
 	for (int i = 0; i < hdr.ncounties; i++) {
 		const County* k = &counties[i];
-		if (i != selectedCounty && k->vcount && regions[k->region].kind == KIND_LAND)
+		if (i != selectedCounty && k->vcount && regions[k->region].kind == KIND_LAND && regionFog[k->region] == 2)
 			label(c, w, h, &countyNames[i], k->cx, k->cz, 8, 0.24f, 0.45f, county, aCounty, false);
 	}
 }
@@ -816,15 +1038,21 @@ static void drawInfo(void)
 	snprintf(stats, sizeof stats, "%d reg, %d cty | tiles %dx%d: %d kept, %d loads, %.0f ms | free %lu KB",
 		hdr.nregions, hdr.ncounties, hdr.tiles, hdr.tiles, ready, loadedCount, lastLoadMs,
 		(unsigned long)(linearSpaceFree() / 1024));
+	char view[96];
+	snprintf(view, sizeof view, "%s | you: %s | fog %s (X), Y: next realm", title,
+		player >= 0 ? realms[player].name : "-", fogOn ? "on" : "off");
 	if (selected < 0) {
-		snprintf(text, sizeof text, "Tap a province or a sea zone.\nDrag: pan  L/R: tilt  Up/Down: zoom (near: counties)\n%s", stats);
+		snprintf(text, sizeof text, "%s\nTap: province (near: county)  L/R: tilt  Up/Down: zoom\n%s", view, stats);
+	} else if (!regionFog[selected]) {
+		snprintf(text, sizeof text, "Unexplored %s\n%s\n%s", regions[selected].kind == KIND_SEA ? "sea" : "land",
+			view, stats);
 	} else {
 		const Region* g = &regions[selected];
-		const char* owner = g->kind == KIND_SEA ? "sea zone" : g->owner >= 0 ? factions[g->owner].name : "-";
+		const char* owner = g->kind == KIND_SEA ? "sea zone" : g->owner >= 0 ? realms[g->owner].name : "-";
 		const char* cty = selectedCounty >= 0 && strcmp(counties[selectedCounty].name, g->name)
 			? counties[selectedCounty].name : "";
-		snprintf(text, sizeof text, "%s%s%s\n%s, %d neighbours\n%s", g->name, *cty ? " - " : "", cty,
-			owner, g->nneigh, stats);
+		snprintf(text, sizeof text, "%s%s%s  (%s, %d neighbours)\n%s\n%s", g->name, *cty ? " - " : "", cty,
+			owner, g->nneigh, view, stats);
 	}
 	C2D_TextBufClear(infoBuf);
 	C2D_Text t;
@@ -851,9 +1079,17 @@ int main(void)
 	C3D_Init(C3D_DEFAULT_CMDBUF_SIZE);
 	C2D_Init(4096);
 
-	if (!loadMap() || !texturesInit() || !shapesInit()) {
+	char err[160] = "";
+	L = luaL_newstate();
+	bool ok = loadMap() && loadScenario(err, sizeof err);
+	if (ok) {
+		fogUpdate();
+		ownersChanged();
+		ok = texturesInit() && shapesInit();
+	}
+	if (!ok) {
 		consoleInit(GFX_BOTTOM, NULL);
-		printf("Cannot read the map from romfs:/\nRun tools/make_m3.py, then rebuild.\nSTART: exit\n");
+		printf("Cannot read the map from romfs:/\n%s\nRun tools/make_m3.py, then rebuild.\nSTART: exit\n", err);
 		while (aptMainLoop()) {
 			hidScanInput();
 			if (hidKeysDown() & KEY_START) break;
@@ -895,6 +1131,18 @@ int main(void)
 		if (held & KEY_R) cam.pitch += 0.02f;
 		if (cam.pitch < minPitch) cam.pitch = minPitch;
 		if (cam.pitch > maxPitch) cam.pitch = maxPitch;
+		if (down & KEY_X) {
+			fogOn = !fogOn;
+			fogUpdate();
+			repaint();
+		}
+		if (down & KEY_Y && nrealms > 0) {
+			// the next realm's view: what it has seen starts again
+			player = (player + 1) % nrealms;
+			memset(known, 0, hdr.nregions);
+			fogUpdate();
+			repaint();
+		}
 		if (held & KEY_DUP) cam.dist *= 0.98f;
 		if (held & KEY_DDOWN) cam.dist *= 1.02f;
 		if (cam.dist < 8) cam.dist = 8;
@@ -1010,6 +1258,11 @@ int main(void)
 	free(borders);
 	free(counties);
 	free(tint);
+	free(neigh);
+	free(neighStart);
+	free(regionFog);
+	free(known);
+	lua_close(L);
 	C2D_Fini();
 	C3D_Fini();
 	romfsExit();

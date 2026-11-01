@@ -69,6 +69,7 @@ NEUTRAL_RGB = (190, 180, 160)
 COUNTY_CELLS = 12     # cells per county (a province is split into about cells / this)
 K_PROVINCE = 3.0      # province lines from this many texture pixels per cell on
 K_COUNTY = 14.0       # county lines from this many
+MAX_REALMS = 32       # realms (factions and city-states) a scenario can have
 TINT = 0.62           # how strong the owners' colours are (1 = the faction colour)
 KIND_LAND, KIND_SEA, KIND_NEUTRAL = 0, 1, 2
 
@@ -879,6 +880,134 @@ def preview(path, m, regions, county_list, tex):
     Image.fromarray(out.astype(np.uint8)).save(path)
 
 
+# ---- scenarios -----------------------------------------------------------------------
+# A scenario is a data file in the Lua subset of LiteLua's data files (D38: nothing is
+# run): realms (factions, city-states), the player, fog of war, every province's owner
+# and name, county names. The 3DS reads romfs:/scenario.lua over map3d.bin. See
+# docs/FORMATS.md ("scenario.lua").
+
+CITY_COLORS = [(190, 175, 145), (160, 178, 190), (192, 165, 170), (170, 185, 160)]
+REALM_ID_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789_")
+
+
+def realm_id(name):
+    return "".join(c for c in name.lower().replace(" ", "_") if c in REALM_ID_CHARS)
+
+
+def default_scenario(m, regions, county_list, cities=3):
+    """The map's own owners (the six H4 factions) and names; `cities` of the smallest
+    land provinces of realms with more than three become city-states."""
+    realms = [dict(id=realm_id(n), name=n, color=list(c)) for n, c in m2.FACTIONS]
+    owner = {r["id"]: (realms[r["owner"]]["id"] if r["owner"] >= 0 else "")
+             for r in regions if r["kind"] == KIND_LAND}
+    sizes = {i: int((m["province"] == i).sum()) for i in owner}
+    count = {}
+    for o in owner.values():
+        count[o] = count.get(o, 0) + 1
+    for pid in sorted(owner, key=lambda i: (sizes[i], i)):
+        if sum(1 for r in realms if r.get("city")) >= cities:
+            break
+        if count.get(owner[pid], 0) <= 3:
+            continue
+        count[owner[pid]] -= 1
+        name = m["names"][pid]
+        k = sum(1 for r in realms if r.get("city"))
+        city = dict(id=realm_id("city " + name), name="Free City of " + name,
+                    color=list(CITY_COLORS[k % len(CITY_COLORS)]), city=True)
+        realms.append(city)
+        owner[pid] = city["id"]
+    provinces = []
+    for r in regions:
+        if r["id"] < 0:
+            continue
+        e = dict(id=r["id"], name=r["name"])
+        if r["kind"] == KIND_LAND:
+            e["owner"] = owner[r["id"]]
+        provinces.append(e)
+    counties = [dict(id=i, name=c["name"]) for i, c in enumerate(county_list) if c["verts"]]
+    return dict(title="Six realms (seed %d)" % m["seed"], player=realms[1]["id"], fog=True,
+                realms=realms, provinces=provinces, counties=counties)
+
+
+def lua_str(v):
+    return '"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def scenario_lua(scen, regions, county_list):
+    """The scenario as a data file, one line per entry (with the province of a county as
+    a comment), easy to edit by hand."""
+    by_id = {r["id"]: r for r in regions}
+    out = ["-- HeroesDS scenario (tools/make_m3.py --dump-scenario; docs/FORMATS.md).",
+           "-- Province ids and county ids belong to one generated map: keep them.",
+           "return {",
+           "  title = %s," % lua_str(scen["title"]),
+           "  player = %s,   -- the realm the player has (its view: fog of war)" % lua_str(scen["player"]),
+           "  fog = %s," % ("true" if scen["fog"] else "false"),
+           "  realms = {   -- city = true: a city-state"]
+    for r in scen["realms"]:
+        extra = ", city = true" if r.get("city") else ""
+        out.append("    { id = %s, name = %s, color = { %d, %d, %d }%s },"
+                   % (lua_str(r["id"]), lua_str(r["name"]), *r["color"], extra))
+    out.append("  },")
+    out.append("  provinces = {   -- owner = \"\": nobody's; sea zones have no owner")
+    for e in scen["provinces"]:
+        own = ", owner = %s" % lua_str(e["owner"]) if "owner" in e else ""
+        out.append("    { id = %d, name = %s%s }," % (e["id"], lua_str(e["name"]), own))
+    out.append("  },")
+    out.append("  counties = {")
+    for e in scen["counties"]:
+        prov = regions[county_list[e["id"]]["region"]]["name"]
+        out.append("    { id = %d, name = %s },   -- %s" % (e["id"], lua_str(e["name"]), prov))
+    out.append("  },")
+    out.append("}")
+    return "\n".join(out) + "\n"
+
+
+def check_scenario(scen, regions, county_list):
+    """Raises ValueError with what is wrong; returns the scenario."""
+    def need(ok, msg):
+        if not ok:
+            raise ValueError(msg)
+    for key in ("title", "player", "fog", "realms", "provinces"):
+        need(key in scen, "scenario: '%s' missing" % key)
+    ids = []
+    need(isinstance(scen["realms"], list) and 0 < len(scen["realms"]) <= MAX_REALMS,
+         "scenario: realms: 1..%d expected" % MAX_REALMS)
+    for r in scen["realms"]:
+        need(isinstance(r.get("id"), str) and r["id"] and r["id"] not in ids,
+             "scenario: realm id missing or twice: %r" % r.get("id"))
+        need(isinstance(r.get("name"), str) and 0 < len(r["name"].encode()) < 24,
+             "scenario: realm %s: name of 1..23 bytes" % r["id"])
+        c = r.get("color")
+        need(isinstance(c, list) and len(c) == 3 and all(isinstance(v, int) and 0 <= v <= 255 for v in c),
+             "scenario: realm %s: color = { r, g, b } 0..255" % r["id"])
+        ids.append(r["id"])
+    need(scen["player"] in ids, "scenario: player: no realm %r" % scen["player"])
+    by_id = {r["id"]: r for r in regions}
+    for e in scen["provinces"]:
+        need(e.get("id") in by_id, "scenario: no province id %r" % e.get("id"))
+        reg = by_id[e["id"]]
+        if "name" in e:
+            need(isinstance(e["name"], str) and 0 < len(e["name"].encode()) < 24,
+                 "scenario: province %d: name of 1..23 bytes" % e["id"])
+        if "owner" in e:
+            need(reg["kind"] == KIND_LAND, "scenario: province %d is not land: no owner" % e["id"])
+            need(e["owner"] == "" or e["owner"] in ids, "scenario: province %d: no realm %r" % (e["id"], e["owner"]))
+    for e in scen.get("counties", []):
+        need(isinstance(e.get("id"), int) and 0 <= e["id"] < len(county_list),
+             "scenario: no county id %r" % e.get("id"))
+        need(isinstance(e.get("name"), str) and 0 < len(e["name"].encode()) < 20,
+             "scenario: county %d: name of 1..19 bytes" % e["id"])
+    return scen
+
+
+def load_scenario(path, regions, county_list):
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "tools"))
+    import lsong
+    with open(path, encoding="utf-8") as f:
+        return check_scenario(lsong.parse_lua(f.read()), regions, county_list)
+
+
 def main(argv):
     p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     p.add_argument("--seed", type=int, default=77)
@@ -890,6 +1019,8 @@ def main(argv):
     p.add_argument("--out", default=os.path.join(here, "3ds", "romfs"), help="romfs folder")
     p.add_argument("--png", help="preview of the full-size picture with owners' colours")
     p.add_argument("--obj", help="also write a Wavefront .obj (one object per region) for Blender")
+    p.add_argument("--scenario", help="scenario file (.lua) put into romfs (default: the map's own)")
+    p.add_argument("--dump-scenario", help="write the map's own scenario there, to edit")
     a = p.parse_args(argv)
     m = m2.generate(a.seed, a.size, a.provinces, a.coast)
     regions, county_list, borders, chains = build(m)
@@ -901,6 +1032,18 @@ def main(argv):
     print("%s: %d regions (%d land), %d counties, %d province borders, %d vertices, "
           "%dx%d tiles of %d^2" % (a.out, len(regions), m["land"], len(county_list), len(borders),
                                    nv, a.tiles, a.tiles, TEX), flush=True)
+    own = default_scenario(m, regions, county_list)
+    if a.dump_scenario:
+        with open(a.dump_scenario, "w", encoding="utf-8") as f:
+            f.write(scenario_lua(own, regions, county_list))
+    scen = load_scenario(a.scenario, regions, county_list) if a.scenario else own
+    if a.scenario:
+        import shutil
+        shutil.copyfile(a.scenario, os.path.join(a.out, "scenario.lua"))
+    else:
+        with open(os.path.join(a.out, "scenario.lua"), "w", encoding="utf-8") as f:
+            f.write(scenario_lua(own, regions, county_list))
+    print("scenario: %s, %d realms" % (scen["title"], len(scen["realms"])), flush=True)
     write_textures(a.out, m, regions, county_list, chains, a.tiles, a.png)
     if a.obj:
         write_obj(a.obj, regions)

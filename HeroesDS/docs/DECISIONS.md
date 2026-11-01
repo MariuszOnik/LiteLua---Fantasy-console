@@ -156,3 +156,13 @@ jest w pełnym 3D (wzór: obrazki „Risk” — płaskie prowincje jak płytki,
 - **Uzupełnienie (2026-11-01, prośba użytkownika):** powiaty da się zaznaczać — z bliska
   (gdy widać ich linie) stuknięcie wybiera powiat, z dalszej odległości prowincję. Nazwy
   państw pastelowe (kolor frakcji rozjaśniony do połowy) z cieniem.
+
+- **Rozstrzygnięcie H13 (2026-11-01, decyzja użytkownika):** Lua na 3DS jak na DS — to samo
+  Lua 5.4 z `vendor/lua` (`LUA_32BITS`, bez zmian) wkompilowane w program 3DS; mapa 3D
+  zostaje w C. Pierwsze użycie: scenariusz czytany parserem LiteLua (`ll_data.c`, ten sam
+  plik). Logika gry (walka, `war.lua`) przejdzie na 3DS przez to samo Lua.
+- **Scenariusze i mgła wojny (2026-11-01):** scenariusz to plik danych `scenario.lua`
+  (państwa, państwa-miasta, gracz, właściciele i nazwy) nakładany na mapę — jedna mapa,
+  wiele scenariuszy; edycja na PC, później na 3DS. Mgła wojny wg powiatów: nieznane /
+  widziane wcześniej / widoczne teraz (własne prowincje i sąsiedzi), kolory nakładane
+  przy malowaniu kafli.

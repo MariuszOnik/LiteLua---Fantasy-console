@@ -192,6 +192,47 @@ class MeshTest(unittest.TestCase):
         self.assertEqual(sum(s[3] for s in starts), nlv)
         self.assertEqual(len(data), off + 8 + 12 * nb + 16 * nlv)
 
+    def scenario_file(self, scen):
+        """The scenario written out and read back like a file from the user."""
+        text = make_m3.scenario_lua(scen, self.regions, self.counties)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "s.lua")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(text)
+            return make_m3.load_scenario(path, self.regions, self.counties)
+
+    def test_default_scenario_round_trip(self):
+        scen = make_m3.default_scenario(self.m, self.regions, self.counties, cities=2)
+        back = self.scenario_file(scen)
+        self.assertEqual(back["player"], scen["player"])
+        self.assertEqual(back["realms"], scen["realms"])
+        self.assertEqual(back["provinces"], scen["provinces"])
+        # city-states come only from realms with more than three provinces
+        cities = [r for r in back["realms"] if r.get("city")]
+        self.assertLessEqual(len(cities), 2)
+        owned = {e["owner"] for e in back["provinces"] if "owner" in e}
+        for c in cities:
+            self.assertIn(c["id"], owned)
+
+    def test_scenario_errors(self):
+        scen = make_m3.default_scenario(self.m, self.regions, self.counties)
+        land = next(e for e in scen["provinces"] if "owner" in e)
+        sea = next(e for e in scen["provinces"] if "owner" not in e)
+        cases = [
+            lambda s: s.update(player="nobody"),
+            lambda s: land.update(owner="nobody"),
+            lambda s: sea.update(owner=s["realms"][0]["id"]),
+            lambda s: s["realms"].append(dict(s["realms"][0])),
+            lambda s: land.update(name="x" * 30),
+        ]
+        for spoil in cases:
+            bad = make_m3.default_scenario(self.m, self.regions, self.counties)
+            land = next(e for e in bad["provinces"] if "owner" in e)
+            sea = next(e for e in bad["provinces"] if "owner" not in e)
+            spoil(bad)
+            with self.assertRaises(ValueError):
+                make_m3.check_scenario(bad, self.regions, self.counties)
+
 
 if __name__ == "__main__":
     unittest.main()
