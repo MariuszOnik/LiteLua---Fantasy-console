@@ -77,3 +77,15 @@ Tak, w stylu DSCraft:
 - Ruch: prosta kolizja z terenem (wysokość pod stopami już jest: `b:ground` / szum).
 - Limity bez zmian: ~2048 wielokątów, 30 FPS na ekran przy 3D na obu ekranach (albo 60 FPS,
   gdyby 3D było tylko na jednym — inny tryb, decyzja na później).
+
+## Modele 3D z Imperial Glory na 3DS (2026-11-01, `tests/3ds/army`)
+- Format V3D z Imperial Glory rozpracowany (narzędzia i opis poza repo: `E:\AI\IG\tools\v3d.py`;
+  zasoby gry tylko lokalnie). Piechur: 228 wierzchołków, 246 trójkątów, tekstura 256×256 na
+  nację; animacje to klatki pozycji wierzchołków (morph, bez szkieletu), np. chód 12 klatek /
+  1,06 s. Kawaleria = koń + jeździec w jednym pliku; działo = 13 części w hierarchii.
+- Na DS siatki odpadają (limit 2048 wielokątów = ~5 żołnierzy obok terenu) — tam billboardy;
+  ewentualnie sprajty wyrenderowane z modeli IG zamiast Cossacks.
+- Na 3DS: `tests/3ds/army` (citro3d, C) — jeden draw na żołnierza, shader miesza dwie
+  klatki (`soldier.v.pica`), model z `make_army.py`. Azahar: 200 fizylierów, 49 tys.
+  trójkątów, 60 FPS. Na konsoli do zmierzenia (500–2000 żołnierzy).
+- Dalej: postój/strzał/śmierć, kawaleria i działa, instancing (mniej poleceń GPU na żołnierza).

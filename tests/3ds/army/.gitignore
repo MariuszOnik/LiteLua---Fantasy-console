@@ -1,0 +1,7 @@
+build/
+*.3dsx
+*.smdh
+*.elf
+*.map
+# Imperial Glory model made locally by make_army.py (private use only)
+romfs/soldier.bin

@@ -52,6 +52,8 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - `examples/songs/` — przykładowe utwory `.lsong` (D36, `docs/LSONG.md`)
 - `tools/` — skrypty PC (Python): `litelua.py` (`pack` → `.lcart`, `song check|convert|render` — D36, reszta w P9), `lsong.py` (format `.lsong`), `midi.py` + `midi_import.py` (import MIDI, D37), `apidoc.py`, `make_font.py` (font 6×8), `make_tiles.py` (grafika testowa map), `tiledmap.py` (Tiled → mapa, `litelua.py map`, D50), `melon.py` (sterowanie melonDS w testach: klawisze, dotyk, zrzuty)
 - `tests/carts/` — kartridże testowe (`bench` — benchmark VM, D19; `files` — piaskownica, D20; `sound` — P7; `song` — utwory `.lsong` na żywo, D41; `edit` — edytor kodu; `map` — mapy kafelkowe, D50; `oop` — pomiar klas/middleclass, D54; `army3d` — warstwa 3D i żołnierze, D60); `build.ps1` kopiuje je na kartę emulatora
+- `tests/3ds/army/` — test na 3DS (citro3d): maszerujący żołnierze 3D z Imperial Glory (morph);
+  model robi lokalnie `make_army.py` (zasoby gry poza repo), `build.ps1 run` → Azahar
 - `tests/tools/` — testy narzędzi PC: `python -m unittest discover -s tests/tools`
   (też edytor `@code` i launcher z atrapami API — wymaga pakietu `lupa`, inaczej pominięty)
 - `HeroesDS/` — gra w stylu Heroes IV (własny `docs/PLAN.md`, `docs/DECISIONS.md` — decyzje H<n>,
