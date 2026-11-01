@@ -1469,3 +1469,13 @@ Propozycja agenta, użytkownik za (wariant A: jeden kąt kamery, bez obrotu — 
     `project3d` (dalekie pomijane przed rzutowaniem). melonDS: rysowanie 15–32 ms (pergamin
     z nazwami), 7 ms (rzeźba). Pamięć list: ~5 KB na kawałek z klatkami (+¼ na LOD).
 - Kolor narodu przez paletę, ozdoby terenu (drzewa) i nazwy API — dalej.
+
+## D61 (2026-11-01) — Licencja Apache 2.0 dozwolona
+Decyzja użytkownika: do dozwolonych licencji zależności i kodu z zewnątrz dochodzą
+**Apache 2.0** (i ISC — już używane: mapbox-earcut, delaunator). Powód: mapgen4 z Red Blob
+Games (`ref/redblob/`, generator map, etykiety, rzeki, szlaki handlowe) jest na Apache
+2.0, a nadaje się do HeroesDS. Apache 2.0 pozwala używać, zmieniać i sprzedawać kod; daje
+licencję patentową. Warunki przy przeniesieniu kodu (też przepisanego z TypeScriptu —
+to utwór zależny): w pliku komentarz z autorem, źródłem i licencją oraz że plik zmieniono;
+tekst licencji (i NOTICE, jeśli projekt go ma) w repo obok. Nasz kod zostaje na zlib.
+Niezgodność: Apache 2.0 nie łączy się z GPLv2 — nie dotyczy nas (GPL i tak wykluczone).

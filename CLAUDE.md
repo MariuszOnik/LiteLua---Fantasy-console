@@ -16,7 +16,9 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
   https://github.com/MariuszOnik/LiteLua---Fantasy-console) tylko na prośbę użytkownika.
 - Licencja projektu: zlib. **Nie kopiuj kodu z µLibrary** (licencja copyleft + zakaz użytku
   komercyjnego) ani z MicroLua (GPLv3). `ref/` zawiera je tylko do wglądu i jest poza repo.
-- Zależności tylko na licencjach permisywnych (zlib/MIT/BSD/public domain).
+- Zależności tylko na licencjach permisywnych (zlib/MIT/BSD/ISC/Apache 2.0/public domain).
+  Kod z Apache 2.0 (np. mapgen4 z `ref/redblob/`, D61): w pliku informacja o autorze
+  i licencji, oznaczenie zmian, tekst licencji (i NOTICE, jeśli jest) w repo.
 - Zmiany w `vendor/lua` oznaczaj komentarzem `LiteLua` i dopisuj do `vendor/lua/LICENSE`.
 
 ## Budowanie
