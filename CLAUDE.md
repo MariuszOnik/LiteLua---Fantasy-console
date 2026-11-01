@@ -57,6 +57,8 @@ z kartridżami `.lcart` ładowanymi z karty SD i docelowo edytorami na samym DS.
 - `tests/3ds/battle/` — prototyp bitwy na 3DS: mapa heksów na wzgórzach, drzewa, oddziały rycerzy
   z Medieval II (`../army/make_knight.py`: postój/galop/szarża, odchudzone `optimize.py`);
   **notka dla nowego czatu: `tests/3ds/battle/NEXT.md`** (łączy się z mapą prowincji HeroesDS)
+- `docs/GAME_TOOLS.md` — czytniki plików Imperial Glory i Medieval II (poza repo, `E:\AI\...`) i
+  eksportery dla 3DS: jak działają, jak ich używać
 - `tests/tools/` — testy narzędzi PC: `python -m unittest discover -s tests/tools`
   (też edytor `@code` i launcher z atrapami API — wymaga pakietu `lupa`, inaczej pominięty)
 - `HeroesDS/` — gra w stylu Heroes IV (własny `docs/PLAN.md`, `docs/DECISIONS.md` — decyzje H<n>,

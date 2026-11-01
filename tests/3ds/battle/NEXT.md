@@ -35,6 +35,7 @@ dopracować rozgrywkę** (sekcja „Rozgrywka — do ustalenia”): technika ju�
 - `../army/` — wcześniejszy test (szyk maszerujących: fizylier IG, rycerze M2TW pełni i lekcy).
 
 ## Zasoby gier — tylko lokalnie (prywatny użytek, poza repo)
+Pełny przewodnik po czytnikach i eksporterach: **`docs/GAME_TOOLS.md`**.
 - **Imperial Glory** (GOG): `data.pak` = ZIP. Format V3D rozpracowany: `E:\AI\IG\tools\v3d.py`
   (opis w docstringu). Wypakowane w `E:\AI\IG`.
 - **Medieval II** (Steam, Kingdoms/Teutonic): wypakowane do `E:\AI\M2TW` (unpacker gry, „Y” na
