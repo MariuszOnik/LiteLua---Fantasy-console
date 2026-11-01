@@ -3,12 +3,17 @@
 // tests/3ds/army/make_knight.py, format "LLM2": several morph animations in one file).
 // The terrain is one mesh: every hex a fan of 24 triangles, heights from a smooth function,
 // so hexes meet without seams; a second texture darkens the hex borders (texcoord 1 is the
-// distance from the hex centre). Trees and rocks are made here, flat shaded by vertex
-// colour, all in one mesh. Knights idle (sometimes the horse moves its head); A: the Polish
-// units advance one hex, B: the Teutonic ones; they gallop over the hills, then stand.
-// Circle pad: turn and tilt the camera, D-pad: move it, L/R: zoom, START: exit.
+// distance from the hex centre). Rocks are made here, flat shaded by vertex colour, in one
+// mesh; trees are sprites turned to the camera (romfs:/trees.bin, make_trees.py).
+// Knights idle (sometimes the horse moves its head).
+// Bottom screen: the field in an orthographic view from one of 4 directions; tap a unit to
+// select it, tap a free hex to send it there (it turns, gallops over the hills, stands).
+// Top screen: a perspective view following the selected unit, with its name (citro2d).
+// L/R: turn the view by 90 degrees, X/Y: zoom, circle pad / D-pad: move, B: deselect,
+// START: exit.
 #include <3ds.h>
 #include <citro3d.h>
+#include <citro2d.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,8 +57,10 @@ enum { A_IDLE, A_FIDGET, A_RUN, A_CHARGE };
 
 typedef struct {
 	int model;
-	float x, z, yaw;           // hex centre now
-	float tx, tz;              // where it goes (== x, z when standing)
+	int c, r;                  // its hex (the target while it moves)
+	float x, z, yaw;           // where it is now, which way it faces
+	float tx, tz, wantYaw;     // where it goes (== x, z when standing), the way to it
+	bool moving;
 } Unit;
 
 typedef struct {
@@ -410,8 +417,10 @@ static void addUnit(int model, int c, int r, float yaw)
 	Unit* u = &units[nunits];
 	hexCentre(c, r, &u->x, &u->z);
 	u->tx = u->x; u->tz = u->z;
+	u->c = c; u->r = r;
 	u->model = model;
-	u->yaw = yaw;
+	u->yaw = u->wantYaw = yaw;
+	u->moving = false;
 	for (int i = 0; i < PER_HEX; i++) {
 		Knight* k = &knights[nknights++];
 		k->unit = nunits;
@@ -423,33 +432,132 @@ static void addUnit(int model, int c, int r, float yaw)
 	nunits++;
 }
 
-static void advance(int model, float now)
+static int unitAt(int c, int r)
 {
-	for (int i = 0; i < nunits; i++) {
-		Unit* u = &units[i];
-		if (u->model != model || u->tx != u->x || u->tz != u->z) continue;
-		u->tx = u->x + sinf(u->yaw) * SQ3 * HEX;   // one hex forward
-		u->tz = u->z + cosf(u->yaw) * SQ3 * HEX;
-		for (int k = 0; k < nknights; k++)
-			if (knights[k].unit == i) { knights[k].anim = A_RUN; knights[k].t0 = now - frand() * 0.3f; }
-	}
+	for (int i = 0; i < nunits; i++)
+		if (units[i].c == c && units[i].r == r) return i;
+	return -1;
+}
+
+static void setAnim(int unit, int anim, float now)
+{
+	for (int k = 0; k < nknights; k++)
+		if (knights[k].unit == unit) { knights[k].anim = anim; knights[k].t0 = now - frand() * 0.4f; }
+}
+
+// the unit turns to the hex, then gallops there in a straight line and stands
+static void orderMove(int i, int c, int r, float now)
+{
+	Unit* u = &units[i];
+	if (u->moving || unitAt(c, r) >= 0) return;
+	u->c = c; u->r = r;
+	hexCentre(c, r, &u->tx, &u->tz);
+	u->wantYaw = atan2f(u->tx - u->x, u->tz - u->z);   // the models face +z
+	u->moving = true;
+	setAnim(i, A_RUN, now);
+}
+
+static float angleTo(float from, float to)
+{
+	float d = fmodf(to - from + 3 * (float)M_PI, 2 * (float)M_PI) - (float)M_PI;
+	return d;
 }
 
 static void stepUnits(float dt, float now)
 {
 	for (int i = 0; i < nunits; i++) {
 		Unit* u = &units[i];
+		if (!u->moving) continue;
+		float turn = angleTo(u->yaw, u->wantYaw), maxTurn = 1.6f * dt;   // radians a second
+		if (fabsf(turn) > 0.02f) {          // turning on the spot, at a trot
+			u->yaw += turn > 0 ? fminf(turn, maxTurn) : fmaxf(turn, -maxTurn);
+			if (fabsf(turn) > 0.6f) continue;
+		}
 		float dx = u->tx - u->x, dz = u->tz - u->z, d = sqrtf(dx * dx + dz * dz);
-		if (d == 0) continue;
 		float s = models[u->model].anims[A_RUN].speed * dt;
 		if (s >= d) {
 			u->x = u->tx; u->z = u->tz;
-			for (int k = 0; k < nknights; k++)
-				if (knights[k].unit == i) { knights[k].anim = A_IDLE; knights[k].t0 = now - frand(); }
+			u->moving = false;
+			setAnim(i, A_IDLE, now);
 		} else {
 			u->x += dx / d * s; u->z += dz / d * s;
 		}
 	}
+}
+
+// --- picking: a screen point of the orthographic view -> the hex under it ----------------
+
+typedef struct { C3D_FVec eye, fwd, right, up; float halfW, halfH; } OrthoCam;
+
+static void orthoCam(OrthoCam* oc, C3D_FVec target, float yaw, float pitch, float halfW, float halfH)
+{
+	oc->fwd = FVec3_New(-cosf(pitch) * sinf(yaw), -sinf(pitch), -cosf(pitch) * cosf(yaw));
+	oc->eye = FVec3_Subtract(target, FVec3_Scale(oc->fwd, 250));
+	oc->right = FVec3_Normalize(FVec3_Cross(oc->fwd, FVec3_New(0, 1, 0)));
+	oc->up = FVec3_Cross(oc->right, oc->fwd);
+	oc->halfW = halfW; oc->halfH = halfH;
+}
+
+// px, py: touch pixels on the bottom screen (320 x 240); false when it misses the map
+static bool pickHex(const OrthoCam* oc, int px, int py, int* hc, int* hr)
+{
+	float sx = (px / 160.0f - 1) * oc->halfW, sy = (1 - py / 120.0f) * oc->halfH;
+	C3D_FVec o = FVec3_Add(oc->eye, FVec3_Add(FVec3_Scale(oc->right, sx), FVec3_Scale(oc->up, sy)));
+	float t0 = 0, t1 = 0;
+	for (float t = 0; t < 500; t += 0.5f) {            // march to the ground, then halve
+		C3D_FVec p = FVec3_Add(o, FVec3_Scale(oc->fwd, t));
+		if (p.y <= height(p.x, p.z)) { t1 = t; break; }
+		t0 = t;
+	}
+	if (t1 == 0) return false;
+	for (int k = 0; k < 12; k++) {
+		float t = (t0 + t1) / 2;
+		C3D_FVec p = FVec3_Add(o, FVec3_Scale(oc->fwd, t));
+		if (p.y <= height(p.x, p.z)) t1 = t; else t0 = t;
+	}
+	C3D_FVec p = FVec3_Add(o, FVec3_Scale(oc->fwd, t1));
+	float best = 1e9f;
+	*hc = *hr = 0;
+	for (int r = 0; r < ROWS; r++)
+		for (int c = 0; c < COLS; c++) {
+			float cx, cz;
+			hexCentre(c, r, &cx, &cz);
+			float d = (cx - p.x) * (cx - p.x) + (cz - p.z) * (cz - p.z);
+			if (d < best) { best = d; *hc = c; *hr = r; }
+		}
+	return best < HEX * HEX;
+}
+
+// --- hex outlines (selection, target), lying on the ground ---------------------------------
+
+#define RING_SEG 4             // segments per edge
+static TVert* ringVerts;       // linear memory, refilled every frame
+static int ringCount;
+
+static void ringAdd(int c, int r, float cr, float cg, float cb)
+{
+	float cx, cz;
+	hexCentre(c, r, &cx, &cz);
+	TVert* v = ringVerts + ringCount;
+	for (int k = 0; k < 6; k++)
+		for (int s = 0; s < RING_SEG; s++) {
+			float a0 = k * (float)M_PI / 3, a1 = (k + 1) * (float)M_PI / 3;
+			float t0 = s / (float)RING_SEG, t1 = (s + 1) / (float)RING_SEG;
+			float pts[4][2];
+			for (int q = 0; q < 2; q++) {           // outer then inner edge, two points along
+				float rad = q ? HEX * 0.86f : HEX * 0.98f;
+				float x0 = cosf(a0) + (cosf(a1) - cosf(a0)) * t0, z0 = sinf(a0) + (sinf(a1) - sinf(a0)) * t0;
+				float x1 = cosf(a0) + (cosf(a1) - cosf(a0)) * t1, z1 = sinf(a0) + (sinf(a1) - sinf(a0)) * t1;
+				pts[q * 2][0] = cx + rad * x0; pts[q * 2][1] = cz + rad * z0;
+				pts[q * 2 + 1][0] = cx + rad * x1; pts[q * 2 + 1][1] = cz + rad * z1;
+			}
+			TVert w[4];
+			for (int q = 0; q < 4; q++)
+				w[q] = (TVert){ pts[q][0], height(pts[q][0], pts[q][1]) + 0.12f, pts[q][1], 0, 0, 0, 0.5f, cr, cg, cb };
+			*v++ = w[0]; *v++ = w[1]; *v++ = w[3];
+			*v++ = w[0]; *v++ = w[3]; *v++ = w[2];
+		}
+	ringCount += 6 * RING_SEG * 6;
 }
 
 // --- drawing -----------------------------------------------------------------------------
@@ -474,6 +582,7 @@ static float camYaw;           // trees turn to it
 
 static void drawWorld(const C3D_Mtx* proj, const C3D_Mtx* view, float now)
 {
+	C3D_DepthTest(true, GPU_GREATER, GPU_WRITE_ALL);   // citro2d (the top screen's text) turns it off
 	// terrain: grass * shading * hex border
 	C3D_BindProgram(&terrainProg);
 	C3D_SetAttrInfo(&terrainAttr);
@@ -501,6 +610,10 @@ static void drawWorld(const C3D_Mtx* proj, const C3D_Mtx* view, float now)
 	C3D_TexEnvInit(C3D_GetTexEnv(1));
 	setTerrainBuffers(decor);
 	C3D_DrawArrays(GPU_TRIANGLES, 0, decorCount);
+	if (ringCount) {           // hex outlines: the same colour source
+		setTerrainBuffers(ringVerts);
+		C3D_DrawArrays(GPU_TRIANGLES, 0, ringCount);
+	}
 	drawTrees(camYaw);
 
 	// knights
@@ -557,12 +670,13 @@ static void shaderInit(shaderProgram_s* prog, DVLB_s** dvlb, u32* bin, u32 size)
 int main(void)
 {
 	gfxInitDefault();
-	consoleInit(GFX_BOTTOM, NULL);
 	romfsInit();
-	C3D_Init(0x100000);
+	C3D_Init(0x100000);        // one draw per knight, both screens: a big command buffer
+	C2D_Init(C2D_DEFAULT_MAX_OBJECTS);
 
 	bool ok = loadModel(&models[0], "romfs:/knight_lo.bin") && loadModel(&models[1], "romfs:/polish_lo.bin");
 	if (!ok) {
+		consoleInit(GFX_BOTTOM, NULL);
 		printf("Missing romfs:/knight_lo.bin or polish_lo.bin\n(LLM2). Run build.ps1.\nSTART: exit\n");
 		while (aptMainLoop()) {
 			hidScanInput();
@@ -604,14 +718,24 @@ int main(void)
 	AttrInfo_AddLoader(&terrainAttr, 2, GPU_FLOAT, 2);
 	AttrInfo_AddLoader(&terrainAttr, 3, GPU_FLOAT, 3);
 
-	float camX, camZ;
-	hexCentre(7, 5, &camX, &camZ);
-	camZ += 3;
-	float yaw = 0.6f, pitch = 0.55f, dist = 55;
+	C3D_RenderTarget* bot = C3D_RenderTargetCreate(240, 320, GPU_RB_RGBA8, GPU_RB_DEPTH24_STENCIL8);
+	C3D_RenderTargetSetOutput(bot, GFX_BOTTOM, GFX_LEFT, DISPLAY_TRANSFER_FLAGS);
+	ringVerts = linearAlloc(4 * 6 * RING_SEG * 6 * sizeof(TVert));
+	C2D_TextBuf textBuf = C2D_TextBufNew(512);
+
+	// bottom: orthographic, one of 4 directions (L/R turn by 90 degrees), touch picks hexes;
+	// top: perspective, close behind the selected unit
+	float mapX, mapZ;
+	hexCentre(7, 5, &mapX, &mapZ);
+	int preset = 0;
+	float yaw = (float)M_PI / 4, pitch = 0.75f, halfW = 42;
+	float topX = mapX, topZ = mapZ;
+	int selected = -1, lastHc = -1, lastHr = -1;
 	u64 start = osGetTime(), last = start;
 	float fps = 0;
 	int fpsFrames = 0;
 	u64 fpsStart = start;
+	static const char* armyName[2] = { "Ritterbrueder (Teutonic Order)", "Polish knights" };
 
 	while (aptMainLoop()) {
 		hidScanInput();
@@ -621,63 +745,106 @@ int main(void)
 		float now = (nowMs - start) / 1000.0f, dt = (nowMs - last) / 1000.0f;
 		last = nowMs;
 		if (dt > 0.1f) dt = 0.1f;
-		if (down & KEY_A) advance(1, now);
-		if (down & KEY_B) advance(0, now);
-		stepUnits(dt, now);
 
+		if (down & KEY_L) preset = (preset + 3) % 4;
+		if (down & KEY_R) preset = (preset + 1) % 4;
+		float wantYaw = (float)M_PI / 4 + preset * (float)M_PI / 2;
+		yaw += angleTo(yaw, wantYaw) * fminf(1, dt * 8);   // a quick smooth turn to the preset
+		if (held & KEY_X) halfW /= 1.03f;
+		if (held & KEY_Y) halfW *= 1.03f;
+		if (halfW < 12) halfW = 12;
+		if (halfW > 90) halfW = 90;
 		circlePosition cp;
 		hidCircleRead(&cp);
-		if (abs(cp.dx) > 15) yaw += cp.dx / 156.0f * 0.04f;
-		if (abs(cp.dy) > 15) pitch += cp.dy / 156.0f * 0.03f;
-		if (pitch < 0.12f) pitch = 0.12f;
-		if (pitch > 1.45f) pitch = 1.45f;
-		if (held & KEY_L) dist *= 1.03f;
-		if (held & KEY_R) dist /= 1.03f;
-		if (dist < 6) dist = 6;
-		if (dist > 160) dist = 160;
-		float pan = dist * 0.02f, fx = -sinf(yaw), fz = -cosf(yaw);   // forward on the ground
-		if (held & KEY_DUP) { camX += fx * pan; camZ += fz * pan; }
-		if (held & KEY_DDOWN) { camX -= fx * pan; camZ -= fz * pan; }
-		if (held & KEY_DLEFT) { camX += fz * pan; camZ -= fx * pan; }
-		if (held & KEY_DRIGHT) { camX -= fz * pan; camZ += fx * pan; }
+		float pan = halfW * 0.025f, fx = -sinf(yaw), fz = -cosf(yaw);   // screen up on the ground
+		float mx = cp.dx / 156.0f, my = cp.dy / 156.0f;
+		if (held & KEY_DUP) my = 1;
+		if (held & KEY_DDOWN) my = -1;
+		if (held & KEY_DLEFT) mx = -1;
+		if (held & KEY_DRIGHT) mx = 1;
+		if (fabsf(mx) > 0.1f || fabsf(my) > 0.1f) {
+			mapX += (fx * my - fz * mx) * pan;
+			mapZ += (fz * my + fx * mx) * pan;
+		}
+
+		C3D_FVec mapTarget = FVec3_New(mapX, height(mapX, mapZ), mapZ);
+		OrthoCam oc;
+		orthoCam(&oc, mapTarget, yaw, pitch, halfW, halfW * 0.75f);
+		if (down & KEY_TOUCH) {
+			touchPosition tp;
+			hidTouchRead(&tp);
+			int c = 0, r = 0;
+			if (pickHex(&oc, tp.px, tp.py, &c, &r)) {
+				int u = unitAt(c, r);
+				if (u >= 0) selected = u;                         // tap a unit: select it
+				else if (selected >= 0) orderMove(selected, c, r, now);   // tap a free hex: go there
+				lastHc = c; lastHr = r;
+			}
+		}
+		if (down & KEY_B) selected = -1;
+		stepUnits(dt, now);
 		if (++fpsFrames == 30) {
 			fps = fpsFrames * 1000.0f / (nowMs - fpsStart);
 			fpsStart = nowMs;
 			fpsFrames = 0;
 		}
 
-		C3D_FVec target = FVec3_New(camX, height(camX, camZ), camZ);
-		C3D_FVec eye = FVec3_New(camX + dist * cosf(pitch) * sinf(yaw), target.y + dist * sinf(pitch),
-			camZ + dist * cosf(pitch) * cosf(yaw));
-		C3D_Mtx proj, view;
-		Mtx_PerspTilt(&proj, C3D_AngleFromDegrees(45), C3D_AspectRatioTop, 0.5f, 500, false);
-		Mtx_LookAt(&view, eye, target, FVec3_New(0, 1, 0), false);
+		// outlines: selected unit's hex yellow, its move target white, the last tap faint
+		ringCount = 0;
+		if (selected >= 0) ringAdd(units[selected].c, units[selected].r, 1.0f, 0.9f, 0.2f);
+		if (lastHc >= 0 && (selected < 0 || lastHc != units[selected].c || lastHr != units[selected].r))
+			ringAdd(lastHc, lastHr, 0.9f, 0.9f, 0.9f);
+		GSPGPU_FlushDataCache(ringVerts, ringCount * sizeof(TVert));
 
+		// top camera follows the selected unit (else the map's middle), from the preset's side
+		float fxu = selected >= 0 ? units[selected].x : mapX, fzu = selected >= 0 ? units[selected].z : mapZ;
+		topX += (fxu - topX) * fminf(1, dt * 3);
+		topZ += (fzu - topZ) * fminf(1, dt * 3);
+		C3D_FVec topTarget = FVec3_New(topX, height(topX, topZ) + 1.5f, topZ);
+		float td = 26, tp = 0.38f;
+		C3D_FVec topEye = FVec3_New(topX + td * cosf(tp) * sinf(yaw), topTarget.y + td * sinf(tp),
+			topZ + td * cosf(tp) * cosf(yaw));
+
+		C3D_Mtx proj, view;
 		C3D_FrameBegin(C3D_FRAME_SYNCDRAW);
+		// top: perspective
 		C3D_RenderTargetClear(top, C3D_CLEAR_ALL, 0x9CC4E8FF, 0);
 		C3D_FrameDrawOn(top);
-		C3D_DepthTest(true, GPU_GREATER, GPU_WRITE_ALL);
+		Mtx_PerspTilt(&proj, C3D_AngleFromDegrees(45), C3D_AspectRatioTop, 0.5f, 500, false);
+		Mtx_LookAt(&view, topEye, topTarget, FVec3_New(0, 1, 0), false);
 		camYaw = yaw;
 		drawWorld(&proj, &view, now);
-		C3D_FrameEnd(0);
-
-		int tris = terrainCount / 3 + decorCount / 3 + ntrees * 2;
-		for (int m = 0; m < 2; m++) {
-			int n = 0;
-			for (int i = 0; i < nknights; i++) n += units[knights[i].unit].model == m;
-			tris += n * models[m].tris;
+		// bottom: orthographic, the touch view
+		C3D_RenderTargetClear(bot, C3D_CLEAR_ALL, 0x9CC4E8FF, 0);
+		C3D_FrameDrawOn(bot);
+		Mtx_OrthoTilt(&proj, -oc.halfW, oc.halfW, -oc.halfH, oc.halfH, 1, 600, false);
+		Mtx_LookAt(&view, oc.eye, mapTarget, FVec3_New(0, 1, 0), false);
+		drawWorld(&proj, &view, now);
+		// the top screen's text last, over a cleared depth (coming back to that target clears it)
+		C2D_TextBufClear(textBuf);
+		char line[160];
+		C2D_Text text;
+		C2D_Prepare();
+		C3D_RenderTargetClear(top, C3D_CLEAR_DEPTH, 0, 0);
+		C2D_SceneBegin(top);
+		if (selected >= 0) {
+			Unit* u = &units[selected];
+			snprintf(line, sizeof line, "%s\nhex %d,%d  %d knights  %s", armyName[u->model], u->c, u->r,
+				PER_HEX, u->moving ? "galloping" : "standing");
+		} else {
+			snprintf(line, sizeof line, "Tap a unit below, then a hex to move it.\nL/R: turn the view  X/Y: zoom  B: deselect");
 		}
-		printf("\x1b[1;1HHex battle prototype\n\n");
-		printf("hexes     %d x %d, forests %s  \n", COLS, ROWS, "dark");
-		printf("knights   %d (%d units of %d)   \n", nknights, nunits, PER_HEX);
-		printf("triangles %6d                   \n", tris);
-		printf("  terrain %6d, rocks %5d     \n", terrainCount / 3, decorCount / 3);
-		printf("  trees   %6d sprites (%d tris) \n", ntrees, ntrees * 2);
-		printf("fps       %5.1f                  \n", fps);
-		printf("cpu ms    %5.2f  gpu ms %5.2f    \n", C3D_GetProcessingTime(), C3D_GetDrawingTime());
-		printf("cmdbuf    %3d%%                  \n", (int)(C3D_GetCmdBufUsage() * 100));
-		printf("\nA: Polish advance  B: Teutons advance\n");
-		printf("pad: turn/tilt  D-pad: move\nL/R: zoom  START: exit\n");
+		C2D_TextParse(&text, textBuf, line);
+		C2D_TextOptimize(&text);
+		// white with a dark shadow: readable over the sky and the dark trees alike
+		C2D_DrawText(&text, C2D_WithColor, 9, 7, 1.0f, 0.55f, 0.55f, 0xC0000000);
+		C2D_DrawText(&text, C2D_WithColor, 8, 6, 1.0f, 0.55f, 0.55f, 0xFFFFFFFF);
+		snprintf(line, sizeof line, "%.0f fps  cpu %.1f ms", fps, C3D_GetProcessingTime());
+		C2D_TextParse(&text, textBuf, line);
+		C2D_DrawText(&text, C2D_WithColor, 9, 223, 1.0f, 0.45f, 0.45f, 0xC0000000);
+		C2D_DrawText(&text, C2D_WithColor, 8, 222, 1.0f, 0.45f, 0.45f, 0xFFFFFFFF);
+		C2D_Flush();
+		C3D_FrameEnd(0);
 	}
 
 	for (int m = 0; m < 2; m++) {
@@ -694,6 +861,9 @@ int main(void)
 	}
 	linearFree(terrain);
 	linearFree(decor);
+	linearFree(ringVerts);
+	C2D_TextBufDelete(textBuf);
+	C2D_Fini();
 	shaderProgramFree(&soldierProg);
 	shaderProgramFree(&terrainProg);
 	DVLB_Free(soldierDvlb);
