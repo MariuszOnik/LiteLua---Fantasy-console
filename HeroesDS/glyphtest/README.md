@@ -18,8 +18,8 @@ Otwórz `index.html` w przeglądarce (działa też na telefonie i z GitHub Pages
   dolnego ekranu. Bitmapy rysowane są ciągami jednego koloru (jeden `rectfill` na ciąg), tło
   pola budowane raz przy zmianie kamery (na DS: warstwa BG).
 
-- **Wybór i potwierdzenie:** pierwsze dotknięcie pokazuje znacznik celu, drugie (albo Enter)
-  wykonuje, Esc anuluje.
+- **Wybór i potwierdzenie:** dotyk pokazuje znacznik celu (kolejne go przesuwają); wykonuje
+  tylko OK w prawym pasku, „✔ Wykonaj” albo Enter; X w lewym pasku albo Esc anuluje.
 - **Dźwięk** (przycisk / D): efekty to pliki `carts/g1/sfx/*.wav`, muzyka to podgląd
   `carts/g1/music/*.lsong` w `audio/` (`litelua.py song render --rate 16000 --bits 8`).
 

@@ -6,8 +6,8 @@ w kodzie (`src/glyphs.lua`) albo litery, czary z linii i kół. Nie potrzebuje d
 **Na kartę:** skopiuj cały folder `g1` do `litelua/carts/g1` (albo
 `python tools/litelua.py pack HeroesDS/carts/g1 g1.lcart`).
 
-**Sterowanie:** dotyk wybiera (ziemia = ruch, wróg = atak), drugie dotknięcie w to samo
-miejsce albo A wykonuje, B anuluje (bez wyboru: czekaj). X wygląd, Y lupa, L/R czar,
+**Sterowanie:** dotyk wybiera (ziemia = ruch, wróg = atak) i przesuwa wybór; wykonuje tylko
+OK w prawym pasku albo A, X w lewym pasku albo B anuluje (bez wyboru B = czekaj). X wygląd, Y lupa, L/R czar,
 SELECT auto.
 
 **Dźwięk:** `sfx/*.wav` (efekty chip, 8-bit 16 kHz) i `music/*.lsong` (marsz bitewny d-moll,

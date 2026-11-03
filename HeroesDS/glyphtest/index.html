@@ -29,13 +29,15 @@
   <button id="bMode">Wygląd: bitmapy 8×8</button>
   <button id="bZoom">Lupa: 1×</button>
   <button id="bSpell">Czar: brak</button>
+  <button id="bOk">✔ Wykonaj</button>
   <button id="bWait">Czekaj</button>
   <button id="bAuto">Auto: wył.</button>
   <button id="bReset">Nowa bitwa</button>
   <button id="bSound">Dźwięk: wył.</button>
 </div>
 <p>Dotknij dolny ekran, żeby wybrać: ziemia = ruch, wróg = atak (z czarem = rzucenie czaru).
-Znacznik pokazuje wybór; dotknij go drugi raz (albo Enter), żeby wykonać, Esc anuluje.
+Znacznik pokazuje wybór (kolejne dotknięcia go przesuwają); wykonuje tylko przycisk OK w prawym
+pasku dolnego ekranu, „✔ Wykonaj” albo Enter. X w lewym pasku albo Esc anuluje.
 Klawisze: M wygląd, Z lupa, S czar, W czekaj, A auto, R nowa bitwa, D dźwięk.
 Efekty i muzyka to te same pliki co w carcie <code>carts/g1</code> (muzyka: podgląd z <code>.lsong</code>).
 Zero sprajtów: wszystko to prymitywy (pset / rectfill / line / trifill / circ / print)
@@ -570,12 +572,6 @@ function plan(px, py) {
   [wx, wy] = clampWorld(wx, wy);
   return { k: 'move', x: wx, y: wy };
 }
-function same(p, q) {
-  if (!p || !q || p.k !== q.k) return false;
-  if (p.k === 'attack') return p.t === q.t;
-  const [ax, ay] = toScreen(p.x, p.y), [bx, by] = toScreen(q.x, q.y);
-  return Math.abs(ax - bx) <= 8 && Math.abs(ay - by) <= 8;
-}
 function confirmAction() {
   const p = pending, a = active;
   if (!p || !waiting) return;
@@ -590,10 +586,11 @@ function confirmAction() {
 function tap(px, py) {
   if (over) { newBattle(); return; }
   if (!waiting || !active) return;
+  if (px >= 256 - OX) { if (pending) confirmAction(); return; }   // OK in the right bar
+  if (px < OX) { if (pending) { pending = null; play('select', 0.4, 0.7); } return; }   // X
   const p = plan(px, py);
   if (!p) return;
-  if (same(p, pending)) { confirmAction(); return; }
-  pending = p; play('select', 0.7);
+  pending = p; play('select', 0.7);   // only chooses; nothing happens until OK
 }
 
 const botEl = document.getElementById('bot');
@@ -616,6 +613,7 @@ $('bMode').onclick = () => setMode(mode === 'bmp' ? 'txt' : 'bmp');
 $('bZoom').onclick = () => setZoom(zoom === 1 ? 2 : 1);
 $('bSpell').onclick = () => setSpell((spell + 1) % SPELLS.length);
 $('bWait').onclick = skip;
+$('bOk').onclick = confirmAction;
 $('bAuto').onclick = () => setAuto(!auto);
 $('bReset').onclick = newBattle;
 $('bSound').onclick = () => setSound(!audio.on);
@@ -758,6 +756,13 @@ function drawBottom() {
   list.sort((a, b) => (alive(a) - alive(b)) || (a.x + a.y) - (b.x + b.y) || a.id - b.id);
   for (const u of list) drawUnit(s, u);
   drawPending(s);
+  if (pending && waiting) {                          // OK / X in the side bars
+    const ok = Math.floor(frame / 16) % 2 ? 6 : 5;
+    s.rectfill(256 - OX + 1, 64, OX - 2, 64, ok); s.rect(256 - OX + 1, 64, OX - 2, 64, 12);
+    s.print('O', 256 - OX + 3, 78, 12, 2); s.print('K', 256 - OX + 3, 98, 12, 2);
+    s.rectfill(1, 64, OX - 2, 64, 2); s.rect(1, 64, OX - 2, 64, 13);
+    s.print('X', 4, 88, 12, 2);
+  }
   drawFx(s);
   if (over) {
     s.rectfill(64, 80, 128, 26, 0); s.rect(64, 80, 128, 26, 4);
@@ -788,7 +793,7 @@ function drawTop() {
     s.print(SIDE[active.side].name + (waiting ? '  - TWOJ RUCH' : ''), 54, 31, SIDE[active.side].X);
     s.print('ILOSC ' + active.count + '   HP ' + active.hp + '/' + T.hp, 54, 40, 13);
     s.print('ATAK ' + T.atk + '   RUCH ' + T.speed + (T.ranged ? '   STRZELA' : ''), 54, 48, 13);
-    if (pending) s.print((pending.k === 'move' ? 'RUCH' : SPELLS[spell] !== 'brak' ? SPELL_NAME[SPELLS[spell]] : 'ATAK') + ': DOTKNIJ ZNOWU', 54, 56, 4);
+    if (pending) s.print((pending.k === 'move' ? 'RUCH' : SPELLS[spell] !== 'brak' ? SPELL_NAME[SPELLS[spell]] : 'ATAK') + ': OK = WYKONAJ', 54, 56, 4);
     else if (SPELLS[spell] !== 'brak') s.print('CZAR: ' + SPELL_NAME[SPELLS[spell]] + ' - WYBIERZ CEL', 54, 56, 11);
   }
   s.print('RUNDA ' + round, 4, 66, 4);

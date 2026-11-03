@@ -3,8 +3,8 @@
 -- view.lua's magnifier), stacks are 8x8 bitmaps from src/glyphs.lua or letters, spells
 -- are lines and circles. The battle rules are a stand-in, not combat/.
 --
--- Touch the ground or an enemy to choose (a marker shows it), touch it again or A to do
--- it, B cancels (B with nothing chosen: wait). X look, Y magnifier, L/R spell, SELECT auto.
+-- Touch the ground or an enemy to choose (a marker shows it; more touches move it), OK in
+-- the right bar or A does it, X in the left bar or B cancels (B with nothing chosen: wait). X look, Y magnifier, L/R spell, SELECT auto.
 -- The top screen shows what the bottom one costs (sys.stats: time and polygons).
 
 local glyphs = require("glyphs")
@@ -354,14 +354,6 @@ local function plan(px, py)
   return { k = "move", x = wx, y = wy, px = px, py = py }
 end
 
-local function same(p, q)
-  if not p or not q or p.k ~= q.k then return false end
-  if p.k == "attack" then return p.t == q.t end
-  local ax, ay = to_screen(p.x, p.y)
-  local bx, by = to_screen(q.x, q.y)
-  return math.abs(ax - bx) <= 8 and math.abs(ay - by) <= 8
-end
-
 local function confirm()
   local p, a = pending, active
   if not p or not waiting then return end
@@ -380,10 +372,14 @@ end
 local function tap(px, py)
   if over then new_battle(); return end
   if not waiting or not active then return end
+  if px >= 256 - OX then if pending then confirm() end; return end      -- OK, right bar
+  if px < OX then                                                         -- X, left bar
+    if pending then pending = nil; play("select", 0.4, 0.7) end
+    return
+  end
   local p = plan(px, py)
   if not p then return end
-  if same(p, pending) then confirm(); return end
-  pending = p
+  pending = p                  -- only chooses; nothing happens until OK or A
   play("select", 0.7)
 end
 
@@ -613,6 +609,13 @@ local function draw_bottom()
   draw_fx()
   rectfill(0, 0, OX, 192, 0)
   rectfill(256 - OX, 0, OX, 192, 0)
+  if pending and waiting then                      -- OK / X in the side bars
+    local ok = (frame // 8) % 2 == 1 and 6 or 5
+    rectfill(256 - OX + 1, 64, OX - 2, 64, ok); rect(256 - OX + 1, 64, OX - 2, 64, 12)
+    text("O", 256 - OX + 5, 84, 12); text("K", 256 - OX + 5, 94, 12)
+    rectfill(1, 64, OX - 2, 64, 2); rect(1, 64, OX - 2, 64, 13)
+    text("X", 5, 92, 12)
+  end
   if over then
     rectfill(56, 76, 144, 34, 0); rect(56, 76, 144, 34, 4)
     local w = textw(over)
@@ -652,7 +655,7 @@ local function draw_top()
     if pending then
       local what = pending.k == "move" and "ruch" or
                    (pending.spell ~= "brak" and SPELL_NAME[pending.spell] or "atak")
-      text(what .. ": dotknij znowu albo A", 54, 52 + 3, 4)
+      text(what .. ": OK albo A = zrób", 54, 55, 4)
     elseif SPELLS[spell] ~= "brak" then
       text("czar: " .. SPELL_NAME[SPELLS[spell]] .. " (L/R)", 54, 55, 11)
     end
@@ -675,9 +678,9 @@ local function draw_top()
   text(string.format("dół: %.1f ms  %d poly  cpu %d%%", avg_us / 1000, avg_poly // 1,
        (st.cpu or 0) // 1), 3, 144, 12)
   text(string.format("fps %d  pamięć Lua %d KB", (st.fps or 0) // 1, (st.mem or 0) // 1024), 3, 153, 13)
-  text("dotyk: wybierz, drugi raz/A: zrób", 3, 163, 14)
-  text("B anuluj/czekaj  X wygląd  Y lupa", 3, 172, 14)
-  text("L/R czar  SELECT auto", 3, 181, 14)
+  text("dotyk: wybierz, OK (prawy pasek)/A: zrób", 3, 163, 14)
+  text("X lewy pasek/B: anuluj  B: czekaj", 3, 172, 14)
+  text("X wygląd  Y lupa  L/R czar  SELECT auto", 3, 181, 14)
 end
 
 function _draw(surface)
