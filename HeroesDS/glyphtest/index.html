@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HeroesDS Glyph Test</title>
+<style>
+  :root { --bg:#14161c; --fg:#e6e6e6; --btn:#2a2f3a; --on:#3b5dc9; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px system-ui,sans-serif;
+         display:flex; flex-direction:column; align-items:center; padding:10px 16px; }
+  .ds { width:min(100%,512px); display:flex; flex-direction:column; gap:6px; background:#000;
+        padding:6px; border-radius:10px; box-sizing:border-box; }
+  canvas { width:100%; display:block; image-rendering:pixelated; image-rendering:crisp-edges;
+           touch-action:none; }
+  .bar { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin:10px 0;
+         width:min(100%,512px); }
+  button { background:var(--btn); color:var(--fg); border:0; border-radius:6px;
+           padding:8px 10px; font:inherit; cursor:pointer; }
+  button.on { background:var(--on); }
+  p { max-width:512px; opacity:.7; font-size:12px; line-height:1.4; margin:0; }
+</style>
+</head>
+<body>
+<div class="ds">
+  <canvas id="top" width="256" height="192"></canvas>
+  <canvas id="bot" width="256" height="192"></canvas>
+</div>
+<div class="bar">
+  <button id="bMode">Wygląd: bitmapy 8×8</button>
+  <button id="bZoom">Lupa: 1×</button>
+  <button id="bSpell">Czar: brak</button>
+  <button id="bWait">Czekaj</button>
+  <button id="bAuto">Auto: wył.</button>
+  <button id="bReset">Nowa bitwa</button>
+</div>
+<p>Dotknij dolny ekran: ziemia = ruch, wróg = atak (z czarem = rzucenie czaru).
+Klawisze: M wygląd, Z lupa, S czar, W czekaj, A auto, R nowa bitwa.
+Zero sprajtów: wszystko to prymitywy (pset / rectfill / line / trifill / circ / print)
+do bufora 256×192 z paletą 16 kolorów, tak jak w LiteLua. Licznik na górnym ekranie
+pokazuje, ile wywołań prymitywów kosztuje jedna klatka.</p>
+
+<script>
+'use strict';
+// HeroesDS glyph test: the C4 battle look with no sprites at all. Every stack, effect and
+// letter is drawn from code with LiteLua-style primitives into a 256x192 palette-indexed
+// framebuffer (one per DS screen). Geometry follows combat/grid.lua and c4/src/view.lua.
+
+const W = 256, H = 192;
+const PAL = ['#000000','#1a1c2c','#b13e53','#ef7d57','#ffcd75','#a7f070','#38b764','#4b692f',
+             '#29366f','#3b5dc9','#41a6f6','#73eff7','#f4f4f4','#94b0c2','#566c86','#333c57'];
+const RGB = PAL.map(h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)));
+const GROUND = 7;
+
+// ---------- 3x5 font (bit 4 = left column) ----------
+const FONT = {
+  '0':[7,5,5,5,7],'1':[2,6,2,2,7],'2':[7,1,7,4,7],'3':[7,1,3,1,7],'4':[5,5,7,1,1],
+  '5':[7,4,7,1,7],'6':[7,4,7,5,7],'7':[7,1,1,2,2],'8':[7,5,7,5,7],'9':[7,5,7,1,7],
+  'A':[2,5,7,5,5],'B':[6,5,6,5,6],'C':[3,4,4,4,3],'D':[6,5,5,5,6],'E':[7,4,6,4,7],
+  'F':[7,4,6,4,4],'G':[3,4,5,5,3],'H':[5,5,7,5,5],'I':[7,2,2,2,7],'J':[1,1,1,5,2],
+  'K':[5,5,6,5,5],'L':[4,4,4,4,7],'M':[5,7,7,5,5],'N':[6,5,5,5,5],'O':[2,5,5,5,2],
+  'P':[6,5,6,4,4],'Q':[2,5,5,6,3],'R':[6,5,6,5,5],'S':[3,4,2,1,6],'T':[7,2,2,2,2],
+  'U':[5,5,5,5,7],'V':[5,5,5,5,2],'W':[5,5,7,7,5],'X':[5,5,2,5,5],'Y':[5,5,2,2,2],
+  'Z':[7,1,2,4,7],' ':[0,0,0,0,0],'-':[0,0,7,0,0],':':[0,2,0,2,0],'.':[0,0,0,0,2],
+  '/':[1,1,2,4,4],'+':[0,2,7,2,0],'!':[2,2,2,0,2],'>':[4,2,1,2,4],'<':[1,2,4,2,1],
+  '(':[1,2,2,2,1],')':[4,2,2,2,4],'=':[0,7,0,7,0],'?':[7,1,2,0,2],',':[0,0,0,2,4],
+  '*':[5,2,7,2,5],'#':[5,7,5,7,5],
+};
+const PL = { 'Ą':'A','Ć':'C','Ę':'E','Ł':'L','Ń':'N','Ó':'O','Ś':'S','Ź':'Z','Ż':'Z' };
+const up = t => String(t).toUpperCase().replace(/[ĄĆĘŁŃÓŚŹŻ]/g, c => PL[c]);
+
+// ---------- Screen: framebuffer + primitives (what LiteLua gives a cart) ----------
+function Screen(canvas) {
+  const fb = new Uint8Array(W * H);
+  const st = { calls: 0, px: 0 };
+  const ctx = canvas && canvas.getContext('2d');
+  const img = ctx && ctx.createImageData(W, H);
+  const hl = (x0, x1, y, c) => {            // clipped horizontal span, not counted as a call
+    y |= 0; if (y < 0 || y >= H) return;
+    x0 = Math.max(0, Math.round(x0)); x1 = Math.min(W - 1, Math.round(x1));
+    if (x1 < x0) return;
+    fb.fill(c, y * W + x0, y * W + x1 + 1); st.px += x1 - x0 + 1;
+  };
+  const put = (x, y, c) => {
+    x = Math.round(x); y = Math.round(y);
+    if (x >= 0 && y >= 0 && x < W && y < H) { fb[y * W + x] = c; st.px++; }
+  };
+  const s = {
+    fb, st,
+    cls(c) { st.calls++; fb.fill(c); },
+    blit(src) { st.calls++; fb.set(src); },
+    pset(x, y, c) { st.calls++; put(x, y, c); },
+    rectfill(x, y, w, h, c) {
+      st.calls++; x = Math.round(x); y = Math.round(y);
+      for (let j = Math.max(0, y); j < Math.min(H, y + h); j++) hl(x, x + w - 1, j, c);
+    },
+    rect(x, y, w, h, c) {
+      st.calls++; x = Math.round(x); y = Math.round(y);
+      hl(x, x + w - 1, y, c); hl(x, x + w - 1, y + h - 1, c);
+      for (let j = y + 1; j < y + h - 1; j++) { put(x, j, c); put(x + w - 1, j, c); }
+    },
+    line(x0, y0, x1, y1, c) {
+      st.calls++;
+      x0 = Math.round(x0); y0 = Math.round(y0); x1 = Math.round(x1); y1 = Math.round(y1);
+      const dx = Math.abs(x1 - x0), dy = -Math.abs(y1 - y0);
+      const sx = x0 < x1 ? 1 : -1, sy = y0 < y1 ? 1 : -1;
+      let e = dx + dy, n = 0;
+      for (;;) {
+        put(x0, y0, c);
+        if ((x0 === x1 && y0 === y1) || ++n > 600) break;
+        const e2 = 2 * e;
+        if (e2 >= dy) { e += dy; x0 += sx; }
+        if (e2 <= dx) { e += dx; y0 += sy; }
+      }
+    },
+    trifill(ax, ay, bx, by, cx, cy, c) {
+      st.calls++;
+      let p = [[ax, ay], [bx, by], [cx, cy]].sort((a, b) => a[1] - b[1]);
+      const [[x0, y0], [x1, y1], [x2, y2]] = p;
+      const at = (xa, ya, xb, yb, y) => yb === ya ? xa : xa + (xb - xa) * (y - ya) / (yb - ya);
+      for (let y = Math.ceil(y0); y <= Math.floor(y2); y++) {
+        const xa = at(x0, y0, x2, y2, y);
+        const xb = y < y1 ? at(x0, y0, x1, y1, y) : at(x1, y1, x2, y2, y);
+        hl(Math.min(xa, xb), Math.max(xa, xb), y, c);
+      }
+    },
+    circfill(cx, cy, r, c) {
+      st.calls++;
+      for (let dy = -r; dy <= r; dy++) {
+        const w = Math.sqrt(r * r - dy * dy);
+        hl(cx - w, cx + w, Math.round(cy) + dy, c);
+      }
+    },
+    circ(cx, cy, r, c) {
+      st.calls++; cx = Math.round(cx); cy = Math.round(cy);
+      let x = r, y = 0, e = 1 - r;
+      while (x >= y) {
+        put(cx + x, cy + y, c); put(cx + y, cy + x, c); put(cx - y, cy + x, c); put(cx - x, cy + y, c);
+        put(cx - x, cy - y, c); put(cx - y, cy - x, c); put(cx + y, cy - x, c); put(cx + x, cy - y, c);
+        y++; if (e < 0) e += 2 * y + 1; else { x--; e += 2 * (y - x) + 1; }
+      }
+    },
+    print(t, x, y, c, k = 1) {               // returns the width in pixels
+      st.calls++; t = up(t); x = Math.round(x); y = Math.round(y);
+      for (let i = 0; i < t.length; i++) {
+        const g = FONT[t[i]] || FONT['?'];
+        for (let r = 0; r < 5; r++) for (let q = 0; q < 3; q++)
+          if (g[r] & (4 >> q))
+            for (let j = 0; j < k; j++) hl(x + (i * 4 + q) * k, x + (i * 4 + q) * k + k - 1, y + r * k + j, c);
+      }
+      return t.length * 4 * k;
+    },
+    flip() {
+      const d = img.data;
+      for (let i = 0, o = 0; i < W * H; i++, o += 4) {
+        const p = RGB[fb[i]]; d[o] = p[0]; d[o + 1] = p[1]; d[o + 2] = p[2]; d[o + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+    },
+  };
+  return s;
+}
+
+const topS = Screen(document.getElementById('top'));
+const botS = Screen(document.getElementById('bot'));
+const bgScr = Screen(null);                  // the field, rebuilt only when the camera moves
+
+// ---------- Glyphs: 8x8-ish bitmaps in code and roguelike letters ----------
+// . none  x side colour  X side light  o outline  w white  y gold  g grey  G dark grey
+// f skin  r red
+const BMP = {
+  knight: [
+    '...oo...',
+    '..oggo..',
+    '..oggo.y',
+    '.oxxxxoy',
+    '.oxXxxoy',
+    '..oxxo..',
+    '..o..o..',
+    '.oo..oo.'],
+  archer: [
+    '..ooo...',
+    '.offo.o.',
+    '.offo.og',
+    'oxxxxo.g',
+    '.oxxxxog',
+    '..oxxo.g',
+    '..o..oo.',
+    '.oo..o..'],
+  skeleton: [
+    '..www...',
+    '.wowow..',
+    '.wwwww..',
+    '..wow..g',
+    '.wwxwwwg',
+    '..www..g',
+    '..w.w...',
+    '.ww.ww..'],
+  dragon: [
+    '........oo..',
+    '..o....oxxo.',
+    '.oxo..oxXxyo',
+    'oxXxooxxxxo.',
+    '.oxxxxxxxo..',
+    '..oxxxxxo...',
+    '..ox.ox.....',
+    '.oo.oo......'],
+  griffin: [
+    'oo......o.',
+    'oXo....oyo',
+    '.oXXo.oxxo',
+    '..oXXxxxo.',
+    '...oxxxxo.',
+    '...oxxxo..',
+    '...o.o.o..',
+    '..oo.oo...'],
+  imp: [
+    'o....o..',
+    'ofo.ofo.',
+    '.offfo..',
+    '.ofrfo.y',
+    '..oxxo.y',
+    '.oxxxxoy',
+    '..o..o..',
+    '.oo..oo.'],
+  hero: [
+    '.y.y.y..',
+    '.yyyyy..',
+    '.offfo..',
+    'oXxxxXo.',
+    'oxXyXxo.',
+    'oxxXxxo.',
+    '.o...o..',
+    'oo...oo.'],
+};
+const TYPES = {
+  hero:     { name: 'Bohater',  ch: 'H', hp: 60,  atk: 9,  speed: 16, size: 3 },
+  knight:   { name: 'Rycerz',   ch: 'K', hp: 30,  atk: 6,  speed: 14, size: 3 },
+  archer:   { name: 'Lucznik',  ch: 'A', hp: 10,  atk: 3,  speed: 10, size: 3, ranged: true },
+  griffin:  { name: 'Gryf',     ch: 'G', hp: 30,  atk: 7,  speed: 24, size: 3 },
+  imp:      { name: 'Chochlik', ch: 'I', hp: 4,   atk: 2,  speed: 18, size: 3 },
+  skeleton: { name: 'Szkielet', ch: 'S', hp: 6,   atk: 2,  speed: 12, size: 3 },
+  dragon:   { name: 'Smok',     ch: 'D', hp: 200, atk: 38, speed: 26, size: 5 },
+};
+const SIDE = [{ x: 9, X: 10, name: 'NIEBIESCY' }, { x: 2, X: 3, name: 'CZERWONI' }];
+
+// Draws a bitmap with its bottom centre at (bx, by), k = pixel size; runs of one colour on
+// a row become one rectfill (what a DS version should do too). tint: one colour for all
+// but the outline; clipY: nothing below it (sinking into the ground).
+function drawBitmap(s, rows, bx, by, k, flip, side, tint, clipY = 1e9) {
+  const w = rows[0].length, h = rows.length;
+  const x0 = Math.round(bx - w * k / 2), y0 = Math.round(by - h * k);
+  const map = { x: SIDE[side].x, X: SIDE[side].X, o: 0, w: 12, y: 4, g: 13, G: 14, f: 3, r: 2 };
+  for (let r = 0; r < h; r++) {
+    const y = y0 + r * k;
+    if (y + k > clipY) break;
+    let run = -1, start = 0;
+    for (let q = 0; q <= w; q++) {
+      const ch = q < w ? rows[r][flip ? w - 1 - q : q] : '.';
+      let c = ch === '.' ? -1 : map[ch];
+      if (tint !== undefined && c > 0) c = tint;
+      if (c !== run) {
+        if (run >= 0) s.rectfill(x0 + start * k, y, (q - start) * k, k, run);
+        run = c; start = q;
+      }
+    }
+  }
+  return y0;
+}
+
+// ---------- Geometry (combat/grid.lua, view.lua) ----------
+const N = 102, SCENE_W = 1180, SCENE_H = 1024, BASE = 3 / 16;
+const OX = (256 - Math.floor(SCENE_W * BASE)) >> 1, OY = 0;
+let zoom = 1, K = BASE, camx = 0, camy = 0;
+const gridScreen = (x, y) => [(y - x) * 16 + 590, (x + y) * 8 + 512 - 8 * N];
+const toScreen = (wx, wy) => { const [sx, sy] = gridScreen(wx, wy); return [OX + (sx - camx) * K, OY + (sy - camy) * K]; };
+function toWorld(px, py) {
+  const sx = camx + (px - OX) / K, sy = camy + (py - OY) / K;
+  const u = (sx - 590) / 16, v = (sy - 512 + 8 * N) / 8;
+  return [(v - u) / 2, (v + u) / 2];
+}
+// u = y - x across the screen, v = x + y down it; the playable part of the scene
+const fromUV = (u, v) => [(v - u) / 2, (v + u) / 2];
+function clampWorld(x, y) {
+  let u = Math.max(-34, Math.min(34, y - x)), v = Math.max(44, Math.min(160, x + y));
+  return fromUV(u, v);
+}
+function setCamera(z, wx, wy) {
+  zoom = z; K = BASE * z;
+  if (z === 1) { camx = camy = 0; }
+  else {
+    const [fx, fy] = gridScreen(wx, wy);
+    camx = fx - (128 - OX) / K; camy = fy - 96 / K;
+    camx = Math.max(-OX / K, Math.min(camx, SCENE_W - (256 - OX) / K));
+    camy = Math.max(0, Math.min(camy, SCENE_H - 192 / K));
+  }
+  buildField();
+}
+
+// ---------- Seeded random ----------
+let seed = 1;
+const rnd = () => (seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+
+// ---------- The field: ground, dither, trees and rocks (a BG layer on the DS) ----------
+let deco = [], grain = [];
+function makeDeco() {
+  deco = []; grain = [];
+  for (let i = 0; i < 18; i++) {
+    const [x, y] = fromUV(-14 + rnd() * 28, 50 + rnd() * 105);
+    deco.push({ x, y, t: rnd() < 0.6 ? 'tree' : 'rock' });
+  }
+  for (let i = 0; i < 600; i++) grain.push([rnd() * SCENE_W, rnd() * SCENE_H, rnd() < 0.7 ? 6 : 15]);
+  deco.sort((a, b) => (a.x + a.y) - (b.x + b.y));
+}
+function buildField() {
+  const s = bgScr, k = zoom;
+  s.cls(0);
+  s.rectfill(OX - camx * K, OY - camy * K, SCENE_W * K, SCENE_H * K, GROUND);
+  for (const [gx, gy, c] of grain) s.pset(OX + (gx - camx) * K, OY + (gy - camy) * K, c);
+  for (const d of deco) {
+    const [cx, cy] = toScreen(d.x, d.y);
+    if (d.t === 'tree') {
+      s.rectfill(cx - (k >> 1), cy - 2 * k, k, 2 * k, 1);
+      s.trifill(cx, cy - 9 * k, cx - 4 * k, cy - 2 * k, cx, cy - 2 * k, 5);
+      s.trifill(cx, cy - 9 * k, cx, cy - 2 * k, cx + 4 * k, cy - 2 * k, 6);
+    } else {
+      s.circfill(cx, cy - k, 2 * k, 14);
+      s.pset(cx - k, cy - 2 * k, 13);
+    }
+  }
+  s.rectfill(0, 0, OX, H, 0); s.rectfill(256 - OX, 0, OX, H, 0);
+}
+
+// ---------- Battle state ----------
+let units = [], fx = [], log = [], order = [], turnIdx = 0, round = 1;
+let active = null, task = null, waiting = false, frame = 0, over = null;
+let mode = 'bmp', spell = 0, auto = false;
+const SPELLS = ['brak', 'ogien', 'blyskawica', 'lod'];
+const SPELL_NAME = { brak: 'brak', ogien: 'ogień', blyskawica: 'błyskawica', lod: 'lód' };
+
+function addLog(t) { log.push(up(t)); if (log.length > 6) log.shift(); }
+
+function newBattle() {
+  seed = 4242 + Math.floor(Math.random() * 1000);
+  makeDeco();
+  setCamera(zoom, 51, 51);
+  const armies = [
+    [['hero', 1], ['knight', 14], ['archer', 22], ['griffin', 8], ['knight', 10], ['archer', 18], ['imp', 30]],
+    [['dragon', 1], ['skeleton', 40], ['archer', 16], ['imp', 25], ['griffin', 6], ['skeleton', 35]],
+  ];
+  units = []; let id = 0;
+  armies.forEach((army, side) => army.forEach(([type, count], i) => {
+    const T = TYPES[type];
+    const v = 58 + i * (96 / (army.length - 1));
+    const [x, y] = fromUV(side ? 27 : -27, v);
+    units.push({ id: id++, type, side, count, hp: T.hp, x, y, size: T.size,
+      face: side ? -1 : 1, hop: 0, ox: 0, oy: 0, flash: 0, frozen: 0, dying: 0 });
+  }));
+  order = units.slice().sort((a, b) => TYPES[b.type].speed - TYPES[a.type].speed || a.id - b.id);
+  fx = []; log = []; turnIdx = -1; round = 1; over = null; task = null; waiting = false;
+  addLog('Nowa bitwa!');
+  nextTurn();
+}
+
+const alive = u => u.count > 0;
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const unitScreen = u => toScreen(u.x, u.y);
+
+function nextTurn() {
+  for (const s of [0, 1]) if (!units.some(u => u.side === s && alive(u))) {
+    over = s === 0 ? 'PRZEGRANA' : 'WYGRANA';
+    addLog(over + '!'); active = null; waiting = false; return;
+  }
+  do {
+    turnIdx++;
+    if (turnIdx >= order.length) { turnIdx = 0; round++; }
+  } while (!alive(order[turnIdx]));
+  active = order[turnIdx];
+  if (zoom === 2) setCamera(2, active.x, active.y);
+  if (active.side === 1 || auto) { task = aiTurn(active); waiting = false; }
+  else waiting = true;
+}
+
+// ---------- Actions as generators: one yield = one frame ----------
+function* waitFrames(n) { for (let i = 0; i < n; i++) yield; }
+
+function* walk(u, tx, ty) {
+  [tx, ty] = clampWorld(tx, ty);
+  const fx0 = u.x, fy0 = u.y, d = Math.hypot(tx - fx0, ty - fy0);
+  if (d < 0.5) return;
+  const [ax] = toScreen(fx0, fy0), [bx] = toScreen(tx, ty);
+  if (Math.abs(bx - ax) > 1) u.face = bx > ax ? 1 : -1;
+  const n = Math.max(8, Math.round(d * 1.6)), hops = Math.max(1, Math.round(d / 4));
+  for (let i = 1; i <= n; i++) {
+    u.x = fx0 + (tx - fx0) * i / n; u.y = fy0 + (ty - fy0) * i / n;
+    u.hop = Math.abs(Math.sin(i / n * Math.PI * hops)) * 3;
+    yield;
+  }
+  u.hop = 0;
+}
+
+function damage(a, t, amount) {
+  amount = Math.max(1, Math.round(amount));
+  const T = TYPES[t.type];
+  const pool = (t.count - 1) * T.hp + t.hp - amount;
+  const before = t.count;
+  if (pool <= 0) { t.count = 0; t.hp = 0; t.dying = 24; }
+  else { t.count = Math.ceil(pool / T.hp); t.hp = pool - (t.count - 1) * T.hp; }
+  const killed = before - t.count;
+  t.flash = 8;
+  const [cx, cy] = unitScreen(t);
+  fx.push({ k: 'num', x: cx, y: cy - 12 * zoom, t: 0, text: '-' + amount, c: 12 });
+  addLog((a ? TYPES[a.type].name + ' > ' : '') + TYPES[t.type].name + ': ' + amount + ' (-' + killed + ')');
+}
+const hitPower = a => a.count * TYPES[a.type].atk * (0.8 + Math.random() * 0.4);
+
+function* lunge(a, t) {
+  const [ax, ay] = unitScreen(a), [tx, ty] = unitScreen(t);
+  const l = Math.hypot(tx - ax, ty - ay) || 1, dx = (tx - ax) / l, dy = (ty - ay) / l;
+  if (Math.abs(tx - ax) > 1) a.face = tx > ax ? 1 : -1;
+  for (let i = 0; i <= 14; i++) {
+    const p = Math.sin(i / 14 * Math.PI) * 5 * zoom;
+    a.ox = dx * p; a.oy = dy * p;
+    if (i === 7) damage(a, t, hitPower(a));
+    yield;
+  }
+  a.ox = a.oy = 0;
+  yield* waitFrames(10);
+}
+
+function* shoot(a, t) {
+  const [tx] = unitScreen(t), [ax] = unitScreen(a);
+  if (Math.abs(tx - ax) > 1) a.face = tx > ax ? 1 : -1;
+  const n = Math.max(10, Math.round(dist(a, t) * 0.8));
+  const f = { k: 'arrow', a, t, i: 0, n };
+  fx.push(f);
+  while (f.i < n) { f.i++; yield; }
+  fx.splice(fx.indexOf(f), 1);
+  damage(a, t, hitPower(a) * 0.7);
+  yield* waitFrames(10);
+}
+
+function* melee(a, t) {
+  const reach = (a.size + t.size) / 2 + 0.5, d = dist(a, t);
+  if (d > reach) {
+    const step = Math.min(d - reach, TYPES[a.type].speed);
+    yield* walk(a, a.x + (t.x - a.x) / d * step, a.y + (t.y - a.y) / d * step);
+    if (dist(a, t) > reach + 0.6) { addLog(TYPES[a.type].name + ' idzie'); return; }
+  }
+  yield* lunge(a, t);
+}
+
+function* cast(a, t, kind) {
+  addLog(TYPES[a.type].name + ' czaruje: ' + SPELL_NAME[kind]);
+  const [ax, ay] = unitScreen(a), [tx, ty] = unitScreen(t);
+  if (kind === 'ogien') {
+    const n = 22, f = { k: 'fireball', x: ax, y: ay - 8 * zoom, trail: [] };
+    fx.push(f);
+    for (let i = 1; i <= n; i++) {
+      f.x = ax + (tx - ax) * i / n; f.y = (ay - 8 * zoom) + (ty - ay) * i / n - Math.sin(i / n * Math.PI) * 14;
+      f.trail.push([f.x, f.y, 10]); yield;
+    }
+    fx.splice(fx.indexOf(f), 1);
+    fx.push({ k: 'boom', x: tx, y: ty - 4 * zoom, t: 0 });
+    damage(null, t, 70 + Math.random() * 30);
+    yield* waitFrames(20);
+  } else if (kind === 'blyskawica') {
+    const f = { k: 'bolt', x: tx, y: ty - 6 * zoom, t: 0 };
+    fx.push(f);
+    for (let i = 0; i < 14; i++) { f.t = i; if (i === 3) damage(null, t, 90 + Math.random() * 40); yield; }
+    fx.splice(fx.indexOf(f), 1);
+    yield* waitFrames(8);
+  } else {
+    const f = { k: 'ice', x: tx, y: ty - 4 * zoom, t: 0 };
+    fx.push(f);
+    for (let i = 0; i < 20; i++) { f.t = i; yield; }
+    fx.splice(fx.indexOf(f), 1);
+    t.frozen = 40;
+    damage(null, t, 45 + Math.random() * 20);
+    yield* waitFrames(16);
+  }
+}
+
+function* aiTurn(u) {
+  yield* waitFrames(12);
+  const foes = units.filter(e => e.side !== u.side && alive(e));
+  if (!foes.length) return;
+  let t;
+  if (TYPES[u.type].ranged) t = foes.reduce((b, e) => e.count * TYPES[e.type].atk > b.count * TYPES[b.type].atk ? e : b);
+  else t = foes.reduce((b, e) => dist(u, e) < dist(u, b) ? e : b);
+  if (TYPES[u.type].ranged) yield* shoot(u, t); else yield* melee(u, t);
+}
+
+// ---------- Input ----------
+function pickUnit(px, py) {
+  let best = null, bd = 1e9;
+  for (const u of units) {
+    if (!alive(u)) continue;
+    const [cx, cy] = unitScreen(u);
+    const hw = (u.size > 3 ? 7 : 5) * zoom + 2;
+    if (Math.abs(px - cx) <= hw && py <= cy + 3 && py >= cy - 12 * zoom) {
+      const d = Math.abs(px - cx) + Math.abs(py - (cy - 4 * zoom));
+      if (d < bd) { bd = d; best = u; }
+    }
+  }
+  return best;
+}
+
+function tap(px, py) {
+  if (over) { newBattle(); return; }
+  if (!waiting || !active) return;
+  const u = pickUnit(px, py), a = active;
+  if (u && u.side !== a.side) {
+    const kind = SPELLS[spell];
+    if (kind !== 'brak') { task = cast(a, u, kind); setSpell(0); }
+    else task = TYPES[a.type].ranged ? shoot(a, u) : melee(a, u);
+    waiting = false;
+  } else if (u && u !== a) {
+    addLog('To twoj oddzial');
+  } else if (!u) {
+    let [wx, wy] = toWorld(px, py);
+    const d = Math.hypot(wx - a.x, wy - a.y), sp = TYPES[a.type].speed;
+    if (d > sp) { wx = a.x + (wx - a.x) / d * sp; wy = a.y + (wy - a.y) / d * sp; }
+    task = walk(a, wx, wy); waiting = false;
+  }
+}
+
+const botEl = document.getElementById('bot');
+botEl.addEventListener('pointerdown', e => {
+  const r = botEl.getBoundingClientRect();
+  tap((e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H);
+});
+
+const $ = id => document.getElementById(id);
+function setMode(m) { mode = m; $('bMode').textContent = 'Wygląd: ' + (m === 'bmp' ? 'bitmapy 8×8' : 'litery'); }
+function setZoom(z) { setCamera(z, active ? active.x : 51, active ? active.y : 51); $('bZoom').textContent = 'Lupa: ' + z + '×'; $('bZoom').classList.toggle('on', z === 2); }
+function setSpell(i) { spell = i; $('bSpell').textContent = 'Czar: ' + SPELL_NAME[SPELLS[i]]; $('bSpell').classList.toggle('on', i > 0); }
+function setAuto(v) {
+  auto = v; $('bAuto').textContent = 'Auto: ' + (v ? 'wł.' : 'wył.'); $('bAuto').classList.toggle('on', v);
+  if (v && waiting && active) { task = aiTurn(active); waiting = false; }
+}
+function skip() { if (waiting && active) { addLog(TYPES[active.type].name + ' czeka'); waiting = false; task = waitFrames(4); } }
+$('bMode').onclick = () => setMode(mode === 'bmp' ? 'txt' : 'bmp');
+$('bZoom').onclick = () => setZoom(zoom === 1 ? 2 : 1);
+$('bSpell').onclick = () => setSpell((spell + 1) % SPELLS.length);
+$('bWait').onclick = skip;
+$('bAuto').onclick = () => setAuto(!auto);
+$('bReset').onclick = newBattle;
+addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'm') $('bMode').click(); else if (k === 'z') $('bZoom').click();
+  else if (k === 's') $('bSpell').click(); else if (k === 'w') skip();
+  else if (k === 'a') $('bAuto').click(); else if (k === 'r') newBattle();
+});
+
+// ---------- Drawing: bottom screen ----------
+function footprint(s, u, c) {
+  const h = u.size / 2;
+  const [tx, ty] = toScreen(u.x - h, u.y - h), [rx, ry] = toScreen(u.x - h, u.y + h);
+  const [bx, by] = toScreen(u.x + h, u.y + h), [lx, ly] = toScreen(u.x + h, u.y - h);
+  s.line(tx, ty, rx, ry, c); s.line(rx, ry, bx, by, c); s.line(bx, by, lx, ly, c); s.line(lx, ly, tx, ty, c);
+}
+
+function moveRing(s, u) {
+  const sp = TYPES[u.type].speed;
+  for (let i = 0; i < 72; i++) {
+    const a = i / 72 * Math.PI * 2;
+    const [x, y] = clampWorld(u.x + Math.cos(a) * sp, u.y + Math.sin(a) * sp);
+    const [px, py] = toScreen(x, y);
+    s.pset(px, py, 5);
+  }
+}
+
+function drawUnit(s, u) {
+  const T = TYPES[u.type], k = zoom;
+  const [cx, cy] = unitScreen(u);
+  const dead = !alive(u);
+  if (dead && u.dying === 0) {                       // corpse: a few grey bones
+    s.line(cx - 3 * k, cy, cx + 3 * k, cy - k, 14);
+    s.line(cx - 2 * k, cy - k, cx + 2 * k, cy + k, 13);
+    return;
+  }
+  if (!dead) {
+    const pulse = u === active && Math.floor(frame / 8) % 2;
+    footprint(s, u, u === active ? (pulse ? 4 : 12) : SIDE[u.side].x);
+  }
+  const bob = !dead && u.hop === 0 && u.ox === 0 && Math.sin((frame + u.id * 7) / 14) > 0.7 ? 1 : 0;
+  let gx = cx + u.ox, gy = cy + 1 - u.hop - bob + u.oy, clip = 1e9;
+  let tint;
+  if (u.flash > 0 && u.flash % 4 < 2) tint = 12;
+  else if (u.frozen > 0) tint = 11;
+  if (dead) { const p = 1 - u.dying / 24; gy += p * 8 * k; clip = cy + 1; tint = 13; }
+  let topY;
+  if (mode === 'bmp') {
+    topY = drawBitmap(s, BMP[u.type], gx, gy, k, u.face < 0, u.side, tint, clip);
+  } else {
+    const kk = 2 * k, w = 3 * kk, h = 5 * kk;
+    const x = Math.round(gx - w / 2), y = Math.round(gy - h);
+    if (y + h <= clip) {
+      s.rectfill(x - k, y - k, w + 2 * k, h + 2 * k, 0);
+      const c = tint !== undefined ? tint : (T === TYPES.hero ? 4 : SIDE[u.side].X);
+      s.print(T.ch, x, y, c, kk);
+    }
+    topY = y - k;
+  }
+  if (!dead) {                                       // the count in a box of the side's colour
+    const t = String(u.count), w = t.length * 4 + 1;
+    const bx = Math.round(cx - w / 2), by = Math.round(topY - 8);
+    s.rectfill(bx, by, w, 7, SIDE[u.side].x);
+    s.print(t, bx + 1, by + 1, 12);
+  }
+}
+
+function drawFx(s) {
+  for (const f of fx) {
+    if (f.k === 'num') {
+      s.print(f.text, f.x - f.text.length * 2 + 1, f.y - f.t / 2 + 1, 0);
+      s.print(f.text, f.x - f.text.length * 2, f.y - f.t / 2, f.c);
+    } else if (f.k === 'arrow') {
+      const [ax, ay] = unitScreen(f.a), [tx, ty] = unitScreen(f.t);
+      const p = f.i / f.n, ah = 8 * zoom;
+      const x = ax + (tx - ax) * p, y = ay - ah + (ty - ay) * p - Math.sin(p * Math.PI) * 18;
+      const p2 = Math.max(0, p - 0.05);
+      const x2 = ax + (tx - ax) * p2, y2 = ay - ah + (ty - ay) * p2 - Math.sin(p2 * Math.PI) * 18;
+      s.line(x2, y2, x, y, 12); s.pset(x, y, 4);
+    } else if (f.k === 'fireball') {
+      f.trail.forEach(p => { if (p[2] > 0) { s.pset(p[0] + (Math.random() * 3 - 1), p[1] + (Math.random() * 3 - 1), p[2] > 6 ? 4 : p[2] > 3 ? 3 : 2); p[2]--; } });
+      s.circfill(f.x, f.y, 3, 3); s.circfill(f.x, f.y, 1, 4);
+    } else if (f.k === 'boom') {
+      const r = 2 + f.t;
+      if (f.t < 16) {
+        s.circfill(f.x, f.y, Math.max(1, r - 6), f.t < 6 ? 12 : 4);
+        s.circ(f.x, f.y, r, f.t < 8 ? 4 : f.t < 12 ? 3 : 2);
+        for (let i = 0; i < 10; i++) { const a = i * 0.63 + f.t * 0.2; s.pset(f.x + Math.cos(a) * r * 1.3, f.y + Math.sin(a) * r * 0.7, 3); }
+      }
+    } else if (f.k === 'bolt') {
+      if (f.t < 10) {
+        let x = f.x + (Math.random() * 20 - 10), y = 0;
+        const steps = 8, c = f.t % 2 ? 11 : 12;
+        for (let i = 1; i <= steps; i++) {
+          const nx = i === steps ? f.x : f.x + (Math.random() * 16 - 8), ny = f.y * i / steps;
+          s.line(x, y, nx, ny, c); s.line(x + 1, y, nx + 1, ny, 10); x = nx; y = ny;
+        }
+        if (f.t < 4) s.circ(f.x, f.y, 3 + f.t * 2, 12);
+      }
+    } else if (f.k === 'ice') {
+      const r = Math.max(0, 18 - f.t);
+      for (let i = 0; i < 8; i++) {
+        const a = i / 8 * Math.PI * 2 + 0.3;
+        const x0 = f.x + Math.cos(a) * (r + 5), y0 = f.y + Math.sin(a) * (r + 5) * 0.6;
+        const x1 = f.x + Math.cos(a) * r, y1 = f.y + Math.sin(a) * r * 0.6;
+        s.line(x0, y0, x1, y1, i % 2 ? 11 : 12);
+      }
+      if (f.t > 14) s.circ(f.x, f.y, (f.t - 14) * 2, 11);
+    }
+  }
+}
+
+function drawBottom() {
+  const s = botS;
+  s.st.calls = 0; s.st.px = 0;
+  s.blit(bgScr.fb);
+  if (waiting && active) moveRing(s, active);
+  const list = units.filter(u => alive(u) || u.dying >= 0);
+  list.sort((a, b) => (alive(a) - alive(b)) || (a.x + a.y) - (b.x + b.y) || a.id - b.id);
+  for (const u of list) drawUnit(s, u);
+  drawFx(s);
+  if (over) {
+    s.rectfill(64, 80, 128, 26, 0); s.rect(64, 80, 128, 26, 4);
+    s.print(over, 128 - over.length * 4, 85, 4, 2);
+    s.print('DOTKNIJ: NOWA BITWA', 128 - 38, 98, 13);
+  }
+  return { calls: s.st.calls, px: s.st.px };
+}
+
+// ---------- Drawing: top screen ----------
+let perf = { calls: 0, px: 0 }, perfAvg = 0;
+function bar(s, x, y, w, v, max, c) {
+  s.rect(x, y, w, 5, 14);
+  s.rectfill(x + 1, y + 1, Math.round((w - 2) * Math.min(1, v / max)), 3, c);
+}
+function drawTop() {
+  const s = topS;
+  s.cls(1);
+  s.rectfill(0, 0, 256, 11, 15);
+  s.print('HEROESDS  GLYPH TEST', 4, 3, 4);
+  s.print(mode === 'bmp' ? 'BITMAPY' : 'LITERY', 252 - (mode === 'bmp' ? 28 : 24), 3, 13);
+  if (active && !over) {
+    const T = TYPES[active.type];
+    s.rectfill(4, 16, 44, 44, 0); s.rect(4, 16, 44, 44, SIDE[active.side].x);
+    if (mode === 'bmp') drawBitmap(s, BMP[active.type], 26, 54, active.size > 3 ? 3 : 4, active.side === 1, active.side, active.frozen > 0 ? 11 : undefined);
+    else s.print(T.ch, 26 - 9, 24, active.type === 'hero' ? 4 : SIDE[active.side].X, 6);
+    s.print(T.name, 54, 18, 12, 2);
+    s.print(SIDE[active.side].name + (waiting ? '  - TWOJ RUCH' : ''), 54, 31, SIDE[active.side].X);
+    s.print('ILOSC ' + active.count + '   HP ' + active.hp + '/' + T.hp, 54, 40, 13);
+    s.print('ATAK ' + T.atk + '   RUCH ' + T.speed + (T.ranged ? '   STRZELA' : ''), 54, 48, 13);
+    if (SPELLS[spell] !== 'brak') s.print('CZAR: ' + SPELL_NAME[SPELLS[spell]] + ' - WYBIERZ CEL', 54, 56, 11);
+  }
+  s.print('RUNDA ' + round, 4, 66, 4);
+  [0, 1].forEach(side => {
+    const n = units.filter(u => u.side === side && alive(u)).length;
+    const all = units.filter(u => u.side === side).length;
+    s.print(SIDE[side].name, 60 + side * 98, 66, SIDE[side].X);
+    bar(s, 60 + side * 98, 73, 90, n, all, SIDE[side].x);
+  });
+  s.rectfill(4, 84, 248, 62, 0);
+  log.forEach((t, i) => s.print(t, 8, 88 + i * 9, i === log.length - 1 ? 12 : 14));
+  s.rectfill(0, 152, 256, 40, 15);
+  perfAvg = perfAvg * 0.9 + perf.calls * 0.1;
+  s.print('DOLNY EKRAN, JEDNA KLATKA:', 4, 156, 13);
+  s.print('PRYMITYWY ' + Math.round(perfAvg) + '   PIKSELE ' + perf.px, 4, 165, 12);
+  s.print('TLO = 1 BLIT (NA DS: WARSTWA BG)', 4, 174, 14);
+  s.print('ZERO SPRAJTOW, ZERO PLIKOW GRAFIKI', 4, 183, 5);
+}
+
+// ---------- Main loop (60 Hz) ----------
+function step() {
+  frame++;
+  if (task) {
+    const r = task.next();
+    if (r.done) { task = null; nextTurn(); }
+  }
+  for (const u of units) {
+    if (u.flash > 0) u.flash--;
+    if (u.frozen > 0) u.frozen--;
+    if (u.dying > 0) u.dying--;
+  }
+  for (let i = fx.length - 1; i >= 0; i--) {
+    const f = fx[i];
+    if (f.k === 'num' || f.k === 'boom') { f.t++; if (f.t > (f.k === 'num' ? 40 : 18)) fx.splice(i, 1); }
+  }
+}
+let last = performance.now(), acc = 0;
+function loop(now) {
+  acc += Math.min(100, now - last); last = now;
+  while (acc >= 1000 / 60) { step(); acc -= 1000 / 60; }
+  perf = drawBottom(); drawTop();
+  botS.flip(); topS.flip();
+  requestAnimationFrame(loop);
+}
+
+setCamera(1);
+newBattle();
+setMode('bmp');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

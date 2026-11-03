@@ -4,6 +4,13 @@ Krótko, co zrobiliśmy danego dnia i co z tego wyszło. Szczegóły: `git log`,
 w `PLAN.md` („Gdzie skończyliśmy”), decyzje w `DECISIONS.md`, formaty w `FORMATS.md`.
 Nowy wpis na górze.
 
+## 2026-11-03 — Glyph test: bitwa C4 bez sprajtów (HTML/JS)
+
+- **`glyphtest/index.html`**: prototyp w przeglądarce, jak wyglądałaby bitwa narysowana
+  wyłącznie prymitywami (bitmapy 8×8 w kodzie albo litery), z animacjami i czarami z kodu
+  oraz licznikiem kosztu na klatkę. Geometria jak w `grid.lua` / `view.lua`. Następny krok,
+  jeśli się sprawdzi: moduł z API `sprites.lua` dla carta C4.
+
 ## 2026-11-01 — Wygląd mapy 3DS: style, pergamin, skóra, granice jak w Imperial Glory (M3k–M3x)
 
 - **`style.lua`** (H14): kolory i wygląd mapy w pliku stylu zamiast w kodzie. `map` —
