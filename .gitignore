@@ -35,6 +35,9 @@ tests/carts/sound/music/rock.wav
 /HeroesDS/carts/*/src/combat/
 /HeroesDS/carts/*/sfx/
 /HeroesDS/carts/*/music/
+# G1's own sound (tools/make_g1_sound.py, no game data) is kept
+!/HeroesDS/carts/g1/sfx/
+!/HeroesDS/carts/g1/music/
 
 # Cossacks art for the 3D test (D60): made locally by tools/cossacks_atlas.py
 /tests/carts/army3d/gfx/soldier*.png
