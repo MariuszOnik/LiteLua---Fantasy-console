@@ -10,6 +10,11 @@ Nowy wpis na górze.
   wyłącznie prymitywami (bitmapy 8×8 w kodzie albo litery), z animacjami i czarami z kodu
   oraz licznikiem kosztu na klatkę. Geometria jak w `grid.lua` / `view.lua`. Następny krok,
   jeśli się sprawdzi: moduł z API `sprites.lua` dla carta C4.
+- **Cart `carts/g1`**: ta sama bitwa w Lua dla LiteLua (bitmapy uruchamiane jako ciągi
+  `rectfill`, licznik `sys.stats` na górze). Wybór celu dwoma dotknięciami (znacznik, potem
+  drugi dotyk albo A; B anuluje), bo przypadkowe dotknięcie od razu ruszało oddział.
+- **Dźwięk** (`tools/make_g1_sound.py`): 11 efektów chip syntetyzowanych w Pythonie do WAV
+  i marsz bitewny d-moll + dżingle w `.lsong`; w HTML te same efekty i podgląd muzyki.
 
 ## 2026-11-01 — Wygląd mapy 3DS: style, pergamin, skóra, granice jak w Imperial Glory (M3k–M3x)
 

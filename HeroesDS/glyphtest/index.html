@@ -32,9 +32,12 @@
   <button id="bWait">Czekaj</button>
   <button id="bAuto">Auto: wył.</button>
   <button id="bReset">Nowa bitwa</button>
+  <button id="bSound">Dźwięk: wył.</button>
 </div>
-<p>Dotknij dolny ekran: ziemia = ruch, wróg = atak (z czarem = rzucenie czaru).
-Klawisze: M wygląd, Z lupa, S czar, W czekaj, A auto, R nowa bitwa.
+<p>Dotknij dolny ekran, żeby wybrać: ziemia = ruch, wróg = atak (z czarem = rzucenie czaru).
+Znacznik pokazuje wybór; dotknij go drugi raz (albo Enter), żeby wykonać, Esc anuluje.
+Klawisze: M wygląd, Z lupa, S czar, W czekaj, A auto, R nowa bitwa, D dźwięk.
+Efekty i muzyka to te same pliki co w carcie <code>carts/g1</code> (muzyka: podgląd z <code>.lsong</code>).
 Zero sprajtów: wszystko to prymitywy (pset / rectfill / line / trifill / circ / print)
 do bufora 256×192 z paletą 16 kolorów, tak jak w LiteLua. Licznik na górnym ekranie
 pokazuje, ile wywołań prymitywów kosztuje jedna klatka.</p>
@@ -330,10 +333,54 @@ function buildField() {
   s.rectfill(0, 0, OX, H, 0); s.rectfill(256 - OX, 0, OX, H, 0);
 }
 
+// ---------- Sound: the G1 cart's WAV effects, music rendered from its .lsong ----------
+const SFX_NAMES = ['step', 'sword', 'arrow', 'thunk', 'die', 'fire', 'boom', 'bolt', 'ice', 'select', 'turn'];
+const audio = { ctx: null, on: false, buf: {}, music: null, musicGain: null, want: null };
+async function audioStart() {
+  if (audio.ctx) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  audio.ctx = new AC();
+  audio.musicGain = audio.ctx.createGain(); audio.musicGain.gain.value = 0.55;
+  audio.musicGain.connect(audio.ctx.destination);
+  const load = async (key, url) => {
+    try {
+      const r = await fetch(url);
+      audio.buf[key] = await audio.ctx.decodeAudioData(await r.arrayBuffer());
+    } catch (e) { /* missing file: stay silent */ }
+  };
+  await Promise.all([
+    ...SFX_NAMES.map(n => load(n, '../carts/g1/sfx/' + n + '.wav')),
+    ...['battle', 'victory', 'defeat'].map(n => load('m_' + n, 'audio/' + n + '.wav')),
+  ]);
+  if (audio.want) playMusic(audio.want.name, audio.want.loop);
+}
+function play(name, vol = 1, pitch = 1) {
+  if (!audio.on || !audio.ctx || !audio.buf[name]) return;
+  const src = audio.ctx.createBufferSource(), g = audio.ctx.createGain();
+  src.buffer = audio.buf[name]; src.playbackRate.value = pitch; g.gain.value = vol * 0.8;
+  src.connect(g).connect(audio.ctx.destination); src.start();
+}
+function playMusic(name, loop = true) {
+  audio.want = name ? { name, loop } : null;
+  if (audio.music) { try { audio.music.stop(); } catch (e) {} audio.music = null; }
+  if (!name || !audio.on || !audio.ctx || !audio.buf['m_' + name]) return;
+  const src = audio.ctx.createBufferSource();
+  src.buffer = audio.buf['m_' + name]; src.loop = loop;
+  src.connect(audio.musicGain); src.start(); audio.music = src;
+}
+function setSound(v) {
+  audio.on = v;
+  $('bSound').textContent = 'Dźwięk: ' + (v ? 'wł.' : 'wył.'); $('bSound').classList.toggle('on', v);
+  if (v) { audioStart().then(() => { if (audio.ctx.state === 'suspended') audio.ctx.resume(); playMusic(audio.want && audio.want.name, audio.want ? audio.want.loop : true); }); }
+  else if (audio.music) { try { audio.music.stop(); } catch (e) {} audio.music = null; }
+}
+
 // ---------- Battle state ----------
 let units = [], fx = [], log = [], order = [], turnIdx = 0, round = 1;
 let active = null, task = null, waiting = false, frame = 0, over = null;
 let mode = 'bmp', spell = 0, auto = false;
+let pending = null;   // the chosen action, waiting for a second touch or Enter
 const SPELLS = ['brak', 'ogien', 'blyskawica', 'lod'];
 const SPELL_NAME = { brak: 'brak', ogien: 'ogień', blyskawica: 'błyskawica', lod: 'lód' };
 
@@ -356,7 +403,8 @@ function newBattle() {
       face: side ? -1 : 1, hop: 0, ox: 0, oy: 0, flash: 0, frozen: 0, dying: 0 });
   }));
   order = units.slice().sort((a, b) => TYPES[b.type].speed - TYPES[a.type].speed || a.id - b.id);
-  fx = []; log = []; turnIdx = -1; round = 1; over = null; task = null; waiting = false;
+  fx = []; log = []; turnIdx = -1; round = 1; over = null; task = null; waiting = false; pending = null;
+  playMusic('battle');
   addLog('Nowa bitwa!');
   nextTurn();
 }
@@ -368,7 +416,8 @@ const unitScreen = u => toScreen(u.x, u.y);
 function nextTurn() {
   for (const s of [0, 1]) if (!units.some(u => u.side === s && alive(u))) {
     over = s === 0 ? 'PRZEGRANA' : 'WYGRANA';
-    addLog(over + '!'); active = null; waiting = false; return;
+    addLog(over + '!'); active = null; waiting = false; pending = null;
+    playMusic(s === 0 ? 'defeat' : 'victory', false); return;
   }
   do {
     turnIdx++;
@@ -377,7 +426,7 @@ function nextTurn() {
   active = order[turnIdx];
   if (zoom === 2) setCamera(2, active.x, active.y);
   if (active.side === 1 || auto) { task = aiTurn(active); waiting = false; }
-  else waiting = true;
+  else { waiting = true; play('turn', 0.6); }
 }
 
 // ---------- Actions as generators: one yield = one frame ----------
@@ -390,9 +439,12 @@ function* walk(u, tx, ty) {
   const [ax] = toScreen(fx0, fy0), [bx] = toScreen(tx, ty);
   if (Math.abs(bx - ax) > 1) u.face = bx > ax ? 1 : -1;
   const n = Math.max(8, Math.round(d * 1.6)), hops = Math.max(1, Math.round(d / 4));
+  let lastHop = 0;
   for (let i = 1; i <= n; i++) {
     u.x = fx0 + (tx - fx0) * i / n; u.y = fy0 + (ty - fy0) * i / n;
-    u.hop = Math.abs(Math.sin(i / n * Math.PI * hops)) * 3;
+    const h = i / n * hops;
+    u.hop = Math.abs(Math.sin(h * Math.PI)) * 3;
+    if (Math.floor(h) > lastHop) { lastHop = Math.floor(h); play('step', 0.35); }
     yield;
   }
   u.hop = 0;
@@ -403,7 +455,7 @@ function damage(a, t, amount) {
   const T = TYPES[t.type];
   const pool = (t.count - 1) * T.hp + t.hp - amount;
   const before = t.count;
-  if (pool <= 0) { t.count = 0; t.hp = 0; t.dying = 24; }
+  if (pool <= 0) { t.count = 0; t.hp = 0; t.dying = 24; play('die'); }
   else { t.count = Math.ceil(pool / T.hp); t.hp = pool - (t.count - 1) * T.hp; }
   const killed = before - t.count;
   t.flash = 8;
@@ -420,7 +472,7 @@ function* lunge(a, t) {
   for (let i = 0; i <= 14; i++) {
     const p = Math.sin(i / 14 * Math.PI) * 5 * zoom;
     a.ox = dx * p; a.oy = dy * p;
-    if (i === 7) damage(a, t, hitPower(a));
+    if (i === 7) { play('sword'); damage(a, t, hitPower(a)); }
     yield;
   }
   a.ox = a.oy = 0;
@@ -433,8 +485,10 @@ function* shoot(a, t) {
   const n = Math.max(10, Math.round(dist(a, t) * 0.8));
   const f = { k: 'arrow', a, t, i: 0, n };
   fx.push(f);
+  play('arrow');
   while (f.i < n) { f.i++; yield; }
   fx.splice(fx.indexOf(f), 1);
+  play('thunk');
   damage(a, t, hitPower(a) * 0.7);
   yield* waitFrames(10);
 }
@@ -454,24 +508,24 @@ function* cast(a, t, kind) {
   const [ax, ay] = unitScreen(a), [tx, ty] = unitScreen(t);
   if (kind === 'ogien') {
     const n = 22, f = { k: 'fireball', x: ax, y: ay - 8 * zoom, trail: [] };
-    fx.push(f);
+    fx.push(f); play('fire');
     for (let i = 1; i <= n; i++) {
       f.x = ax + (tx - ax) * i / n; f.y = (ay - 8 * zoom) + (ty - ay) * i / n - Math.sin(i / n * Math.PI) * 14;
       f.trail.push([f.x, f.y, 10]); yield;
     }
     fx.splice(fx.indexOf(f), 1);
-    fx.push({ k: 'boom', x: tx, y: ty - 4 * zoom, t: 0 });
+    fx.push({ k: 'boom', x: tx, y: ty - 4 * zoom, t: 0 }); play('boom');
     damage(null, t, 70 + Math.random() * 30);
     yield* waitFrames(20);
   } else if (kind === 'blyskawica') {
     const f = { k: 'bolt', x: tx, y: ty - 6 * zoom, t: 0 };
-    fx.push(f);
+    fx.push(f); play('bolt');
     for (let i = 0; i < 14; i++) { f.t = i; if (i === 3) damage(null, t, 90 + Math.random() * 40); yield; }
     fx.splice(fx.indexOf(f), 1);
     yield* waitFrames(8);
   } else {
     const f = { k: 'ice', x: tx, y: ty - 4 * zoom, t: 0 };
-    fx.push(f);
+    fx.push(f); play('ice');
     for (let i = 0; i < 20; i++) { f.t = i; yield; }
     fx.splice(fx.indexOf(f), 1);
     t.frozen = 40;
@@ -505,28 +559,47 @@ function pickUnit(px, py) {
   return best;
 }
 
+// The action a touch at (px, py) would do, or null
+function plan(px, py) {
+  const a = active, u = pickUnit(px, py);
+  if (u && u.side !== a.side) return { k: 'attack', t: u };
+  if (u) { if (u !== a) addLog('To twoj oddzial'); return null; }
+  let [wx, wy] = toWorld(px, py);
+  const d = Math.hypot(wx - a.x, wy - a.y), sp = TYPES[a.type].speed;
+  if (d > sp) { wx = a.x + (wx - a.x) / d * sp; wy = a.y + (wy - a.y) / d * sp; }
+  [wx, wy] = clampWorld(wx, wy);
+  return { k: 'move', x: wx, y: wy };
+}
+function same(p, q) {
+  if (!p || !q || p.k !== q.k) return false;
+  if (p.k === 'attack') return p.t === q.t;
+  const [ax, ay] = toScreen(p.x, p.y), [bx, by] = toScreen(q.x, q.y);
+  return Math.abs(ax - bx) <= 8 && Math.abs(ay - by) <= 8;
+}
+function confirmAction() {
+  const p = pending, a = active;
+  if (!p || !waiting) return;
+  if (p.k === 'move') task = walk(a, p.x, p.y);
+  else {
+    const kind = SPELLS[spell];
+    if (kind !== 'brak') { task = cast(a, p.t, kind); setSpell(0); }
+    else task = TYPES[a.type].ranged ? shoot(a, p.t) : melee(a, p.t);
+  }
+  waiting = false; pending = null;
+}
 function tap(px, py) {
   if (over) { newBattle(); return; }
   if (!waiting || !active) return;
-  const u = pickUnit(px, py), a = active;
-  if (u && u.side !== a.side) {
-    const kind = SPELLS[spell];
-    if (kind !== 'brak') { task = cast(a, u, kind); setSpell(0); }
-    else task = TYPES[a.type].ranged ? shoot(a, u) : melee(a, u);
-    waiting = false;
-  } else if (u && u !== a) {
-    addLog('To twoj oddzial');
-  } else if (!u) {
-    let [wx, wy] = toWorld(px, py);
-    const d = Math.hypot(wx - a.x, wy - a.y), sp = TYPES[a.type].speed;
-    if (d > sp) { wx = a.x + (wx - a.x) / d * sp; wy = a.y + (wy - a.y) / d * sp; }
-    task = walk(a, wx, wy); waiting = false;
-  }
+  const p = plan(px, py);
+  if (!p) return;
+  if (same(p, pending)) { confirmAction(); return; }
+  pending = p; play('select', 0.7);
 }
 
 const botEl = document.getElementById('bot');
 botEl.addEventListener('pointerdown', e => {
   const r = botEl.getBoundingClientRect();
+  if (audio.on && audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume();
   tap((e.clientX - r.left) / r.width * W, (e.clientY - r.top) / r.height * H);
 });
 
@@ -536,20 +609,24 @@ function setZoom(z) { setCamera(z, active ? active.x : 51, active ? active.y : 5
 function setSpell(i) { spell = i; $('bSpell').textContent = 'Czar: ' + SPELL_NAME[SPELLS[i]]; $('bSpell').classList.toggle('on', i > 0); }
 function setAuto(v) {
   auto = v; $('bAuto').textContent = 'Auto: ' + (v ? 'wł.' : 'wył.'); $('bAuto').classList.toggle('on', v);
-  if (v && waiting && active) { task = aiTurn(active); waiting = false; }
+  if (v && waiting && active) { task = aiTurn(active); waiting = false; pending = null; }
 }
-function skip() { if (waiting && active) { addLog(TYPES[active.type].name + ' czeka'); waiting = false; task = waitFrames(4); } }
+function skip() { if (waiting && active) { pending = null; addLog(TYPES[active.type].name + ' czeka'); waiting = false; task = waitFrames(4); } }
 $('bMode').onclick = () => setMode(mode === 'bmp' ? 'txt' : 'bmp');
 $('bZoom').onclick = () => setZoom(zoom === 1 ? 2 : 1);
 $('bSpell').onclick = () => setSpell((spell + 1) % SPELLS.length);
 $('bWait').onclick = skip;
 $('bAuto').onclick = () => setAuto(!auto);
 $('bReset').onclick = newBattle;
+$('bSound').onclick = () => setSound(!audio.on);
 addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (k === 'm') $('bMode').click(); else if (k === 'z') $('bZoom').click();
   else if (k === 's') $('bSpell').click(); else if (k === 'w') skip();
   else if (k === 'a') $('bAuto').click(); else if (k === 'r') newBattle();
+  else if (k === 'd') $('bSound').click();
+  else if (k === 'enter') confirmAction();
+  else if (k === 'escape') pending = null;
 });
 
 // ---------- Drawing: bottom screen ----------
@@ -567,6 +644,23 @@ function moveRing(s, u) {
     const [x, y] = clampWorld(u.x + Math.cos(a) * sp, u.y + Math.sin(a) * sp);
     const [px, py] = toScreen(x, y);
     s.pset(px, py, 5);
+  }
+}
+
+function drawPending(s) {
+  const p = pending, a = active;
+  if (!p || !a) return;
+  const blink = Math.floor(frame / 8) % 2 === 0;
+  const [ax, ay] = unitScreen(a);
+  if (p.k === 'move') {
+    const [tx, ty] = toScreen(p.x, p.y);
+    for (let i = 1; i <= 9; i++) s.pset(ax + (tx - ax) * i / 10, ay + (ty - ay) * i / 10, 12);
+    footprint(s, { x: p.x, y: p.y, size: a.size }, blink ? 4 : 12);
+    s.pset(tx, ty, 4);
+  } else {
+    const [tx, ty] = unitScreen(p.t);
+    for (let i = 1; i <= 9; i++) s.pset(ax + (tx - ax) * i / 10, ay - 4 * zoom + (ty - ay) * i / 10, 3);
+    footprint(s, { x: p.t.x, y: p.t.y, size: p.t.size + 1 }, blink ? 2 : 12);
   }
 }
 
@@ -663,6 +757,7 @@ function drawBottom() {
   const list = units.filter(u => alive(u) || u.dying >= 0);
   list.sort((a, b) => (alive(a) - alive(b)) || (a.x + a.y) - (b.x + b.y) || a.id - b.id);
   for (const u of list) drawUnit(s, u);
+  drawPending(s);
   drawFx(s);
   if (over) {
     s.rectfill(64, 80, 128, 26, 0); s.rect(64, 80, 128, 26, 4);
@@ -693,7 +788,8 @@ function drawTop() {
     s.print(SIDE[active.side].name + (waiting ? '  - TWOJ RUCH' : ''), 54, 31, SIDE[active.side].X);
     s.print('ILOSC ' + active.count + '   HP ' + active.hp + '/' + T.hp, 54, 40, 13);
     s.print('ATAK ' + T.atk + '   RUCH ' + T.speed + (T.ranged ? '   STRZELA' : ''), 54, 48, 13);
-    if (SPELLS[spell] !== 'brak') s.print('CZAR: ' + SPELL_NAME[SPELLS[spell]] + ' - WYBIERZ CEL', 54, 56, 11);
+    if (pending) s.print((pending.k === 'move' ? 'RUCH' : SPELLS[spell] !== 'brak' ? SPELL_NAME[SPELLS[spell]] : 'ATAK') + ': DOTKNIJ ZNOWU', 54, 56, 4);
+    else if (SPELLS[spell] !== 'brak') s.print('CZAR: ' + SPELL_NAME[SPELLS[spell]] + ' - WYBIERZ CEL', 54, 56, 11);
   }
   s.print('RUNDA ' + round, 4, 66, 4);
   [0, 1].forEach(side => {

@@ -18,7 +18,15 @@ Otwórz `index.html` w przeglądarce (działa też na telefonie i z GitHub Pages
   dolnego ekranu. Bitmapy rysowane są ciągami jednego koloru (jeden `rectfill` na ciąg), tło
   pola budowane raz przy zmianie kamery (na DS: warstwa BG).
 
+- **Wybór i potwierdzenie:** pierwsze dotknięcie pokazuje znacznik celu, drugie (albo Enter)
+  wykonuje, Esc anuluje.
+- **Dźwięk** (przycisk / D): efekty to pliki `carts/g1/sfx/*.wav`, muzyka to podgląd
+  `carts/g1/music/*.lsong` w `audio/` (`litelua.py song render --rate 16000 --bits 8`).
+
 ## Przenosiny do LiteLua
+Gotowy cart: `HeroesDS/carts/g1` (ten sam wygląd i dźwięk w Lua).
+
+
 Moduł z tym samym API co `c4/src/sprites.lua` (`get`, `effect`, `frame`, `length`, `draw`,
 `tick`), rysujący jak `drawBitmap` / `drawUnit` stąd, zastępuje sprajty jedną linią
 `require` w `c4/main.lua`. Logika walki (`combat/`) się nie zmienia.
